@@ -7,3 +7,4 @@ dist/
 !.env.example
 *.tar.gz
 *.zip
+.agents/skills/ui-ux-pro-max/

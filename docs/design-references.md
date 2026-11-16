@@ -21,3 +21,18 @@
 기존 순자산·총자산·총부채, 주식 평가손익, 예금·퇴직금, 대출 월 이자, 입출금 일정은 대시보드에 유지합니다. 기존 항목별 입력 및 계정별 저장 경로도 유지합니다. 새 메뉴 이름은 '월별 예산', '자산 기록', '월말 예상'입니다.
 
 계산·API 테스트 15개와 DOM에서 입력·수정·월 전환·예산 저장·수동 기록·과거 월 입력·12개월 예상표를 검증했습니다. 이 환경에서는 미리보기 릴레이 연결이 실패하여 실제 브라우저 화면 및 전후 비교 이미지는 캡처하지 못했습니다. 캡처를 추정 이미지로 대체하지 않았습니다.
+
+
+## 맞춤 대시보드와 통계 구조 (2026-11-16)
+
+사용자 요청: 섞여 있는 통계를 정리하고 빠진 항목을 보완하며, 드래그로 맞춤 통계를 구성하고 모호한 용어를 변경한다. 현재 색상·글꼴·테두리 없는 표면, 금융 원본 데이터, 기존 경로와 계산을 유지한다. GitHub 플러그인 추가는 명시적으로 요청한 범위다.
+
+Mobbin MCP 검색에서 실제 확인한 화면:
+
+- [Revolut Analytics](https://mobbin.com/screens/8fac3b7f-37ab-4ec5-81ae-a7a20f7d492d?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 상단 기간·계좌 필터, 지출·수입과 총자산의 별도 영역. 기간 통계와 현재 보유 자산을 구분하는 구조를 참고했다. 어두운 테마와 색상은 가져오지 않았다.
+- [Quicken Reports](https://mobbin.com/screens/0b93f0f4-a0d2-42ec-91e2-924842b88b9d?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 기간과 필터 아래 집계, 그 아래 상세 거래표. 통합 통계에서 조건·요약·상세의 순서를 참고했다.
+- [Quicken Customize Dashboard](https://mobbin.com/screens/90783f19-3381-4011-8f67-6049ae5a3cdb?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 별도 편집 영역에서 통계별 손잡이와 표시 제어, 취소·완료. 편집 상태에서 선택·정렬 후 저장하는 흐름을 참고했다.
+- [Monarch Customize Dashboard](https://mobbin.com/screens/e038c2e6-29e9-4f66-8fc3-e8d6d703735f?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 모달에서 대시보드 통계를 선택·배치. 카드 추가 모달과 두 열의 카드 구성을 참고했다.
+- [Rocket Money Spending](https://mobbin.com/screens/4ffdc60c-95f8-4920-8339-5724906f1d1b?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 지출, 예산, 순자산의 목적별 메뉴와 기간 선택. 분석과 잔액·계획을 구분하는 메뉴의 예시로 참고했다.
+
+위 화면은 구조의 근거다. 한국어 용어, 완료 기록/일정/예측의 정의, 퇴직연금의 별도 집계와 정확한 배치는 이 제품의 계산 모델과 사용자의 요청에 맞춰 정했다. 실제 브라우저 캡처가 불가능하여 변경 전후 이미지는 제작하지 않았다. DOM과 계산 테스트를 화면 캡처 검증으로 주장하지 않는다.

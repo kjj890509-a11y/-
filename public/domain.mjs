@@ -1,7 +1,27 @@
 export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cashflow', 'fixed'];
-export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
+export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직연금·퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [], fixed: [], budgets: [], snapshots: [] });
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [], fixed: [], budgets: [], snapshots: [], loanPayments: [], dashboard: null });
+export function validateDashboard(input) {
+  if (input === null || input === undefined) return null;
+  if (input.version !== 1 || !Array.isArray(input.widgets) || input.widgets.length > 16) throw new Error('통계 카드는 최대 16개까지 저장할 수 있습니다.');
+  const period=input.period;
+  if (!period || !['month','year','custom'].includes(period.preset) || !validDate(period.start) || !validDate(period.end) || period.start>period.end || !validMonth(period.start.slice(0,7)) || !validMonth(period.end.slice(0,7)) || (Number(period.end.slice(0,4))-Number(period.start.slice(0,4)))*12+Number(period.end.slice(5,7))-Number(period.start.slice(5,7))>=120) throw new Error('통계 조회 기간은 10년 이내로 선택해 주세요.');
+  const ids=new Set();
+  const widgets=input.widgets.map(widget=>{
+    if(!widget || typeof widget.id!=='string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(widget.id) || ids.has(widget.id))throw new Error('통계 카드 ID를 확인해 주세요.');
+    ids.add(widget.id);
+    if(!['analysis','composition','forecast','history','budget','payday','schedule'].includes(widget.type))throw new Error('통계 카드 종류를 확인해 주세요.');
+    const result={id:widget.id,type:widget.type};
+    for(const [key,max] of [['title',80],['bank',100],['item',600],['query',100]]){
+      if(typeof widget[key]!=='string'||widget[key].length>max)throw new Error('통계 카드의 이름과 조회 조건을 확인해 주세요.');
+      result[key]=widget[key].trim();
+    }
+    if(!result.title || !['all','loans','expense','income','cards','retirement'].includes(widget.kind) || !['income','expense','principal','interest','retirementContribution','loanPayment'].includes(widget.metric) || !['all','recorded','scheduled','projected'].includes(widget.basis) || !['trend','breakdown'].includes(widget.display) || !['standard','wide'].includes(widget.width))throw new Error('통계 카드 설정을 확인해 주세요.');
+    return {...result,kind:widget.kind,metric:widget.metric,basis:widget.basis,display:widget.display,width:widget.width};
+  });
+  return {version:1,period:{preset:period.preset,start:period.start,end:period.end},widgets};
+}
 export function todayKST(now = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);
 }
@@ -10,7 +30,7 @@ export function validDate(value) {
   const d = new Date(value + 'T00:00:00Z');
   return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
-const moneyFields = { stocks: ['valuation', 'cost'], loans: ['balance', 'principal', 'interest'], retirement: ['amount'], deposits: ['balance'], cards: ['amount'], cashflow:['amount'], fixed:['amount'] };
+const moneyFields = { stocks: ['valuation', 'cost'], loans: ['balance', 'principal', 'interest'], retirement: ['amount', 'monthlyContribution'], deposits: ['balance'], cards: ['amount'], cashflow:['amount'], fixed:['amount'] };
 const textFields = { stocks: ['institution', 'note'], loans: ['institution', 'method', 'note'], retirement: ['institution', 'note'], deposits: ['institution', 'note'], cards: ['note'], cashflow:['note'], fixed:['note'] };
 export function validatePortfolio(input) {
   if (!input || input.version !== 1 || typeof input !== 'object') throw new Error('지원하지 않는 백업 형식입니다.');
@@ -27,8 +47,9 @@ export function validatePortfolio(input) {
       const result = {id: row.id, name: row.name.trim()};
       for (const key of moneyFields[kind]) {
         if(kind==='loans'&&key==='interest'&&row.interestMode==='estimate')continue;
-        if (!Number.isSafeInteger(row[key]) || row[key] < 0 || row[key] > 1_000_000_000_000_000) throw new Error('금액은 0 이상의 정수(원)로 입력해 주세요.');
-        result[key] = row[key];
+        const value=kind==='retirement'&&key==='monthlyContribution'&&row[key]===undefined?0:row[key];
+        if (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000_000_000_000) throw new Error('금액은 0 이상의 정수(원)로 입력해 주세요.');
+        result[key] = value;
       }
       for (const key of textFields[kind]) {
         if (row[key] != null && typeof row[key] !== 'string') throw new Error('텍스트 항목을 확인해 주세요.');
@@ -67,8 +88,11 @@ export function validatePortfolio(input) {
         result.includeInForecast=row.includeInForecast??true;
       }
       if (kind === 'retirement') {
-        if (!validDate(row.asOf)) throw new Error('퇴직금 기준일을 입력해 주세요.');
+        if (!validDate(row.asOf)) throw new Error('퇴직연금·퇴직금 기준일을 입력해 주세요.');
         result.asOf = row.asOf;
+        const date=row.contributionDate??'';
+        if(typeof date!=='string'||(date&&!validDate(date))||(result.monthlyContribution>0&&!validDate(date)))throw new Error('회사 월 납입액의 첫 납입 예정일을 입력해 주세요.');
+        result.contributionDate=date;
       }
       if (kind === 'deposits') {
         if (row.maturity && !validDate(row.maturity)) throw new Error('만기일을 확인해 주세요.');
@@ -87,7 +111,7 @@ export function validatePortfolio(input) {
       if (!row || !validMonth(row.month) || months.has(row.month)) throw new Error('월별 기록의 월을 확인해 주세요.');
       months.add(row.month);
       if (key==='budgets') {
-        if (!validMoney(row.expenseLimit) || !validMoney(row.savingsTarget)) throw new Error('예산과 저축 목표는 0 이상의 원 단위 정수로 입력해 주세요.');
+        if (!validMoney(row.expenseLimit) || !validMoney(row.savingsTarget)) throw new Error('지출 한도와 저축 목표는 0 이상의 원 단위 정수로 입력해 주세요.');
         return {month:row.month,expenseLimit:row.expenseLimit,savingsTarget:row.savingsTarget};
       }
       if (!validDate(row.asOf) || row.asOf.slice(0,7)!==row.month || row.asOf>todayKST()) throw new Error('자산 기록의 기준일은 해당 월의 오늘 이전 날짜로 입력해 주세요.');
@@ -101,6 +125,21 @@ export function validatePortfolio(input) {
       result.note=row.note||'';return result;
     }).sort((a,b)=>a.month.localeCompare(b.month));
   }
+  if (input.loanPayments !== undefined) {
+    if (!Array.isArray(input.loanPayments) || input.loanPayments.length > 2000) throw new Error('대출 상환 기록은 최대 2,000건까지 저장할 수 있습니다.');
+    const ids = new Set();
+    clean.loanPayments = input.loanPayments.map(row => {
+      if (!row || typeof row.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(row.id) || ids.has(row.id)) throw new Error('상환 기록 ID를 확인해 주세요.');
+      ids.add(row.id);
+      if (typeof row.name !== 'string' || !row.name.trim() || row.name.length > 100 || typeof row.institution !== 'string' || !row.institution.trim() || row.institution.length > 100) throw new Error('대출명과 은행을 100자 이내로 입력해 주세요.');
+      if (!validDate(row.date) || row.date > todayKST()) throw new Error('상환 기록은 오늘까지의 실제 상환일을 입력해 주세요.');
+      if (!validMoney(row.principal) || !validMoney(row.interest) || row.principal + row.interest === 0) throw new Error('상환 원금과 이자를 확인해 주세요.');
+      if (row.loanId != null && row.loanId !== '' && (typeof row.loanId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(row.loanId))) throw new Error('연결한 대출을 확인해 주세요.');
+      if (row.note != null && (typeof row.note !== 'string' || row.note.length > 500)) throw new Error('상환 메모는 500자 이내로 입력해 주세요.');
+      return {id:row.id,loanId:row.loanId||'',name:row.name.trim(),institution:row.institution.trim(),date:row.date,principal:row.principal,interest:row.interest,note:row.note||''};
+    });
+  }
+  clean.dashboard=validateDashboard(input.dashboard);
   if (count > 2000) throw new Error('최대 2,000개 항목까지 저장할 수 있습니다.');
   return clean;
 }
@@ -131,6 +170,9 @@ export function cashflowForMonth(data,month,includeExcluded=false) {
 export function scheduledCashflows(data,date=todayKST(),range='upcoming') {
  return (data.cashflow||[]).filter(row=>row.repeat==='once'&&['other_income','expense'].includes(row.type)).filter(row=>range==='all'||(range==='past'?row.date<=date:row.date>date)).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
 }
+export function retirementContributionsForMonth(data,month) {
+ return (data.retirement||[]).filter(row=>(row.monthlyContribution||0)>0&&validDate(row.contributionDate)&&row.contributionDate.slice(0,7)<=month).map(row=>({id:row.id,name:row.name,amount:row.monthlyContribution,date:paymentDate(month,Number(row.contributionDate.slice(8)))}));
+}
 export function monthlyFlow(data,month) {
   const records=cashflowForMonth(data,month);
   const sum=type=>records.filter(row=>row.type===type).reduce((n,row)=>n+row.amount,0);
@@ -146,15 +188,16 @@ export function fixedForMonth(data,month) {
 export function estimatedMonthlyInterest(balance,rate) {return Math.round(balance*rate/1200);}
 export function interestForLoan(loan,balance=loan.balance) {return balance<=0?0:loan.interestMode==='estimate'?estimatedMonthlyInterest(balance,loan.rate):loan.interest;}
 export function loanSchedule(data,startMonth=todayKST().slice(0,7),count=12,afterDate=null) {
- const loans=data.loans.map(row=>({...row,scheduledPayment:row.principal+interestForLoan(row)})),months=[];
+ // A recorded bank bill describes the current payment; forecasts always use the rate and remaining principal.
+ const loans=data.loans.map(row=>({...row,scheduledPayment:row.principal+estimatedMonthlyInterest(row.balance,row.rate)})),months=[];
  for(let index=0;index<count;index++) {
   const month=shiftMonth(startMonth,index);let principal=0,interest=0;const details=[];
   for(const row of loans) {
    const date=paymentDate(month,row.day),openingBalance=row.balance;
    let repayment=0,fee=0;
    if(row.balance>0&&(!afterDate||date>afterDate)) {
-    fee=interestForLoan(row);
-    const planned=row.interestMode==='estimate'&&row.method==='원리금균등'?Math.max(0,row.scheduledPayment-fee):row.principal;
+    fee=estimatedMonthlyInterest(row.balance,row.rate);
+    const planned=row.method==='원리금균등'?Math.max(0,row.scheduledPayment-fee):row.principal;
     repayment=Math.min(row.balance,planned);row.balance-=repayment;
    }
    principal+=repayment;interest+=fee;
@@ -203,14 +246,16 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
   for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
   for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
   for(const row of loanMonths[index].details)if(row.date>startDate&&row.payment>0)events.push({date:row.date,name:row.name,kind:'loan',amount:row.payment,income:false,principal:row.principal,interest:row.interest});
+  for(const row of retirementContributionsForMonth(data,month))if(row.date>startDate)events.push({...row,kind:'retirement',income:false});
  }
  for(const row of data.cards)if(!row.paid&&row.dueDate>startDate&&row.dueDate<=dates.at(-1))events.push({date:row.dueDate,name:row.name,kind:'card',amount:row.amount,income:false});
  events.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
- const baseline=totals(data),sums={income:0,expense:0,principal:0,interest:0,otherExpense:0,fixedCash:0,cardPayments:0};
- let deposits=baseline.deposits,loanDebt=baseline.loans,cardDebt=baseline.cards,pointer=0,previous={...sums};
+ const baseline=totals(data),sums={income:0,expense:0,principal:0,interest:0,otherExpense:0,fixedCash:0,cardPayments:0,retirementContribution:0};
+ let deposits=baseline.deposits,retirement=baseline.retirement,loanDebt=baseline.loans,cardDebt=baseline.cards,pointer=0,previous={...sums};
  return dates.map(date=>{
   while(pointer<events.length&&events[pointer].date<=date){
    const event=events[pointer++];
+   if(event.kind==='retirement'){retirement+=event.amount;sums.retirementContribution+=event.amount;continue;}
    if(event.income){deposits+=event.amount;sums.income+=event.amount;}
    else {deposits-=event.amount;sums.expense+=event.amount;}
    if(event.kind==='loan'){loanDebt-=event.principal;sums.principal+=event.principal;sums.interest+=event.interest;}
@@ -219,8 +264,8 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
    if(event.kind==='expense')sums.otherExpense+=event.amount;
   }
   const period=Object.fromEntries(Object.keys(sums).map(key=>[key,sums[key]-previous[key]]));previous={...sums};
-  const gross=baseline.stock+baseline.retirement+deposits,debt=loanDebt+cardDebt;
-  return {...period,date,month:date.slice(0,7),deposits,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,dayEvents:events.filter(event=>event.date===date)};
+  const gross=baseline.stock+retirement+deposits,debt=loanDebt+cardDebt;
+  return {...period,date,month:date.slice(0,7),deposits,retirement,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,cumulativeRetirementContribution:sums.retirementContribution,dayEvents:events.filter(event=>event.date===date&&event.kind!=='retirement'),retirementEvents:events.filter(event=>event.date===date&&event.kind==='retirement')};
  });
 }
 export function forecastMonths(data,startDate=todayKST(),count=12) {

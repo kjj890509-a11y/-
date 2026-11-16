@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows,retirementContributionsForMonth} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -55,6 +55,20 @@ function req(user,method='GET',body,origin='https://moa.test'){
  const headers={'Content-Type':'application/json',Origin:origin};if(user)headers['oai-authenticated-user-id']=user;
  return new Request('https://moa.test/api/portfolio',{method,headers,body:body?JSON.stringify(body):undefined});
 }
+test('repayment history round-trips by account and survives older clients without changing current balances',async()=>{
+ const env={DB:database()},data=samplePortfolio('2026-11-16'),before=totals(data);
+ data.loanPayments=[{id:'payment',loanId:'demo-l1',name:'주택담보대출',institution:'신한은행',date:'2026-01-25',principal:320000,interest:220000,note:'실제 상환'}];
+ assert.equal((await handleApi(req('history-owner','PUT',{data,revision:0}),env)).status,200);
+ const legacy=structuredClone(data);delete legacy.loanPayments;
+ assert.equal((await handleApi(req('history-owner','PUT',{data:legacy,revision:1}),env)).status,200);
+ const saved=await(await handleApi(req('history-owner'),env)).json();
+ assert.equal(saved.data.loanPayments.length,1);assert.deepEqual(totals(saved.data),before);
+ assert.equal((await(await handleApi(req('other-owner'),env)).json()).data.loanPayments.length,0);
+ assert.equal(validatePortfolio(legacy).loanPayments.length,0);
+ for(const patch of [{date:'2199-01-01'},{principal:-1},{interest:'100'},{name:''},{institution:''}]){
+  const invalid=structuredClone(data);Object.assign(invalid.loanPayments[0],patch);assert.throws(()=>validatePortfolio(invalid));
+ }
+});
 test('persistent API separates users, rejects anonymous writes and detects stale updates',async()=>{
  const env={DB:database()};assert.equal((await handleApi(req(null),env)).status,401);
  const first=await (await handleApi(req('alice'),env)).json();assert.equal(first.revision,0);
@@ -85,8 +99,8 @@ test('forecast pays principal and card liabilities without subtracting the debt 
  p.loans=[{id:'l',name:'대출',institution:'',balance:200000,principal:150000,interest:10000,rate:5,day:25,method:'원금균등',note:''}];
  p.cards=[{id:'c',name:'카드',amount:100000,dueDate:'2026-11-24',paid:false,note:''}];
  const [nov,dec,jan]=forecastMonths(p,'2026-11-16',3);
- assert.equal(totals(p).net,700000);assert.equal(nov.deposits,740000);assert.equal(nov.loans,50000);assert.equal(nov.cards,0);assert.equal(nov.net,690000);
- assert.equal(dec.principal,50000);assert.equal(dec.loans,0);assert.equal(dec.net,680000);assert.equal(jan.interest,0);assert.equal(jan.net,680000);
+ assert.equal(totals(p).net,700000);assert.equal(nov.interest,833);assert.equal(nov.deposits,749167);assert.equal(nov.loans,50000);assert.equal(nov.cards,0);assert.equal(nov.net,699167);
+ assert.equal(dec.principal,50000);assert.equal(dec.interest,208);assert.equal(dec.loans,0);assert.equal(dec.net,698959);assert.equal(jan.interest,0);assert.equal(jan.net,698959);
 });
 test('forecast uses only events after the baseline date, retains overdue card debt and flags cash shortages',()=>{
  const p=emptyPortfolio();p.cashflow=[{id:'s',name:'월급',type:'salary',amount:100,date:'2026-11-10',repeat:'monthly',note:''},{id:'e',name:'지출',type:'expense',amount:200,date:'2026-11-30',repeat:'once',note:''}];
@@ -141,6 +155,29 @@ test('estimated annuity repayments hold the total payment and cap the final prin
  const rows=loanSchedule(p,'2026-11',4);assert.deepEqual(rows.map(r=>r.interest),[12,8,4,0]);assert.deepEqual(rows.map(r=>r.principal),[400,404,396,0]);assert.deepEqual(rows.map(r=>r.payment),[412,412,400,0]);
  const projection=forecastMonths(p,'2026-11-16',3);assert.deepEqual(projection.map(r=>r.interest),[12,8,4]);
 });
+test('future interest declines from the remaining balance even for manually entered and legacy loans',()=>{
+ for(const interestMode of ['manual',undefined]){
+  const p=emptyPortfolio();
+  p.loans=[{id:'l',name:'대출',institution:'',balance:12000000,principal:1000000,interest:117500,rate:12,day:25,method:'원금균등',note:'',...(interestMode?{interestMode}:{})}];
+  const before=structuredClone(p),rows=loanSchedule(p,'2026-11',3);
+  assert.deepEqual(rows.map(r=>r.interest),[120000,110000,100000]);
+  assert.deepEqual(rows.map(r=>r.balance),[11000000,10000000,9000000]);
+  assert.equal(interestForLoan(p.loans[0]),117500);
+  assert.deepEqual(forecastMonths(p,'2026-11-16',3).map(r=>r.interest),[120000,110000,100000]);
+  const salaryData=structuredClone(p);salaryData.cashflow=[{id:'s',name:'월급',type:'salary',amount:3000000,date:'2026-11-25',repeat:'monthly',note:''}];
+  assert.deepEqual(paydayForecasts(salaryData,'2026-11-16',3).map(r=>r.interest),[120000,110000,100000]);
+  assert.deepEqual(p,before);
+ }
+});
+test('manually entered annuity loans keep projected payments steady while interest declines',()=>{
+ const p=emptyPortfolio();
+ p.loans=[{id:'l',name:'원리금균등',institution:'',balance:1200,principal:400,interest:11,rate:12,day:25,method:'원리금균등',interestMode:'manual',note:''}];
+ const rows=loanSchedule(p,'2026-11',4);
+ assert.deepEqual(rows.map(r=>r.interest),[12,8,4,0]);
+ assert.deepEqual(rows.map(r=>r.principal),[400,404,396,0]);
+ assert.deepEqual(rows.map(r=>r.payment),[412,412,400,0]);
+ assert.equal(p.loans[0].interest,11);
+});
 test('legacy backups and clients retain fixed expenses and loan calculation modes',async()=>{
  const data=samplePortfolio('2026-11-16');delete data.fixed;assert.deepEqual(validatePortfolio(data).fixed,[]);
  const env={DB:database()};data.fixed=[{id:'f',name:'보험료',amount:5000,day:25,startMonth:'2026-11',endMonth:'',paymentSource:'account',note:''}];data.loans[0].interestMode='estimate';
@@ -157,9 +194,9 @@ test('payday assets include same-day salary, loans, cards and fixed expenses but
  p.fixed=[{id:'f',name:'고정',amount:50,day:25,startMonth:'2026-11',endMonth:'',paymentSource:'account',note:''}];
  p.cashflow=[{id:'s',name:'월급',type:'salary',amount:500,date:'2026-11-25',repeat:'monthly',note:''},{id:'i',name:'수입',type:'other_income',amount:20,date:'2026-11-20',repeat:'once',note:''},{id:'e',name:'이후 지출',type:'expense',amount:30,date:'2026-11-26',repeat:'once',note:''}];
  const [nov,dec]=paydayForecasts(p,'2026-11-16',2);
- assert.equal(nov.date,'2026-11-25');assert.equal(nov.salaryAmount,500);assert.equal(nov.deposits,1260);assert.equal(nov.loans,100);assert.equal(nov.cards,0);assert.equal(nov.net,1160);assert.equal(nov.previousDayDeposits,1020);assert.equal(nov.previousDayNet,720);assert.equal(nov.cumulativeIncome,520);assert.equal(nov.cumulativeExpense,260);
- assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,1130);
- assert.equal(dec.date,'2026-12-25');assert.equal(dec.deposits,1570);assert.equal(dec.loans,0);assert.equal(dec.net,1570);
+ assert.equal(nov.date,'2026-11-25');assert.equal(nov.salaryAmount,500);assert.equal(nov.interest,1);assert.equal(nov.deposits,1269);assert.equal(nov.loans,100);assert.equal(nov.cards,0);assert.equal(nov.net,1169);assert.equal(nov.previousDayDeposits,1020);assert.equal(nov.previousDayNet,720);assert.equal(nov.cumulativeIncome,520);assert.equal(nov.cumulativeExpense,251);
+ assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,1139);
+ assert.equal(dec.date,'2026-12-25');assert.equal(dec.interest,0);assert.equal(dec.deposits,1589);assert.equal(dec.loans,0);assert.equal(dec.net,1589);
 });
 test('multiple salaries on one day are grouped and filtering payday dates keeps all income in asset calculations',()=>{
  const p=emptyPortfolio();p.cashflow=[{id:'a',name:'월급 A',type:'salary',amount:100,date:'2026-11-20',repeat:'monthly',note:''},{id:'b',name:'월급 B',type:'salary',amount:200,date:'2026-11-20',repeat:'monthly',note:''},{id:'c',name:'일회 급여',type:'salary',amount:50,date:'2026-11-25',repeat:'once',note:''}];
@@ -211,4 +248,50 @@ test('legacy clients preserve excluded plans and the same flow is stored only on
  const legacy=structuredClone(data);for(const row of legacy.cashflow)delete row.includeInForecast;legacy.cashflow[1].note='일정 변경 검토';
  assert.equal((await handleApi(req('plan-owner','PUT',{data:legacy,revision:1}),env)).status,200);
  const saved=await(await handleApi(req('plan-owner'),env)).json();assert.equal(saved.data.cashflow.length,3);assert.equal(saved.data.cashflow.find(r=>r.id==='demo-f2').includeInForecast,false);assert.equal(saved.data.cashflow.find(r=>r.id==='demo-f2').note,'일정 변경 검토');
+});
+
+test('retirement contributions default safely for old backups and validate the recurring deposit date',()=>{
+ const data=samplePortfolio('2026-11-16');
+ const old=validatePortfolio(data);assert.equal(old.retirement[0].monthlyContribution,0);assert.equal(old.retirement[0].contributionDate,'');
+ Object.assign(data.retirement[0],{monthlyContribution:350000,contributionDate:'2027-01-31'});
+ const saved=validatePortfolio(JSON.parse(JSON.stringify(data)));
+ assert.equal(saved.retirement[0].amount,34800000);assert.equal(saved.retirement[0].monthlyContribution,350000);assert.equal(saved.retirement[0].contributionDate,'2027-01-31');
+ for(const patch of [{monthlyContribution:-1},{monthlyContribution:1.5},{monthlyContribution:'350000'},{monthlyContribution:null},{contributionDate:''},{contributionDate:'2027-02-30'}]){
+  const invalid=structuredClone(data);Object.assign(invalid.retirement[0],patch);assert.throws(()=>validatePortfolio(invalid));
+ }
+});
+
+test('company contributions grow retirement on their dates without becoming cash income or changing current balances',()=>{
+ const p=emptyPortfolio();p.deposits=[{id:'cash',name:'예금',balance:1000,rate:0}];
+ p.retirement=[{id:'a',name:'회사 연금',amount:10000,monthlyContribution:300,contributionDate:'2026-11-25'},{id:'b',name:'다른 회사 연금',amount:20000,monthlyContribution:200,contributionDate:'2027-01-31'}];
+ const original=structuredClone(p);
+ const dates=['2026-11-24','2026-11-25','2026-11-30','2026-12-25','2027-01-30','2027-01-31'];
+ const rows=forecastOnDates(p,dates,'2026-11-16');
+ assert.deepEqual(rows.map(row=>row.retirement),[30000,30300,30300,30600,30900,31100]);
+ assert.deepEqual(rows.map(row=>row.retirementContribution),[0,300,0,300,300,200]);
+ assert.equal(rows.at(-1).cumulativeRetirementContribution,1100);
+ assert.ok(rows.every(row=>row.deposits===1000&&row.income===0&&row.expense===0&&row.net===row.retirement+1000));
+ assert.equal(rows[1].dayEvents.length,0);assert.equal(rows[1].retirementEvents[0].amount,300);
+ assert.equal(monthlyFlow(p,'2027-01').income,0);assert.equal(budgetPlan(p,'2027-01').expense,0);
+ assert.equal(totals(p).retirement,30000);assert.deepEqual(p,original);
+ assert.equal(retirementContributionsForMonth(p,'2027-02').find(row=>row.id==='b').date,'2027-02-28');
+ assert.equal(retirementContributionsForMonth(p,'2028-02').find(row=>row.id==='b').date,'2028-02-29');
+ const [sameDay,nextMonth]=forecastMonths(p,'2026-11-25',2);assert.equal(sameDay.retirement,30000);assert.equal(nextMonth.retirement,30300);
+ p.cashflow=[{id:'salary',name:'월급',type:'salary',amount:100,date:'2026-11-25',repeat:'monthly'}];
+ const payday=paydayForecasts(p,'2026-11-16',1)[0];assert.equal(payday.retirement,30300);assert.equal(payday.deposits,1100);assert.equal(payday.salaryAmount,100);assert.equal(payday.net,31400);
+});
+
+test('the API retains retirement plans for old clients and permits explicitly stopping contributions',async()=>{
+ const env={DB:database()},data=samplePortfolio('2026-11-16');
+ Object.assign(data.retirement[0],{monthlyContribution:350000,contributionDate:'2027-01-31'});
+ assert.equal((await handleApi(req('pension-owner','PUT',{data,revision:0}),env)).status,200);
+ const legacy=structuredClone(data);delete legacy.retirement[0].monthlyContribution;delete legacy.retirement[0].contributionDate;legacy.retirement[0].amount=36000000;
+ assert.equal((await handleApi(req('pension-owner','PUT',{data:legacy,revision:1}),env)).status,200);
+ let saved=await(await handleApi(req('pension-owner'),env)).json();
+ assert.equal(saved.data.retirement[0].amount,36000000);assert.equal(saved.data.retirement[0].monthlyContribution,350000);assert.equal(saved.data.retirement[0].contributionDate,'2027-01-31');
+ assert.equal((await handleApi(req('pension-owner','PUT',{data:legacy,revision:1}),env)).status,409);
+ assert.equal((await(await handleApi(req('another-owner'),env)).json()).data.retirement.length,0);
+ saved.data.retirement[0].monthlyContribution=0;saved.data.retirement[0].contributionDate='';
+ assert.equal((await handleApi(req('pension-owner','PUT',{data:saved.data,revision:2}),env)).status,200);
+ saved=await(await handleApi(req('pension-owner'),env)).json();assert.equal(saved.data.retirement[0].monthlyContribution,0);assert.equal(saved.data.retirement[0].contributionDate,'');
 });

@@ -20,18 +20,31 @@ export async function handleApi(request, env) {
     let body;
     try {body = JSON.parse(raw);} catch {return responseJSON({error:'데이터 형식을 확인해 주세요.'},400);}
     if (!Number.isSafeInteger(body.revision) || body.revision < 0) return responseJSON({error:'저장 버전이 올바르지 않습니다.'},400);
-    if (body.data && typeof body.data === 'object' && (['cashflow','fixed','budgets','snapshots'].some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&row.interestMode===undefined)) || (Array.isArray(body.data.cashflow)&&body.data.cashflow.some(row=>row&&row.includeInForecast===undefined))) && body.revision > 0) {
+    const dashboardOnly=Object.hasOwn(body,'dashboard');
+    if(dashboardOnly){
+      const previous=await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
+      if((previous?.revision||0)!==body.revision)return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
+      body.data={...(previous?JSON.parse(previous.data):emptyPortfolio()),dashboard:body.dashboard};
+    }
+    if(body.data && body.data.dashboard===undefined && body.revision>0){
+      const previous=await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
+      if(!previous||previous.revision!==body.revision)return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
+      body.data.dashboard=JSON.parse(previous.data).dashboard??null;
+    }
+    if (body.data && typeof body.data === 'object' && (['cashflow','fixed','budgets','snapshots','loanPayments'].some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&row.interestMode===undefined)) || (Array.isArray(body.data.cashflow)&&body.data.cashflow.some(row=>row&&row.includeInForecast===undefined)) || (Array.isArray(body.data.retirement)&&body.data.retirement.some(row=>row&&(row.monthlyContribution===undefined||row.contributionDate===undefined)))) && body.revision > 0) {
       const previous = await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
       if (!previous || previous.revision !== body.revision) return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
       const stored=JSON.parse(previous.data);
-      for(const key of ['cashflow','fixed','budgets','snapshots'])if(body.data[key]===undefined)body.data[key]=stored[key]||[];
+      for(const key of ['cashflow','fixed','budgets','snapshots','loanPayments'])if(body.data[key]===undefined)body.data[key]=stored[key]||[];
       const oldFlows=new Map((stored.cashflow||[]).map(row=>[row.id,row]));
       if(Array.isArray(body.data.cashflow))body.data.cashflow=body.data.cashflow.map(row=>row&&row.includeInForecast===undefined?{...row,includeInForecast:oldFlows.get(row.id)?.includeInForecast??true}:row);
+      const oldRetirement=new Map((stored.retirement||[]).map(row=>[row.id,row]));
+      if(Array.isArray(body.data.retirement))body.data.retirement=body.data.retirement.map(row=>{if(!row)return row;const old=oldRetirement.get(row.id);return {...row,monthlyContribution:row.monthlyContribution===undefined?(old?.monthlyContribution??0):row.monthlyContribution,contributionDate:row.contributionDate===undefined?(old?.contributionDate??''):row.contributionDate};});
       const oldLoans=new Map((stored.loans||[]).map(row=>[row.id,row]));
       if(Array.isArray(body.data.loans))body.data.loans=body.data.loans.map(row=>row&&row.interestMode===undefined?{...row,interestMode:oldLoans.get(row.id)?.interestMode||'manual'}:row);
     }
     let clean;
-    try {clean = recordCurrentSnapshot(validatePortfolio(body.data));} catch(error) {return responseJSON({error:error.message},400);}
+    try {clean = validatePortfolio(body.data);if(!dashboardOnly)clean=recordCurrentSnapshot(clean);} catch(error) {return responseJSON({error:error.message},400);}
     const stamp = new Date().toISOString();
     let result;
     if (body.revision === 0) {

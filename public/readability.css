@@ -1,0 +1,482 @@
+/* Shared reading scale and contrast, after the dashboard's layout styles. */
+:root {
+  --ink: #152b33;
+  --muted: #465b62;
+  --green: #12655c;
+  --line: #e0e9e5;
+  --text-secondary: #31474f;
+  --text-on-dark: #eef7f2;
+  --surface: #fff;
+  --canvas: #f3f6f4;
+  --soft-surface: #e8f1ec;
+  --track: #e0ebe5;
+  --asset-stock: #12655c;
+  --asset-cash: #6f9f8b;
+  --asset-retirement: #c7dccf;
+  --card-shadow: 0 6px 24px #163e390a, 0 1px 5px #163e3905;
+  --red: #ad303c;
+  --blue: #3558ad;
+
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+body { color: var(--ink); background: var(--canvas); }
+
+/* Filled surfaces and soft shadows replace container outlines. */
+.panel, .table-panel, .metric-box, .summary-card, .stat-card {
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+.summary-card.featured { background: #163e39; box-shadow: 0 8px 26px #163e3914; }
+.sidebar, .topbar { background: var(--surface); box-shadow: 0 4px 22px #163e3906; }
+.nav-link:hover, .icon-button:hover, .row-actions button:hover { background: #eef4f0; }
+.nav-link.active { background: #e0eee6; }
+.nav-link.active:after { background: var(--green); }
+.avatar, .institution-icon, .institution-icon.cards, .institution-icon.fixed,
+.stat-icon, .lock-icon, .payday-symbol { background: var(--soft-surface); }
+.payday-spotlight, .forecast-banner, .dashboard-notice, .intro-note,
+.empty-welcome { background: var(--soft-surface); box-shadow: 0 3px 14px #163e3905; }
+.payday-symbol { background: #f7fbf8; }
+.button, .calendar-toolbar button { box-shadow: 0 3px 10px #163e3908; }
+.secondary { background: #e5efe9; }
+.secondary:hover { background: #d9e9e0; }
+.segmented { background: #eaf0ec; }
+.segmented button.active { background: #fff; box-shadow: 0 2px 8px #163e390a; }
+.search-input, .field input, .field select, .field textarea,
+.payday-controls select, .scheduled-filters select { background: #edf3ef; box-shadow: none; }
+.field input[readonly] { background: #e5ece7; }
+.form-notice, .storage-note { background: #edf4ef; }
+.table-scroll th { background: #edf3ef; }
+.table-scroll tbody tr:nth-child(even) td { background: #f5f8f5; }
+.table-scroll tbody tr:hover td { background: #edf4ef; }
+.payday-table .selected-payday td { background: #e5f0e8; }
+.excluded-plan td { background: #f0f3f0; }
+.calendar-grid { gap: 5px; }
+.calendar-cell { background: #f0f5f1; border-radius: 8px; }
+.calendar-amount, .status-pill, .forecast-badge { background: #e0ece4; }
+.calendar-income, .status-pill.paid { background: #e0f0e5; }
+.status-pill.overdue { background: #f9e9e5; }
+.excluded-plan .status-pill:not(.paid) { background: #e3e9e4; }
+.budget-progress, .mini-progress { background: var(--track); }
+.budget-progress > i, .mini-progress i { background: var(--green); }
+.budget-progress > i.over-budget { background: #bd5b49; }
+.trend-chart figcaption i { background: var(--green); }
+.trend-chart figcaption .forecast-key i { background: repeating-linear-gradient(to right,#628b80 0 3px,transparent 3px 5px); }
+dialog { background: #fff; box-shadow: 0 18px 70px #163e3926; }
+dialog::backdrop { background: #102e2859; }
+.calendar-event-count { color: var(--muted);  }
+.loan-forecast-result { padding: 12px 16px; background: var(--soft-surface); border-radius: 10px; }
+.loan-forecast-result span { display: block; color: var(--text-secondary);  }
+.loan-forecast-result strong { display: block; color: var(--ink);  margin-top: 4px; }
+.loan-forecast-panel th, .loan-forecast-panel td { white-space: nowrap; }
+.loan-forecast-panel th[scope="colgroup"] { text-align: center; }
+.loan-forecast-panel .loan-balance-total,
+.loan-forecast-panel .table-scroll td.loan-balance-total { background: var(--soft-surface); color: var(--ink); }
+.loan-forecast-panel .loan-schedule-note { padding: 18px 24px; }
+.loan-interest-hint { margin: 0 24px 18px; padding: 13px 16px; background: var(--soft-surface); border-radius: 9px; color: var(--text-secondary);  line-height: 1.8; }
+.stats-controls { margin-bottom: 22px; }
+.stats-filter-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 18px; }
+.stats-filter-grid label, .stats-chart-select { display: flex; flex-direction: column; gap: 8px; color: var(--text-secondary);  }
+.stats-filter-grid input, .stats-filter-grid select, .stats-chart-select select { border: 0; border-radius: 9px; padding: 12px; min-height: 46px; min-width: 0; width: 100%; background: #edf3ef; color: var(--ink);  }
+.stats-filter-grid select:disabled { opacity: .55; }
+.stats-filter-wide { grid-column: span 2; }
+.stats-filter-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 20px; }
+#stats-filter-error { color: var(--red); margin-right: auto;  }
+.stats-period-label { color: var(--text-secondary);  margin: 0 0 16px; }
+.stats-note { background: var(--soft-surface); color: var(--text-secondary); border-radius: 10px; padding: 15px 18px;  line-height: 1.8; margin-bottom: 18px; }
+.stats-trend, .stats-table, .stats-breakdown { margin-bottom: 24px; }
+.stats-chart-select { min-width: 180px; }
+.stats-breakdown summary { color: var(--ink);  font-weight: 650; cursor: pointer; }
+.stats-breakdown summary span {  color: var(--muted); margin-left: 10px; font-weight: 400; }
+.stats-breakdown .table-scroll { margin-top: 18px; }
+.stats-table td { white-space: nowrap; }
+.stats-delete { width: auto; display: inline-block; }
+.stats-pagination { display: flex; align-items: center; justify-content: center; gap: 18px; padding: 18px; color: var(--text-secondary); }
+.stats-pagination button:disabled { cursor: default; }
+.advisor-controls { margin-bottom: 24px; }
+.advisor-controls fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.advisor-question { grid-column: 1/-1; }
+.advisor-question textarea { border: 0; border-radius: 9px; padding: 14px;  line-height: 1.7; background: #edf3ef; color: var(--ink); resize: vertical; width: 100%; }
+.advisor-key-note { color: var(--muted);  line-height: 1.8; margin-top: 18px; }
+.advisor-strategies { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+.advisor-answer { margin-bottom: 24px; }
+.advisor-answer p, .advisor-answer li {  color: var(--ink); line-height: 1.9; }
+.advisor-answer p { margin-top: 16px; }
+.advisor-answer h3 { color: var(--text-secondary);  margin-top: 18px; }
+.with-info { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.info-button { display: inline-grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--soft-surface); color: var(--green); font: 700 16px/1 Georgia,serif; cursor: pointer; box-shadow: 0 2px 8px #163e3908; }
+.info-button:hover { background: #d9e9e0; }
+.info-dialog { width: min(620px,calc(100vw - 32px)); }
+.info-dialog .info-copy, .info-dialog p, .info-dialog dd, .info-dialog li {  color: var(--ink); line-height: 1.9; }
+.info-dialog dt { color: var(--text-secondary);  margin-top: 16px; }
+.info-dialog dd { margin: 4px 0 0; font-weight: 650; }
+.filter-dialog { width: min(900px,calc(100vw - 32px)); }
+.filter-dialog .stats-controls { box-shadow: none; padding: 0; margin: 0; }
+.filter-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 0 0 20px; }
+.filter-summary {  color: var(--text-secondary); overflow-wrap: anywhere; }
+.filter-advanced { background: var(--soft-surface); padding: 16px; border-radius: 10px; margin-top: 18px; }
+.filter-advanced summary {  color: var(--ink); cursor: pointer; }
+.filter-advanced .stats-filter-grid { margin-top: 18px; }
+.disclosure-card { background: #fff; box-shadow: var(--card-shadow); border-radius: 14px; margin-bottom: 22px; overflow: clip; }
+.disclosure-card > summary { display: flex; align-items: center; gap: 10px; padding: 20px 23px; cursor: pointer; list-style: none; color: var(--ink);  font-weight: 650; }
+.disclosure-card > summary::-webkit-details-marker { display: none; }
+.disclosure-hint { margin-left: auto; color: var(--green);  font-weight: 500; white-space: nowrap; }
+.disclosure-body > .panel, .disclosure-body > .table-panel { box-shadow: none; margin: 0; border-radius: 0; }
+.disclosure-card[open] > .disclosure-body { animation: disclosure-reveal .18s ease; }
+.advisor-answer .disclosure-card { box-shadow: none; background: var(--soft-surface); margin: 14px 0; }
+.advisor-answer .disclosure-body { padding: 0 20px 15px; }
+.ui-steps { display: flex; flex-wrap: wrap; gap: 10px; height: auto; margin-bottom: 22px; }
+.ui-steps button { border: 0; background: var(--soft-surface); color: var(--text-secondary); border-radius: 10px; padding: 13px 18px;  font-weight: 650; }
+.ui-steps button.active { background: var(--green); color: #fff; }
+.advisor-connection { margin-bottom: 22px; }
+.advisor-connection .stats-filter-grid { margin-top: 18px; }
+.stage-next { margin-bottom: 24px; }
+.loan-forecast-select { display: grid; gap: 8px;  color: var(--text-secondary); min-width: 230px; }
+.loan-forecast-select select { padding: 12px; border: 0; border-radius: 10px; background: var(--soft-surface);  color: var(--ink); width: 100%; }
+.loan-forecast-summary { display: flex; align-items: center; gap: 24px; margin: 0 24px 24px; padding: 20px; border-radius: 12px; background: var(--soft-surface); }
+.loan-forecast-summary div { min-width: 0; }
+.loan-forecast-summary div span { display: block;  color: var(--text-secondary); line-height: 1.7; }
+.loan-forecast-summary strong { display: block;  margin-top: 8px; overflow-wrap: anywhere; }
+.loan-principal { color: var(--green); font-weight: 700; background: #edf4ef; }
+.row-actions .loan-forecast-link { padding: 9px 12px;  color: var(--green); background: var(--soft-surface); white-space: nowrap; }
+.loan-overview { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 24px; padding: 24px; background: var(--soft-surface); margin-bottom: 24px; }
+.loan-overview span, .loan-card-amounts span { color: var(--text-secondary);  }
+.loan-overview strong { display: block; color: var(--ink);  font-weight: 700; letter-spacing: -.7px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.loan-overview p { color: var(--muted);  margin-top: 8px; }
+.loan-overview .info-button { background: var(--surface); }
+.loan-accounts { margin-bottom: 24px; }
+.loan-accounts-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; }
+.loan-accounts-toolbar h2 {  color: var(--ink); }
+.loan-accounts-toolbar h2 span {  font-weight: 400; color: var(--muted); margin-left: 8px; }
+.loan-accounts-toolbar .search-input { width: 250px; max-width: 100%;  padding: 12px 14px; }
+.loan-account-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; align-items: start; }
+.loan-card { min-width: 0; padding: 24px; }
+.loan-card-heading { display: flex; align-items: start; gap: 14px; justify-content: space-between; margin-bottom: 22px; }
+.loan-card-heading > div { min-width: 0; }
+.loan-card-heading p, .loan-card-meta, .loan-card-note {  color: var(--muted); overflow-wrap: anywhere; }
+.loan-card-heading h3 {  color: var(--ink); margin-top: 4px; line-height: 1.6; overflow-wrap: anywhere; }
+.loan-card-heading .status-pill { white-space: nowrap;  }
+.loan-card-amounts { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+.loan-card-amounts > div { min-width: 0; }
+.loan-card-amounts strong { display: block;  color: var(--ink); line-height: 1.5; margin-top: 6px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.loan-card-amounts > div + div strong {  font-weight: 650; }
+.loan-card-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+.loan-card-details { margin-top: 20px; }
+.loan-card-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0;  color: var(--green); cursor: pointer; list-style: none; }
+.loan-card-details > summary::-webkit-details-marker { display: none; }
+.loan-card-details[open] > summary > span { transform: rotate(180deg); }
+.loan-detail-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; padding: 18px; border-radius: 10px; background: var(--soft-surface); }
+.loan-detail-grid > div { min-width: 0; }
+.loan-detail-grid dt { color: var(--text-secondary);  }
+.loan-detail-grid dd { margin: 5px 0 0;  color: var(--ink); font-weight: 650; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.loan-detail-grid dd small { display: block; margin-top: 4px;  font-weight: 400; color: var(--muted); }
+.loan-card-note { margin-top: 16px; }
+.loan-card-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; gap: 12px; }
+.loan-card-actions .loan-delete { color: var(--red);  min-height: 40px; }
+.loan-search-empty { grid-column: 1/-1; }
+.loan-month-list { margin: 0 24px 24px; }
+.loan-month-list-heading { display: flex; justify-content: space-between; padding: 0 42px 12px 16px; color: var(--muted);  }
+.loan-month { background: var(--canvas); border-radius: 10px; margin-bottom: 10px; }
+.loan-month > summary { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 16px; list-style: none; padding: 16px; cursor: pointer;  color: var(--ink); }
+.loan-month > summary::-webkit-details-marker { display: none; }
+.loan-month > summary .loan-balance-total {  font-weight: 650; background: none; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.loan-month-chevron { color: var(--green); }
+.loan-month[open] .loan-month-chevron { transform: rotate(180deg); }
+.loan-month-body { padding: 0 16px 18px; }
+.loan-month-body .loan-detail-grid { background: none; padding: 0; }
+.loan-month-caption {  color: var(--muted); margin-bottom: 16px; }
+.loan-month-calculation { display: flex; align-items: center; gap: 10px; margin-top: 18px;  color: var(--text-secondary); }
+@media(max-width:1100px) { .loan-account-list { grid-template-columns: 1fr; } }
+@media(max-width:680px) { .loan-overview { grid-template-columns: 1fr; gap: 20px; padding: 20px; } .loan-card { padding: 20px; } .loan-card-amounts { grid-template-columns: 1fr; gap: 16px; } .loan-accounts-toolbar .search-input { width: 100%; } .loan-month-list { margin: 0 18px 20px; } .loan-month > summary { gap: 10px; } }
+@media(max-width:680px) { .loan-forecast-panel .table-heading { flex-wrap: wrap; } .loan-forecast-select { width: 100%; } .loan-forecast-summary { margin: 0 18px 20px; padding: 18px; gap: 12px; flex-wrap: wrap; } }
+@keyframes disclosure-reveal { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@media(max-width:680px) { .ui-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; } .ui-steps button { padding: 12px 7px;  } .disclosure-card > summary { padding: 18px; flex-wrap: wrap; } }
+@media (max-width: 1000px) { .stats-filter-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 680px) { .stats-filter-wide { grid-column: 1/-1; } .stats-trend .panel-header { flex-wrap: wrap; } .stats-chart-select { width: 100%; } .stats-filter-actions { flex-wrap: wrap; } #stats-filter-error { width: 100%; } }
+h1 {  line-height: 1.4; }
+.panel-header h2, .table-heading h2, .card-title {
+  color: var(--ink);
+
+  font-weight: 700;
+}
+.subtitle, .summary-label, .budget-eyebrow, .metric-box .label,
+.flow-metrics span, .breakdown-row strong, .goal-details span,
+.payday-controls label, .payday-ledger > div, .settings-item h3,
+.calendar-toolbar strong, .legend-row, .payment-info strong {
+  color: var(--text-secondary);
+
+}
+.subtitle, .panel-header p, .summary-card > p, .panel-note,
+.budget-progress-label, .budget-widget-metrics span, .budget-widget-foot,
+.metric-box small, .flow-metrics small, .forecast-banner p,
+.category-note, .table-hint, .table-heading h2 span, .legend-row small,
+.payment-info small, .payment-date span, .portfolio-note,
+.loan-schedule-note, .loan-interest-panel th small, .form-notice,
+.storage-note, .settings-item p, .field-hint, .dialog-copy, .cash-hint,
+.payday-spotlight small, .payday-events small, .payday-debt,
+.dashboard-notice, .intro-note, .empty-state p, .empty-inline,
+.empty-welcome p, .error-state p, .cash-caption, .stat-caption {
+  color: var(--muted);
+
+  line-height: 1.8;
+}
+.summary-card:not(.featured) > p { color: var(--muted); }
+.eyebrow, .subtle-tag, .brand-sub, .workspace-label,
+.workspace-label > span, .nav-label, .summary-label > span,
+.date-chip, .brand-symbol > span {
+  color: var(--muted);
+}
+.eyebrow, .subtle-tag, .brand-sub { letter-spacing: 1px; }
+.breadcrumb, .breadcrumb strong, #save-state {
+  color: var(--text-secondary);
+
+}
+.breadcrumb span { color: var(--muted); }
+.nav-link { color: var(--text-secondary);  }
+.nav-link.active { color: var(--green); font-weight: 700; }
+.nav-link .nav-count { color: var(--muted);  }
+.private-badge, .text-button, .signout { color: var(--text-secondary);  }
+.private-badge small { color: var(--muted);  }
+.brand-symbol, .icon-button { color: var(--green); }
+.avatar { color: var(--green);  }
+.sidebar-bottom { padding-top: 12px; }
+
+.summary-card { min-height: 174px; }
+.summary-card > strong, .planning-metrics .metric-box strong,
+.metric-box strong, .budget-remaining, .budget-total strong,
+.goal-ring strong, .flow-metrics strong {
+  color: var(--ink);
+
+  font-weight: 700;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.summary-card p b, .summary-label svg { color: var(--green); }
+.summary-card.featured > strong { color: #fff; }
+.summary-card.featured .summary-label,
+.summary-card.featured .summary-label svg,
+.summary-card.featured > p, .summary-card.featured p b {
+  color: var(--text-on-dark);
+}
+.budget-widget-metrics strong, .legend-row strong, .payment-amount,
+.breakdown-row > b, .goal-details strong, .payday-ledger strong,
+.payday-events strong, .payday-events b, .payday-debt b,
+.portfolio-note b, .donut-center strong, .budget-total span {
+  color: var(--ink);
+
+  font-weight: 600;
+}
+.payday-ledger-total strong, .payday-spotlight-amount { color: var(--green);  }
+.payday-spotlight { color: var(--ink); }
+.payday-spotlight strong, .forecast-banner strong { color: var(--ink);  }
+.payday-spotlight-amount small {  font-weight: 400; }
+.donut-center span { color: var(--muted);  }
+.payment-date strong { color: var(--ink);  }
+.goal-ring span { color: var(--muted);  }
+.institution-icon, .institution-icon.cards, .institution-icon.fixed,
+.stat-icon, .lock-icon { color: var(--green); }
+.institution-icon.cashflow { color: #126749; }
+
+.button, .button.small, .heading-actions .button,
+.budget-widget > .button, .payday-table .button.small,
+.settings-item .button, .add-menu button {
+
+  min-height: 42px;
+}
+.primary { background: var(--green); color: #fff; }
+.primary:hover { background: #0e5149; }
+.secondary { border-color: #c7dccf; color: var(--green); }
+.panel-link, .dashboard-notice a, .trend-footer a { color: var(--green);  }
+.row-actions button { color: var(--green); min-width: 36px; min-height: 36px; }
+.segmented button { color: var(--text-secondary);  padding: 7px 11px; }
+.segmented button.active { color: var(--green); font-weight: 700; }
+.status-pill, .forecast-badge, .excluded-plan .status-pill:not(.paid) {
+  color: #31474f;
+
+  font-weight: 600;
+  line-height: 1.6;
+}
+.status-pill.paid { color: #126749; }
+.status-pill.overdue, .inline-warning, .form-error { color: #9d302f; }
+.demo-bar, .demo-bar button { color: #765012;  }
+.income-color { color: #126749 !important; }
+.text-danger { color: var(--red) !important; }
+.positive { color: var(--red); }
+.negative { color: var(--blue); }
+
+.table-scroll table, .table-scroll td { color: var(--ink);  }
+.table-scroll th { color: var(--text-secondary);  font-weight: 650; }
+.table-scroll td small { color: var(--muted);  line-height: 1.8; }
+.table-scroll { overflow-x: auto; }
+.table-heading { flex-wrap: wrap; }
+.table-hint { max-width: none; text-align: left; }
+.search-input, .payday-controls select, .scheduled-filters select {
+  color: var(--ink);
+
+  min-height: 42px;
+  border-color: #c7dccf;
+}
+.search-input::placeholder, .field input::placeholder, .field textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.field label { color: var(--text-secondary);  }
+.field label > small, .field label .required, .input-wrap > span, .field-suffix > span {
+  color: var(--muted);
+
+}
+.field input, .field select, .field textarea {
+  color: var(--ink);
+
+  border-color: #c7dccf;
+}
+.field input[readonly] { color: var(--text-secondary); }
+.dialog-heading h2 { color: var(--ink);  }
+.empty-state h3, .empty-welcome h2 { color: var(--ink); }
+.empty-symbol { color: var(--green) !important; }
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible,
+.scheduled-filters select:focus-visible { outline-color: var(--green); }
+
+/* Keep SVG labels readable at narrow widths; scroll the chart within its panel. */
+.trend-chart { overflow-x: auto; }
+.trend-chart svg { min-width: 640px; min-height: 220px; }
+.trend-chart text { fill: var(--text-secondary);  }
+.trend-chart figcaption { color: var(--muted);  flex-wrap: wrap; }
+.trend-footer { color: var(--muted);  flex-wrap: wrap; line-height: 1.8; }
+.calendar-day-label, .calendar-cell { color: var(--text-secondary);  }
+.calendar-cell.today .day-number { background: var(--green); color: #fff; }
+.calendar-amount { color: var(--green);  }
+.calendar-income { color: #126749;  }
+.calendar-count, .calendar-key { color: var(--muted);  }
+.calendar-toolbar button { color: var(--green);  min-height: 32px; }
+footer, footer .footer-right { color: var(--muted);  line-height: 1.8; }
+footer { flex-wrap: wrap; }
+#toast { background: #163e39;  }
+
+@media (max-width: 1220px) {
+  .dashboard-main { grid-template-columns: 1fr; }
+}
+@media (min-width: 681px) and (max-width: 1220px) {
+  .budget-widget { display: block; }
+  .budget-widget-metrics { margin-top: 24px; padding: 19px 0 22px; }
+}
+@media (max-width: 680px) {
+  .page-heading { flex-wrap: wrap; align-items: flex-start; }
+  .subtitle { max-width: none;  }
+  .heading-actions { flex-wrap: wrap; gap: 8px; }
+  .sidebar { height: 78px; }
+  .sidebar nav { padding: 0 5px; }
+  .nav-link { flex-basis: 88px; min-width: 88px; padding: 9px 5px;  }
+  .nav-link svg { width: 20px; height: 20px; }
+  .budget-widget { display: block; }
+  .budget-widget-metrics { grid-template-columns: 1fr 1fr; margin-top: 24px; padding: 18px 0; }
+  .budget-widget > .button { margin-top: 10px; }
+  .budget-widget-foot {  margin: 0 0 16px; }
+  .payday-spotlight { flex-wrap: wrap; }
+  .payday-spotlight small { max-width: none; }
+  .payday-spotlight-amount { margin-left: 40px; text-align: left; }
+  .payday-ledger > div {  flex-wrap: wrap; gap: 8px; }
+  .forecast-banner { flex-wrap: wrap; }
+  .payment-row { flex-wrap: wrap; }
+  .payment-info { min-width: 100px; }
+  .allocation { gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .allocation-legend { min-width: 160px; }
+  .calendar-cell { min-height: 95px; }
+  .calendar-amount, .calendar-income {  overflow-wrap: anywhere; }
+  footer { padding-bottom: 110px; }
+  #toast { bottom: 96px; }
+}
+@media (max-width: 520px) {
+  .summary-grid { grid-template-columns: 1fr; }
+  .summary-card { min-height: 0; padding: 20px; }
+  .summary-label {  margin-bottom: 12px; }
+}
+
+/* Reveal the plot together so the forecast keeps its dashed line pattern. */
+.interactive-chart { overflow: visible; position: relative; }
+.trend-plot-scroll { overflow-x: auto; scrollbar-width: thin; border-radius: 8px; }
+.interactive-chart svg { min-width: 760px; min-height: 280px; max-height: none; overflow: hidden; }
+.chart-reveal-mask {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: chart-unfold 1.2s cubic-bezier(.22,.61,.36,1) both;
+}
+@keyframes chart-unfold {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.chart-point { cursor: pointer; outline: none; }
+.chart-hit-area { pointer-events: all; }
+.chart-dot { transition: r .16s ease; }
+.chart-point-halo { opacity: 0; transition: opacity .16s ease; pointer-events: none; }
+.chart-point[aria-pressed="true"] .chart-point-halo,
+.chart-point:focus-visible .chart-point-halo { opacity: 1; }
+.chart-point[aria-pressed="true"] .chart-dot,
+.chart-point:focus-visible .chart-dot { r: 9px; stroke-width: 3px; }
+.chart-selection-line {
+  stroke: #628b80;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+.chart-tooltip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  position: absolute;
+  z-index: 60;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #163e39;
+  color: #fff;
+  box-shadow: 0 7px 24px #163e3926;
+  pointer-events: none;
+}
+.chart-tooltip .chart-tooltip-date { color: #e0eee8;  line-height: 1.4; font-variant-numeric: tabular-nums; }
+.chart-tooltip .chart-tooltip-value { color: #fff;  font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.interactive-chart figcaption { padding-top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-reveal-mask { animation: none; transform: none; }
+  .chart-dot, .chart-point-halo { transition: none; }
+}
+
+/* Keep the history page on one reading scale at every viewport width. */
+.history-view .flow-month-bar { flex-wrap: wrap; gap: 16px; color: var(--ink);  }
+.history-view .calendar-toolbar { gap: 12px; flex-wrap: wrap; }
+.history-view .calendar-toolbar strong {  color: var(--ink); font-weight: 650; }
+.history-view .calendar-toolbar button {  min-width: 44px; min-height: 44px; background: var(--surface); color: var(--green); }
+.history-view .planning-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+.history-view .planning-metrics .metric-box { display: block; grid-column: auto; padding: 20px 24px; min-width: 0; }
+.history-view .planning-metrics .metric-box .label { color: var(--text-secondary);  line-height: 1.6; margin-bottom: 12px; }
+.history-view .planning-metrics .metric-box strong {  line-height: 1.5; color: var(--ink); font-weight: 650; letter-spacing: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.history-view .panel-header h2, .history-view .disclosure-card > summary {  line-height: 1.6; font-weight: 650; color: var(--ink); }
+.history-view .disclosure-hint {  color: var(--green); }
+.history-view .history-trend .trend-chart text {  font-weight: 500; fill: var(--text-secondary); }
+.history-view .history-trend figcaption {  color: var(--text-secondary); }
+.history-view .history-records .table-heading { display: none; }
+.history-view .history-records th {  font-weight: 650; color: var(--ink); background: var(--soft-surface); padding: 18px 20px; }
+.history-view .history-records td {  font-weight: 500; color: var(--ink); padding: 20px; line-height: 1.6; }
+.history-view .history-records td strong {  font-weight: 650; }
+.history-view .history-records td small {  line-height: 1.7; color: var(--text-secondary); margin-top: 6px; }
+.history-view .history-records td.history-net { background: var(--soft-surface); }
+.history-view .history-records .status-pill { display: inline-block;  line-height: 1.6; font-weight: 500; color: var(--ink); padding: 6px 10px; background: var(--soft-surface); }
+.history-view .history-records .button, .history-view .heading-actions .button {  min-height: 44px; }
+.history-view .empty-state h3, .history-view .empty-welcome h2 {  color: var(--ink); line-height: 1.6; }
+.history-view .empty-state p, .history-view .empty-welcome p, .history-view .empty-inline {  color: var(--text-secondary); line-height: 1.8; }
+.history-editor { width: min(620px,calc(100vw - 32px)); }
+.history-editor .dialog-heading h2 {  line-height: 1.5; }
+.history-editor .field label, .history-editor .field input {  line-height: 1.6; color: var(--ink); }
+.history-editor .input-wrap > span {  color: var(--text-secondary); }
+.history-editor .dialog-actions .button {  min-height: 44px; }
+.history-editor .form-error {  line-height: 1.7; }
+@media(max-width:520px) {
+  .history-view .planning-metrics { grid-template-columns: 1fr; }
+  .history-view .planning-metrics .metric-box { padding: 20px; }
+  .history-view .history-records th, .history-view .history-records td { padding: 18px 16px; }
+  .history-editor .form-grid { grid-template-columns: 1fr; }
+}
