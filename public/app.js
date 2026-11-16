@@ -184,7 +184,7 @@ document.addEventListener('click',async e=>{
  if(['prev-month','next-month','this-month'].includes(action)){if(action==='this-month')month=todayKST().slice(0,7);else{const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+(action==='next-month'?1:-1),1));month=d.toISOString().slice(0,7);}render();}
 });
 document.addEventListener('input',e=>{
- if(e.target.id==='record-search'){query=e.target.value;const rows=filteredRecords(view);$('records-body').innerHTML=rows.map(r=>rowHTML(view,r)).join('')||`<tr><td colspan="${tableHeaders[view].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
+ if(e.target.id==='record-search'){query=e.target.value;const rows=filteredRecords(view);if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(view,r)).join('')||`<tr><td colspan="${tableHeaders[view].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
  if(e.target.matches('#record-form input[inputmode="numeric"]')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}
 });
 $('privacy-toggle').onclick=()=>{hidden=!hidden;localStorage.setItem('moa-hide-amounts',String(hidden));if(!loading)render();else renderNav();};

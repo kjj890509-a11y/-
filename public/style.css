@@ -7,3 +7,5 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 #mobile-settings{display:none}@media(max-width:680px){#mobile-settings{display:grid}.topbar-right{gap:5px}}
+
+[hidden]{display:none!important}.full-width{grid-column:1/-1}.input-wrap{position:relative}.input-wrap input{padding-right:40px}.input-wrap>span{position:absolute;right:12px;top:12px;color:#9ba88f;font-size:10px;pointer-events:none}.field label>small{font-size:9px;font-weight:400;color:#a0aa96;margin-left:4px}.form-notice{font-size:10px;color:#97a38c;line-height:1.9}
