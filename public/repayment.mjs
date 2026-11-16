@@ -1,4 +1,4 @@
-import {todayKST, validDate, totals, cashflowForMonth, fixedForMonth, paymentDate, shiftMonth, estimatedMonthlyInterest, retirementContributionsForMonth} from './domain.mjs';
+import {todayKST, validDate, totals, cashflowForMonth, fixedForMonth, paymentDate, shiftMonth, estimatedMonthlyInterest, retirementContributionsForMonth, createLoanState, loanPaymentForMonth} from './domain.mjs';
 
 export function repaymentScenarios(data, options = {}) {
   const asOf=options.asOf||todayKST(), months=Number(options.months??12);
@@ -16,7 +16,7 @@ export function repaymentScenarios(data, options = {}) {
 }
 function simulateRepayment(data,{monthlyExtra,lumpSum,reserve,asOf,months,strategy}) {
   const opening=totals(data);
-  const loans=data.loans.map(loan=>({...loan,scheduledPayment:loan.principal+estimatedMonthlyInterest(loan.balance,loan.rate)}));
+  const loans=data.loans.map(loan=>createLoanState(loan,asOf));
   let deposits=opening.deposits,retirement=opening.retirement,cards=opening.cards,totalInterest=0,totalExtra=0,payoffDate=null;
   const extraByLoan=new Map(),rows=[];
   const applyExtra = requested => {
@@ -33,15 +33,14 @@ function simulateRepayment(data,{monthlyExtra,lumpSum,reserve,asOf,months,strate
     for(const row of cashflowForMonth(data,month))if(row.occursOn>asOf)events.push({date:row.occursOn,kind:row.type==='expense'?'expense':'income',amount:row.amount});
     for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>asOf)events.push({date:row.occursOn,kind:'expense',amount:row.amount});
     for(const row of data.cards)if(!row.paid&&row.dueDate.startsWith(month)&&row.dueDate>asOf)events.push({date:row.dueDate,kind:'card',amount:row.amount});
-    for(const loan of loans){const date=paymentDate(month,loan.day);if(date>asOf)events.push({date,kind:'loan',loan});}
+    for(const loan of loans){const date=loan.term&&month===loan.firstPaymentDate.slice(0,7)?loan.firstPaymentDate:paymentDate(month,loan.day);if(date>asOf&&(!loan.term||date>=loan.firstPaymentDate))events.push({date,kind:'loan',loan});}
     events.sort((a,b)=>a.date.localeCompare(b.date));
     for(const event of events){
       if(event.kind==='income'){deposits+=event.amount;income+=event.amount;continue;}
       if(event.kind==='loan'){
         const loan=event.loan;if(loan.balance<=0)continue;
-        const fee=estimatedMonthlyInterest(loan.balance,loan.rate);
-        const repaid=Math.min(loan.balance,loan.method==='원리금균등'?Math.max(0,loan.scheduledPayment-fee):loan.principal);
-        loan.balance-=repaid;deposits-=repaid+fee;interest+=fee;principal+=repaid;expense+=repaid+fee;
+        const payment=loanPaymentForMonth(loan,month,asOf),fee=payment.interest,repaid=payment.principal;
+        deposits-=repaid+fee;interest+=fee;principal+=repaid;expense+=repaid+fee;
         if(!payoffDate&&loans.every(row=>row.balance===0))payoffDate=event.date;
       }else{deposits-=event.amount;expense+=event.amount;if(event.kind==='card')cards-=event.amount;}
     }

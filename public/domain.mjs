@@ -46,7 +46,7 @@ export function validatePortfolio(input) {
       if (typeof row.name !== 'string' || !row.name.trim() || row.name.length > 100) throw new Error('항목 이름을 100자 이내로 입력해 주세요.');
       const result = {id: row.id, name: row.name.trim()};
       for (const key of moneyFields[kind]) {
-        if(kind==='loans'&&key==='interest'&&row.interestMode==='estimate')continue;
+        if(kind==='loans'&&(key==='interest'&&(row.interestMode==='estimate'||row.calculationMode==='term')||key==='principal'&&row.calculationMode==='term'))continue;
         const value=kind==='retirement'&&key==='monthlyContribution'&&row[key]===undefined?0:row[key];
         if (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000_000_000_000) throw new Error('금액은 0 이상의 정수(원)로 입력해 주세요.');
         result[key] = value;
@@ -64,9 +64,22 @@ export function validatePortfolio(input) {
         if (!Number.isInteger(row.day) || row.day < 1 || row.day > 31) throw new Error('상환일은 매월 1~31일로 입력해 주세요.');
         if (!['원리금균등', '원금균등', '만기일시', '기타'].includes(row.method)) throw new Error('상환 방식을 선택해 주세요.');
         result.day = row.day;
-        const mode=row.interestMode??'manual';
-        if(!['manual','estimate'].includes(mode))throw new Error('이자 계산 방식을 선택해 주세요.');
-        result.interestMode=mode;result.interest=mode==='estimate'?estimatedMonthlyInterest(row.balance,row.rate):row.interest;
+        result.calculationMode=row.calculationMode??'manual';
+        if(!['manual','term'].includes(result.calculationMode))throw new Error('상환 계산 기준을 선택해 주세요.');
+        if(result.calculationMode==='term'){
+          if(!['원금균등','원리금균등','만기일시'].includes(row.method))throw new Error('기간 계산에 사용할 상환 방식을 선택해 주세요.');
+          if(!Number.isInteger(row.remainingMonths)||row.remainingMonths<1||row.remainingMonths>600)throw new Error('남은 상환 횟수는 1~600회로 입력해 주세요.');
+          const grace=row.graceMonths??0;
+          if(!Number.isInteger(grace)||grace<0||grace>=row.remainingMonths)throw new Error('남은 거치 횟수는 0 이상, 전체 남은 상환 횟수보다 작아야 합니다.');
+          if(!validDate(row.nextPaymentDate)||!validMonth(row.nextPaymentDate.slice(0,7)))throw new Error('다음 납부일을 입력해 주세요.');
+          result.remainingMonths=row.remainingMonths;result.graceMonths=grace;result.nextPaymentDate=row.nextPaymentDate;
+          result.interestMode='estimate';
+          const payment=loanNextPayment({...result,method:row.method});result.principal=payment.principal;result.interest=payment.interest;
+        }else{
+          const mode=row.interestMode??'manual';
+          if(!['manual','estimate'].includes(mode))throw new Error('이자 계산 방식을 선택해 주세요.');
+          result.interestMode=mode;result.interest=mode==='estimate'?estimatedMonthlyInterest(row.balance,row.rate):row.interest;
+        }
       }
       if(kind==='fixed') {
         if(!Number.isInteger(row.day)||row.day<1||row.day>31)throw new Error('납부일은 1~31일로 입력해 주세요.');
@@ -149,7 +162,7 @@ export function totals(data) {
   const deposits = sum('deposits', 'balance'), retirement = sum('retirement', 'amount');
   const loans = sum('loans', 'balance'), cards = sum('cards', 'amount', row => !row.paid);
   const gross = stock + deposits + retirement;
-  return {stock, cost, deposits, retirement, loans, cards, gross, debt: loans + cards, net: gross - loans - cards, profit: stock - cost, profitRate: cost ? (stock - cost) / cost * 100 : null, monthlyPrincipal:data.loans.reduce((n,row)=>n+Math.min(row.balance,row.principal),0), monthlyInterest:data.loans.reduce((n,row)=>n+interestForLoan(row),0)};
+  return {stock, cost, deposits, retirement, loans, cards, gross, debt: loans + cards, net: gross - loans - cards, profit: stock - cost, profitRate: cost ? (stock - cost) / cost * 100 : null, monthlyPrincipal:data.loans.reduce((n,row)=>n+loanNextPayment(row).principal,0), monthlyInterest:data.loans.reduce((n,row)=>n+interestForLoan(row),0)};
 }
 export function paymentDate(month, day) {
   const [year, m] = month.split('-').map(Number);
@@ -158,7 +171,7 @@ export function paymentDate(month, day) {
 }
 export function eventsForMonth(data, month) {
   return [
-    ...data.loans.filter(row => row.balance > 0 && row.principal + interestForLoan(row) > 0).map(row => ({id: row.id, name: row.name, date: paymentDate(month, row.day), amount: Math.min(row.balance,row.principal) + interestForLoan(row), type: 'loans', paid: false})),
+    ...loanEventsForMonth(data,month),
     ...data.cards.filter(row => row.dueDate.startsWith(month)).map(row => ({id: row.id, name: row.name, date: row.dueDate, amount: row.amount, type: 'cards', paid: row.paid})),
     ...fixedForMonth(data,month).filter(row=>row.paymentSource==='account').map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'fixed',paid:false})),
     ...cashflowForMonth(data,month).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
@@ -186,26 +199,70 @@ export function fixedForMonth(data,month) {
  return (data.fixed||[]).filter(row=>row.startMonth<=month&&(!row.endMonth||row.endMonth>=month)).map(row=>({...row,occursOn:paymentDate(month,row.day)})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
 }
 export function estimatedMonthlyInterest(balance,rate) {return Math.round(balance*rate/1200);}
-export function interestForLoan(loan,balance=loan.balance) {return balance<=0?0:loan.interestMode==='estimate'?estimatedMonthlyInterest(balance,loan.rate):loan.interest;}
-export function loanSchedule(data,startMonth=todayKST().slice(0,7),count=12,afterDate=null) {
- // A recorded bank bill describes the current payment; forecasts always use the rate and remaining principal.
- const loans=data.loans.map(row=>({...row,scheduledPayment:row.principal+estimatedMonthlyInterest(row.balance,row.rate)})),months=[];
- for(let index=0;index<count;index++) {
-  const month=shiftMonth(startMonth,index);let principal=0,interest=0;const details=[];
-  for(const row of loans) {
-   const date=paymentDate(month,row.day),openingBalance=row.balance;
-   let repayment=0,fee=0;
-   if(row.balance>0&&(!afterDate||date>afterDate)) {
-    fee=estimatedMonthlyInterest(row.balance,row.rate);
-    const planned=row.method==='원리금균등'?Math.max(0,row.scheduledPayment-fee):row.principal;
-    repayment=Math.min(row.balance,planned);row.balance-=repayment;
+export function interestForLoan(loan,balance=loan.balance) {return balance<=0?0:loan.calculationMode==='term'||loan.interestMode==='estimate'?estimatedMonthlyInterest(balance,loan.rate):loan.interest;}
+export function loanFirstPaymentDate(loan,asOf=null){
+ if(loan.calculationMode!=='term')return null;
+ if(!asOf||loan.nextPaymentDate>asOf)return loan.nextPaymentDate;
+ const date=paymentDate(asOf.slice(0,7),loan.day);
+ return date>asOf?date:paymentDate(shiftMonth(asOf.slice(0,7),1),loan.day);
+}
+export function createLoanState(loan,asOf=null){
+ const term=loan.calculationMode==='term',count=term?loan.remainingMonths:0,grace=term?(loan.graceMonths||0):0,repayments=count-grace;
+ const monthlyRate=loan.rate/1200;
+ const principal=term?(loan.method==='만기일시'?0:Math.floor(loan.balance/repayments)):loan.principal;
+ const scheduledPayment=term?(monthlyRate===0?Math.round(loan.balance/repayments):Math.round(loan.balance*monthlyRate/(-Math.expm1(-repayments*Math.log1p(monthlyRate))))):loan.principal+estimatedMonthlyInterest(loan.balance,loan.rate);
+ return {...loan,graceMonths:loan.graceMonths??0,term,installments:0,firstPaymentDate:loanFirstPaymentDate(loan,asOf),principal,scheduledPayment};
+}
+export function loanPaymentForMonth(row,month,afterDate=null){
+ const openingBalance=row.balance;
+ let date=paymentDate(month,row.day),principal=0,interest=0,installment=null;
+ const eligible=!row.term||month>=row.firstPaymentDate.slice(0,7);
+ if(row.term&&month===row.firstPaymentDate.slice(0,7))date=row.firstPaymentDate;
+ if(eligible&&row.balance>0&&(!afterDate||date>afterDate)&&(!row.term||row.installments<row.remainingMonths)){
+  interest=estimatedMonthlyInterest(row.balance,row.rate);
+  if(row.term){
+   row.installments++;installment=row.installments;
+   if(installment>row.graceMonths){
+    const last=installment===row.remainingMonths;
+    const planned=row.method==='원리금균등'?Math.max(0,row.scheduledPayment-interest):row.method==='만기일시'?0:row.principal;
+    principal=last?row.balance:Math.min(row.balance,planned);
    }
-   principal+=repayment;interest+=fee;
-   details.push({id:row.id,name:row.name,date,principal:repayment,interest:fee,payment:repayment+fee,openingBalance,balance:row.balance,interestMode:row.interestMode||'manual'});
-  }
-  months.push({month,principal,interest,payment:principal+interest,balance:loans.reduce((n,row)=>n+row.balance,0),details});
+  }else principal=Math.min(row.balance,row.method==='원리금균등'?Math.max(0,row.scheduledPayment-interest):row.principal);
+  row.balance-=principal;
+ }
+ return {id:row.id,name:row.name,date,principal,interest,payment:principal+interest,openingBalance,balance:row.balance,interestMode:row.interestMode||'manual',installment,scheduled:eligible&&(!row.term||row.installments<=row.remainingMonths)};
+}
+export function loanNextPayment(loan,asOf=null){
+ if(loan.calculationMode!=='term')return {principal:Math.min(loan.balance,loan.principal),interest:interestForLoan(loan),payment:Math.min(loan.balance,loan.principal)+interestForLoan(loan)};
+ const state=createLoanState(loan,asOf),row=loanPaymentForMonth(state,state.firstPaymentDate.slice(0,7));
+ return row;
+}
+export function loanSchedule(data,startMonth=todayKST().slice(0,7),count=12,afterDate=null) {
+ const loans=data.loans.map(row=>createLoanState(row,afterDate)),months=[];
+ for(let index=0;index<count;index++) {
+  const month=shiftMonth(startMonth,index),details=loans.map(row=>loanPaymentForMonth(row,month,afterDate));
+  months.push({month,principal:details.reduce((n,row)=>n+row.principal,0),interest:details.reduce((n,row)=>n+row.interest,0),payment:details.reduce((n,row)=>n+row.payment,0),balance:loans.reduce((n,row)=>n+row.balance,0),details});
  }
  return months;
+}
+export function loanPlanSummary(loan,asOf=todayKST()){
+ const first=loanFirstPaymentDate(loan,asOf);
+ if(loan.calculationMode!=='term')return {complete:false,next:loanNextPayment(loan),payoffDate:null,interest:null,payment:null};
+ const state=createLoanState(loan,asOf),rows=[];
+ for(let i=0;i<loan.remainingMonths;i++)rows.push(loanPaymentForMonth(state,shiftMonth(first.slice(0,7),i)));
+ const payable=rows.filter(row=>row.payment>0||row.installment!==null),last=payable.at(-1);
+ return {complete:true,next:rows[0],payoffDate:last?.date||null,interest:rows.reduce((n,row)=>n+row.interest,0),payment:rows.reduce((n,row)=>n+row.payment,0),principal:loan.balance-state.balance,rows,adjusted:first!==loan.nextPaymentDate};
+}
+function loanEventsForMonth(data,month){
+ const today=todayKST(),current=today.slice(0,7),distance=(Number(month.slice(0,4))-Number(current.slice(0,4)))*12+Number(month.slice(5,7))-Number(current.slice(5,7));
+ return data.loans.flatMap(loan=>{
+  if(loan.calculationMode!=='term')return loan.balance>0&&loan.principal+interestForLoan(loan)>0?[{id:loan.id,name:loan.name,date:paymentDate(month,loan.day),amount:Math.min(loan.balance,loan.principal)+interestForLoan(loan),type:'loans',paid:false}]:[];
+  // Term-based calendar, budget and projections use the same future amortization schedule.
+  const start=distance>=0?current:loan.nextPaymentDate.slice(0,7),count=distance>=0?distance+1:1;
+  if(distance<0&&month!==start||count>120)return [];
+  const row=loanSchedule({loans:[loan]},start,count,distance>=0?today:null).at(-1).details[0];
+  return row.payment>0?[{id:loan.id,name:loan.name,date:row.date,amount:row.payment,type:'loans',paid:false}]:[];
+ });
 }
 export function validMonth(month) { return typeof month==='string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && Number(month.slice(0,4))>=1900 && Number(month.slice(0,4))<=2199; }
 export function shiftMonth(month,offset) {

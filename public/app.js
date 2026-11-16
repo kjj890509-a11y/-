@@ -1,5 +1,5 @@
 import {createWorkspaceState,renderWorkspace,mountWorkspace,unmountWorkspace,defaultDashboard,dashboardConfig,widgetTemplates} from '/workspace.mjs';
-import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, loanSchedule, paydayForecasts, scheduledCashflows} from '/domain.mjs';
+import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, loanSchedule, paydayForecasts, scheduledCashflows, loanNextPayment, loanPlanSummary, shiftMonth} from '/domain.mjs';
 import {renderTrendChart, mountTrendCharts} from '/chart.mjs';
 import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
@@ -43,7 +43,7 @@ let hidden = localStorage.getItem('moa-hide-amounts') === 'true';
 let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
-let chartHorizon=6,loanForecastId='';
+let chartHorizon=6,loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
 let advisorState;
 let workspaceState=createWorkspaceState();
@@ -253,6 +253,25 @@ function syncLoanInterest(){
  input.readOnly=mode.value==='estimate';input.title=input.readOnly?'잔액 × 연 이율 ÷ 12로 계산한 추정 금액입니다.':'금융기관의 이번 납부 이자를 입력하세요. 월별 예상 이자는 잔액과 이율로 다시 계산합니다.';
  if(input.readOnly){const balance=Number(($('field-balance').value||'0').replaceAll(',','')),rate=Number($('field-rate').value||0);if(Number.isFinite(balance)&&Number.isFinite(rate)&&balance>=0&&rate>=0&&rate<=100)input.value=wonFormat.format(estimatedMonthlyInterest(balance,rate));}
 }
+function syncLoanPlan(){
+ if(editorKind!=='loans'||!$('field-calculationMode'))return;
+ const term=$('field-calculationMode').value==='term';
+ for(const key of ['remainingMonths','graceMonths','nextPaymentDate']){const field=$('field-'+key);field.closest('.field').hidden=!term;field.required=term;}
+ for(const key of ['principal','interestMode','interest']){const field=$('field-'+key);field.closest('.field').hidden=term;field.required=!term;}
+ const method=$('field-method');method.querySelector('option[value="기타"]').disabled=term;
+ if(term&&method.value==='기타')method.value='원금균등';
+ const date=$('field-nextPaymentDate');if(term)date.min=new Date(Date.parse(todayKST()+'T00:00:00Z')+86400000).toISOString().slice(0,10);
+ const notice=$('form-fields').querySelector('.form-notice');
+ if(notice&&!demo)notice.textContent=term?'현재 잔액과 남은 횟수 기준입니다. 원금균등은 거치 후 잔액 ÷ 원금 상환 횟수, 이자는 매월 상환 전 잔액 × 연이율 ÷ 12로 추정합니다. 마지막 회차에 원 단위 차이를 정산합니다. 금융기관의 일수 계산·금리 변동·중도상환 수수료는 별도입니다.':'은행의 월 원금과 이번 납부 이자를 입력하세요. 미래 이자는 남은 잔액과 연이율로 다시 계산합니다.';
+ const preview=$('loan-plan-preview');if(!preview)return;preview.hidden=!term;
+ if(!term){syncLoanInterest();return;}
+ const number=key=>Number(String($('field-'+key).value).replaceAll(',',''));
+ const loan={id:'preview',name:'예상',calculationMode:'term',balance:number('balance'),rate:number('rate'),remainingMonths:number('remainingMonths'),graceMonths:number('graceMonths'),nextPaymentDate:date.value,day:number('day'),method:method.value};
+ if(!Number.isSafeInteger(loan.balance)||loan.balance<0||!Number.isFinite(loan.rate)||loan.rate<0||loan.rate>100||!Number.isInteger(loan.remainingMonths)||loan.remainingMonths<1||loan.remainingMonths>600||!Number.isInteger(loan.graceMonths)||loan.graceMonths<0||loan.graceMonths>=loan.remainingMonths||!Number.isInteger(loan.day)||loan.day<1||loan.day>31||!/^\d{4}-\d{2}-\d{2}$/.test(date.value)){preview.textContent='잔액·연이율·남은 횟수·납부일을 입력하면 상환 계획을 계산합니다.';return;}
+ const plan=loanPlanSummary(loan),next=plan.next;
+ $('field-principal').value=wonFormat.format(next.principal);$('field-interest').value=wonFormat.format(next.interest);$('field-interestMode').value='estimate';
+ preview.innerHTML=`<h3>입력 조건으로 계산한 상환 계획</h3><dl><div><dt>첫 납부액 · ${next.date}</dt><dd>${money(next.payment)}</dd><small>원금 ${money(next.principal)} + 이자 ${money(next.interest)}</small></div><div><dt>남은 총이자</dt><dd>${money(plan.interest)}</dd></div><div><dt>남은 총상환액</dt><dd>${money(plan.payment)}</dd></div><div><dt>완납 예정일</dt><dd>${plan.payoffDate||'상환 완료'}</dd><small>${loan.remainingMonths}회 · 거치 ${loan.graceMonths}회 포함</small></div></dl>`;
+}
 function syncRetirementContribution(){
  if(editorKind!=='retirement'||!$('field-monthlyContribution')||!$('field-contributionDate'))return;
  const enabled=Number($('field-monthlyContribution').value.replaceAll(',',''))>0,input=$('field-contributionDate');
@@ -260,12 +279,12 @@ function syncRetirementContribution(){
  const label=input.closest('.field').querySelector('label small');if(label)label.textContent=enabled?'필수':'선택';
 }
 function loanForecastPanel(){
- return renderLoanForecastPanel(portfolio,{formatMoney:money,loanId:loanForecastId});
+ return renderLoanForecastPanel(portfolio,{formatMoney:money,loanId:loanForecastId,period:loanForecastPeriod});
 }
 
 function filteredRecords(kind){return (kind==='cashflow'?cashflowForMonth(portfolio,month,true):kind==='fixed'?fixedForMonth(portfolio,month):portfolio[kind]).filter(r=>(r.name+' '+(r.institution||'')+' '+(r.note||'')).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>kind==='cards'?a.dueDate.localeCompare(b.dueDate):0);}
 function category(kind){
- if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,query,heading:heading('대출 현황','남은 잔액과 매월 납입액을 확인하세요.'),demoBanner:demoBanner(),forecastPanel:loanForecastPanel()});
+ if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.'),demoBanner:demoBanner(),forecastPanel:loanForecastPanel()});
  const data=filteredRecords(kind);
  const notes={fixed:'매월 납부일이 없는 달은 말일로 표시합니다. 시작월·종료월은 해당 월을 포함합니다. 카드 청구액에 포함되는 항목은 고정지출 분석에만 포함하고 카드대금과 중복 합산하지 않습니다. 수입·지출에 같은 항목을 이미 등록했다면 중복 입력하지 마세요.',cashflow:'월급은 실수령액으로 입력해 주세요. 매월 반복은 시작일이 속한 달부터 같은 날짜에 반영하며, 해당 날짜가 없는 달에는 말일로 표시합니다. 기타 지출은 카드대금·대출상환액과 중복되지 않게 입력해 주세요. 수입·지출 기록은 예금 잔액이나 순자산을 자동으로 바꾸지 않습니다.',stocks:'증권사 계좌별 총액 또는 종목별 금액 중 한 가지 방식으로 등록해 주세요. 같은 자산을 중복 등록하면 합계도 중복됩니다. 해외 자산은 원화로 환산해 입력해 주세요.',loans:'월별 예상 이자는 매달 남은 잔액 × 연 이율 ÷ 12로 계산합니다. 이번 납부 이자는 은행 청구액을 직접 입력할 수 있습니다. 실제 이자는 일수·금리 변경에 따라 다를 수 있습니다. 월별 표는 현재 잔액 기준이며 실제 상환 이력이 아닙니다. 일정이 지나도 현재 대출잔액을 자동 차감하지 않습니다.',retirement:'퇴직금 예상액과 퇴직연금 계좌 평가액은 중복되지 않도록 입력해 주세요. 입력 금액은 세전·세후 여부에 따라 실제 수령액과 다를 수 있습니다. 회사 월 납입액은 첫 납입 예정일부터 매월 예상 퇴직연금에 더하며, 예금이나 현재 잔액을 자동 변경하지 않습니다.',deposits:'연 예상 이자는 현재 잔액과 연 이율을 사용한 세전 단순 추정치입니다. 실제 이자는 상품 조건과 입출금 내역에 따라 달라집니다.',cards:'카드 청구액은 정확한 날짜별로 등록해 주세요. 상태를 눌러 결제 완료로 바꿀 수 있습니다. 완료된 카드대금은 부채에서 제외되며, 예금 잔액은 직접 수정해 주세요.'};
  return `${heading(navLabels[kind],descriptions[kind])}${demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div><section class="table-panel"><div class="table-heading"><h2>${LABELS[kind]} 내역 <span>${['cashflow','fixed'].includes(kind)?data.length+'건 · 전체 등록 '+portfolio[kind].length+'건':portfolio[kind].length+'건'}</span></h2><input class="search-input" id="record-search" type="search" placeholder="이름 · 금융기관 검색" aria-label="내역 검색" value="${escapeHTML(query)}"></div>${portfolio[kind].length?`<div class="table-scroll"><table><thead><tr>${tableHeaders[kind].map((h,i)=>`<th class="${i>0&&/금액|평가액|손익|잔액|이율|원금|이자|상환액|납입액/.test(h)?'numeric':''}">${h}</th>`).join('')}</tr></thead><tbody id="records-body">${data.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">${['cashflow','fixed'].includes(kind)&&!query?'이 달에 해당하는 내역이 없습니다.':'검색 결과가 없습니다.'}</td></tr>`}</tbody></table></div>`:`<div class="empty-state"><div class="empty-symbol">${svg(kind)}</div><h3>아직 등록된 ${LABELS[kind]} 내역이 없어요</h3><p>첫 내역을 추가하고<br>나의 자산을 차곡차곡 모아 보세요.</p><button class="button primary" data-action="add" data-kind="${kind}">${svg('plus')} ${LABELS[kind]} 추가하기</button></div>`}</section><p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
@@ -289,7 +308,7 @@ const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
  stocks:[['name','계좌 · 종목명','text',true,'예: 국내주식 계좌 / 삼성전자'],['institution','증권사','text',false,'예: 미래에셋증권'],['cost','총매입금액','money',true,'0'],['valuation','총평가액','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
- loans:[['name','대출명','text',true,'예: 주택담보대출'],['institution','금융기관','text',false,'예: 신한은행'],['balance','대출 잔액','money',true,'0'],['rate','적용 연 이율','rate',true,'예: 4.2'],['principal','매월 상환 원금','money',true,'0'],['interestMode','현재 이자 입력 방식','interestMode',true,''],['interest','이번 납부 이자','money',true,'0'],['day','매월 상환일','day',true,'예: 25'],['method','상환 방식','select',true,''],['note','메모','textarea',false,'선택 입력']],
+ loans:[['name','대출명','text',true,'예: 주택담보대출'],['institution','금융기관','text',false,'예: 신한은행'],['balance','현재 대출 잔액','money',true,'0'],['rate','적용 연 이율','rate',true,'예: 4.2'],['calculationMode','상환 계산 기준','calculationMode',true,''],['method','상환 방식','select',true,''],['remainingMonths','남은 납부 횟수 · 거치 포함','months',true,'예: 36'],['graceMonths','그중 이자만 내는 거치 횟수','grace',true,'0'],['nextPaymentDate','다음 납부 예정일','date',true,''],['day','이후 매월 납부일','day',true,'예: 25'],['principal','매월 상환 원금','money',true,'0'],['interestMode','현재 이자 입력 방식','interestMode',true,''],['interest','이번 납부 이자','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
  retirement:[['name','퇴직금·연금 이름','text',true,'예: 퇴직연금 DC / 예상 퇴직금'],['institution','금융기관 · 회사','text',false,'예: 삼성생명'],['amount','현재 금액','money',true,'0'],['monthlyContribution','회사 월 납입액','money',true,'0'],['contributionDate','첫 납입 예정일','date',false,''],['asOf','금액 기준일','date',true,''],['note','메모','textarea',false,'세전/세후 여부 등을 기록하세요']],
  deposits:[['name','계좌명','text',true,'예: 생활비 통장 / 정기예금'],['institution','금융기관','text',false,'예: 토스뱅크'],['balance','현재 잔액','money',true,'0'],['rate','연 이율','rate',true,'0'],['maturity','만기일','date',false,''],['note','메모','textarea',false,'선택 입력']],
  cards:[['name','카드사 · 카드명','text',true,'예: 현대카드 M'],['amount','결제예정액','money',true,'0'],['dueDate','결제일','date',true,''],['paid','결제 상태','paid',false,''],['note','메모','textarea',false,'선택 입력']]
@@ -302,18 +321,19 @@ function openEditor(kind,id){
  if(!row)return;
  $('editor-title').textContent=`${LABELS[kind]} ${id?'수정':'추가'}`;$('form-error').textContent='';
  $('form-fields').innerHTML=fields[kind].map(([key,label,type,required,placeholder])=>{
-  let value=row[key]??(key==='includeInForecast'?true:key==='startMonth'?month:key==='paymentSource'?'account':key==='interestMode'?(id?'manual':'estimate'):key==='repeat'?'monthly':(type==='date'&&required)?(kind==='cashflow'&&month!==todayKST().slice(0,7)?month+'-01':todayKST()):['money','rate'].includes(type)?0:'');
+  let value=row[key]??(kind==='loans'&&key==='calculationMode'?(id?'manual':'term'):kind==='loans'&&key==='method'?'원금균등':kind==='loans'&&key==='remainingMonths'?12:kind==='loans'&&key==='graceMonths'?0:kind==='loans'&&key==='nextPaymentDate'?(paymentDate(todayKST().slice(0,7),25)>todayKST()?paymentDate(todayKST().slice(0,7),25):paymentDate(shiftMonth(todayKST().slice(0,7),1),25)):kind==='loans'&&key==='day'?25:key==='includeInForecast'?true:key==='startMonth'?month:key==='paymentSource'?'account':key==='interestMode'?(id?'manual':'estimate'):key==='repeat'?'monthly':(type==='date'&&required)?(kind==='cashflow'&&month!==todayKST().slice(0,7)?month+'-01':todayKST()):['money','rate'].includes(type)?0:'');
   let input;
-  if(type==='forecastFlag')input=`<select id="field-${key}" name="${key}"><option value="true" ${value!==false?'selected':''}>예상에 반영</option><option value="false" ${value===false?'selected':''}>예상에서 제외</option></select>`;
+  if(type==='calculationMode')input=`<select id="field-${key}" name="${key}"><option value="term" ${value==='term'?'selected':''}>남은 기간으로 자동 계산</option><option value="manual" ${value==='manual'?'selected':''}>월 원금 직접 입력 · 기존 방식</option></select>`;
+  else if(type==='forecastFlag')input=`<select id="field-${key}" name="${key}"><option value="true" ${value!==false?'selected':''}>예상에 반영</option><option value="false" ${value===false?'selected':''}>예상에서 제외</option></select>`;
   else if(type==='paymentSource'||type==='interestMode'){const options=type==='paymentSource'?[['account','계좌 결제 · 지출에 추가'],['card','카드 청구액에 포함 · 중복 제외']]:[['estimate','잔액·연 이율로 자동 추정'],['manual','이번 납부액 직접 입력']];input=`<select id="field-${key}" name="${key}" required>${options.map(([v,label])=>`<option value="${v}" ${value===v?'selected':''}>${label}</option>`).join('')}</select>`;}
   else if(type==='flowType'||type==='repeat'){const options=type==='flowType'?Object.entries(FLOW_LABELS):[['once','해당 날짜 1회'],['monthly','매월 반복']];input=`<select id="field-${key}" name="${key}" required>${options.map(([v,label])=>`<option value="${v}" ${value===v?'selected':''}>${label}</option>`).join('')}</select>`;}
-  else if(type==='select')input=`<select id="field-${key}" name="${key}" required>${['원리금균등','원금균등','만기일시','기타'].map(v=>`<option ${value===v?'selected':''}>${v}</option>`).join('')}</select>`;
+  else if(type==='select')input=`<select id="field-${key}" name="${key}" required>${['원금균등','원리금균등','만기일시','기타'].map(v=>`<option value="${v}" ${value===v?'selected':''}>${v==='원금균등'?'원금균등분할 · 원금 일정, 이자 감소':v==='원리금균등'?'원리금균등 · 총 납부액 일정':v==='만기일시'?'만기일시 · 마지막에 원금 상환':v}</option>`).join('')}</select>`;
   else if(type==='paid')input=`<select id="field-${key}" name="${key}"><option value="false">결제 예정</option><option value="true" ${value===true?'selected':''}>결제 완료</option></select>`;
   else if(type==='textarea')input=`<textarea id="field-${key}" name="${key}" maxlength="500" placeholder="${placeholder}" rows="2">${escapeHTML(value)}</textarea>`;
-  else input=`<div class="input-wrap"><input id="field-${key}" name="${key}" type="${type==='money'?'text':type==='rate'||type==='day'?'number':type}" ${required?'required':''} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='rate'?'min="0" max="100" step="0.001"':type==='day'?'min="1" max="31" step="1"':type==='text'?'maxlength="100"':''} value="${escapeHTML(type==='money'?wonFormat.format(value):value)}" placeholder="${placeholder}">${type==='money'?'<span>원</span>':type==='rate'?'<span>%</span>':type==='day'?'<span>일</span>':''}</div>`;
-  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':''}</div>`;
+  else input=`<div class="input-wrap"><input id="field-${key}" name="${key}" type="${type==='money'?'text':['rate','day','months','grace'].includes(type)?'number':type}" ${required?'required':''} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='rate'?'min="0" max="100" step="0.001"':type==='day'?'min="1" max="31" step="1"':type==='months'?'min="1" max="600" step="1"':type==='grace'?'min="0" max="599" step="1"':type==='text'?'maxlength="100"':''} value="${escapeHTML(type==='money'?wonFormat.format(value):value)}" placeholder="${placeholder}">${type==='money'?'<span>원</span>':type==='rate'?'<span>%</span>':type==='day'?'<span>일</span>':''}</div>`;
+  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':''}</div>`;
  }).join('')+`<p class="form-notice full-width">${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 기타 지출은 카드·대출과 중복 등록하지 마세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
- syncLoanInterest();syncRetirementContribution();
+ if(kind==='loans'){const preview=document.createElement('section');preview.id='loan-plan-preview';preview.className='loan-plan-preview full-width';preview.setAttribute('aria-live','polite');$('form-fields').insertBefore(preview,$('form-fields').querySelector('.form-notice'));syncLoanPlan();}else syncRetirementContribution();
  $('record-form').onsubmit=submitRecord;
  $('record-form').querySelector('button[type="submit"]').textContent='저장하기 ↗';
  openDialog('editor');
@@ -326,7 +346,8 @@ function showAddMenu(){
 async function submitRecord(e){
  e.preventDefault();if(saving)return;
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
- for(const [key,,type]of fields[editorKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):type==='rate'||type==='day'?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
+ for(const [key,,type]of fields[editorKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
+ if(editorKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
  const next=structuredClone(portfolio);const i=next[editorKind].findIndex(r=>r.id===editingId);if(i>=0)next[editorKind][i]=record;else next[editorKind].push(record);
  const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;$('form-error').textContent='';
  try{await persist(next);$('editor').close();toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');}catch(error){$('form-error').textContent=error.message;}finally{submit.disabled=false;}
@@ -353,7 +374,7 @@ document.addEventListener('click',async e=>{
  if(action==='add-salary'){if($('editor').open)$('editor').close();$('record-form').querySelector('button[type="submit"]').hidden=false;month=todayKST().slice(0,7);openEditor('cashflow');$('field-type').value='salary';}
  if(action==='reset-payday-filter'){paydaySalaryId='all';paydaySelectedDate='';render();}
  if(action==='select-payday'){paydaySelectedDate=button.dataset.date;render();}
- if(action==='loan-forecast'){loanForecastId=id;render();expandSection($('main'),'loan-forecast');$('loan-forecast-title')?.scrollIntoView?.({behavior:'smooth',block:'start'});}
+ if(action==='loan-forecast'){loanForecastId=id;render();$('loan-forecast-title')?.scrollIntoView?.({behavior:'smooth',block:'start'});}
  if(action==='chart-range'){chartHorizon=Number(button.dataset.range);render();}
  if(action==='add'||action==='edit'){if($('editor').open)$('editor').close();$('record-form').querySelector('button[type="submit"]').hidden=false;openEditor(kind,id);}
  if(action==='choose-kind'){$('editor').close();$('record-form').querySelector('button[type="submit"]').hidden=false;openEditor(kind);}
@@ -367,10 +388,10 @@ document.addEventListener('click',async e=>{
  if(action==='demo')startDemo();if(action==='exit-demo')exitDemo();if(action==='retry')loadData();
  if(['prev-month','next-month','this-month'].includes(action)){if(action==='this-month')month=todayKST().slice(0,7);else{const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+(action==='next-month'?1:-1),1));month=d.toISOString().slice(0,7);}render();}
 });
-document.addEventListener('change',e=>{if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-interestMode')syncLoanInterest();if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
+document.addEventListener('change',e=>{if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
  if(e.target.id==='field-monthlyContribution')syncRetirementContribution();
- if(['field-balance','field-rate'].includes(e.target.id))syncLoanInterest();
+ if(['field-balance','field-rate','field-remainingMonths','field-graceMonths','field-principal','field-day'].includes(e.target.id))syncLoanPlan();
  if(e.target.id==='record-search'){query=e.target.value;const rows=filteredRecords(view);if(view==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(view,r)).join('')||`<tr><td colspan="${tableHeaders[view].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
  if(e.target.matches('#record-form input[inputmode="numeric"]')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}
 });

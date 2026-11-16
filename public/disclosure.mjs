@@ -121,7 +121,7 @@ export function enhanceDisclosure(root,{view=''}={}){
   help(source,target,'계산·표시 기준');
  }
  if(view==='statistics')root.querySelectorAll('.stats-table').forEach((element,index)=>fold(element,'stats-table-'+index,index===0?'월별 합계':'기간 내 상세 내역',state));
- if(view==='loans')fold(root.querySelector('.loan-forecast-panel'),'loan-forecast','월별 예상 잔액과 상환 과정',state);
+
  if(view==='loans')for(const details of root.querySelectorAll('details[data-loan-details]'))if(state.sections.get(state.view+':'+details.dataset.uiSection))details.setAttribute('open','');
 
  if(view==='advisor'){
