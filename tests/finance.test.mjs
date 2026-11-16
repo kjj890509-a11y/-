@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -72,4 +72,42 @@ test('legacy clients preserve new cashflow records when saving their existing as
  const legacy=structuredClone(data);delete legacy.cashflow;legacy.deposits[0].balance=123456;
  assert.equal((await handleApi(req('alice','PUT',{data:legacy,revision:1}),env)).status,200);
  const saved=await (await handleApi(req('alice'),env)).json();assert.equal(saved.data.cashflow.length,3);assert.equal(saved.data.deposits[0].balance,123456);
+});
+
+test('monthly budgets count paid cards as spending and stay independent by month',()=>{
+ const p=samplePortfolio('2026-11-16');p.cards[0].paid=true;
+ const plan=budgetPlan(p,'2026-11');assert.equal(plan.expense,2501000);assert.equal(plan.limit,3000000);assert.equal(plan.remaining,499000);
+ p.budgets.push({month:'2027-05',expenseLimit:1000000,savingsTarget:0});assert.equal(budgetPlan(p,'2027-05').limit,1000000);
+ assert.equal(budgetPlan(p,'2027-06').limit,null);
+});
+test('forecast pays principal and card liabilities without subtracting the debt twice from net worth',()=>{
+ const p=emptyPortfolio();p.deposits=[{id:'d',name:'통장',institution:'',balance:1000000,rate:0,maturity:'',note:''}];
+ p.loans=[{id:'l',name:'대출',institution:'',balance:200000,principal:150000,interest:10000,rate:5,day:25,method:'원금균등',note:''}];
+ p.cards=[{id:'c',name:'카드',amount:100000,dueDate:'2026-11-24',paid:false,note:''}];
+ const [nov,dec,jan]=forecastMonths(p,'2026-11-16',3);
+ assert.equal(totals(p).net,700000);assert.equal(nov.deposits,740000);assert.equal(nov.loans,50000);assert.equal(nov.cards,0);assert.equal(nov.net,690000);
+ assert.equal(dec.principal,50000);assert.equal(dec.loans,0);assert.equal(dec.net,680000);assert.equal(jan.interest,0);assert.equal(jan.net,680000);
+});
+test('forecast uses only events after the baseline date, retains overdue card debt and flags cash shortages',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'s',name:'월급',type:'salary',amount:100,date:'2026-11-10',repeat:'monthly',note:''},{id:'e',name:'지출',type:'expense',amount:200,date:'2026-11-30',repeat:'once',note:''}];
+ p.cards=[{id:'c',name:'미결제',amount:50,dueDate:'2026-11-15',paid:false,note:''}];
+ const [nov,dec]=forecastMonths(p,'2026-11-16',2);assert.equal(nov.income,0);assert.equal(nov.deposits,-200);assert.equal(nov.cards,50);assert.equal(nov.net,-250);assert.equal(nov.cashShortage,true);assert.equal(dec.income,100);
+});
+test('auto history updates only the current month and preserves manual month-end records',()=>{
+ let p=validatePortfolio(samplePortfolio('2026-11-16'));
+ p=recordCurrentSnapshot(p,'2026-11-16');const before=structuredClone(p.snapshots[0]);assert.equal(p.snapshots.at(-1).asOf,'2026-11-16');
+ p.deposits[0].balance+=500;let next=recordCurrentSnapshot(p,'2026-11-17');assert.equal(next.snapshots.at(-1).deposits,p.snapshots.at(-1).deposits+500);assert.deepEqual(next.snapshots[0],before);
+ next.snapshots.at(-1).source='manual';const fixed=structuredClone(next.snapshots.at(-1));next.deposits[0].balance+=1000;next=recordCurrentSnapshot(next,'2026-11-18');assert.deepEqual(next.snapshots.at(-1),fixed);
+ assert.equal(snapshotTotals(fixed).net,fixed.stock+fixed.deposits+fixed.retirement-fixed.loans-fixed.cards);
+});
+test('legacy backups gain empty plans and history; duplicate months and future actuals are rejected',()=>{
+ const p=samplePortfolio('2026-11-16');delete p.budgets;delete p.snapshots;const clean=validatePortfolio(p);assert.deepEqual(clean.budgets,[]);assert.deepEqual(clean.snapshots,[]);
+ clean.budgets=[{month:'2026-11',expenseLimit:0,savingsTarget:0},{month:'2026-11',expenseLimit:1,savingsTarget:1}];assert.throws(()=>validatePortfolio(clean));
+ clean.budgets=[];clean.snapshots=[{...captureSnapshot(clean),month:shiftMonth(todayKST().slice(0,7),1),asOf:shiftMonth(todayKST().slice(0,7),1)+'-01'}];assert.throws(()=>validatePortfolio(clean));
+});
+test('API preserves budgets and history when a legacy client saves asset updates',async()=>{
+ const env={DB:database()},data=samplePortfolio('2026-11-16');assert.equal((await handleApi(req('owner','PUT',{data,revision:0}),env)).status,200);
+ const legacy=structuredClone(data);delete legacy.budgets;delete legacy.snapshots;legacy.deposits[0].balance=300;
+ assert.equal((await handleApi(req('owner','PUT',{data:legacy,revision:1}),env)).status,200);
+ const saved=await(await handleApi(req('owner'),env)).json();assert.equal(saved.data.budgets.length,4);assert.equal(saved.data.snapshots.filter(r=>r.source==='manual').length,4);assert.equal(saved.data.snapshots.at(-1).source,'auto');
 });

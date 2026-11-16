@@ -1,4 +1,4 @@
-import {validatePortfolio, emptyPortfolio} from '../public/domain.mjs';
+import {validatePortfolio, emptyPortfolio, recordCurrentSnapshot} from '../public/domain.mjs';
 const responseJSON = (data, status = 200) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export async function handleApi(request, env) {
   if (new URL(request.url).pathname !== '/api/portfolio') return responseJSON({error:'요청한 경로가 없습니다.'},404);
@@ -20,13 +20,14 @@ export async function handleApi(request, env) {
     let body;
     try {body = JSON.parse(raw);} catch {return responseJSON({error:'데이터 형식을 확인해 주세요.'},400);}
     if (!Number.isSafeInteger(body.revision) || body.revision < 0) return responseJSON({error:'저장 버전이 올바르지 않습니다.'},400);
-    if (body.data && typeof body.data === 'object' && body.data.cashflow === undefined && body.revision > 0) {
+    if (body.data && typeof body.data === 'object' && ['cashflow','budgets','snapshots'].some(key=>body.data[key]===undefined) && body.revision > 0) {
       const previous = await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
       if (!previous || previous.revision !== body.revision) return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
-      body.data = {...body.data, cashflow:JSON.parse(previous.data).cashflow || []};
+      const stored=JSON.parse(previous.data);
+      for(const key of ['cashflow','budgets','snapshots'])if(body.data[key]===undefined)body.data[key]=stored[key]||[];
     }
     let clean;
-    try {clean = validatePortfolio(body.data);} catch(error) {return responseJSON({error:error.message},400);}
+    try {clean = recordCurrentSnapshot(validatePortfolio(body.data));} catch(error) {return responseJSON({error:error.message},400);}
     const stamp = new Date().toISOString();
     let result;
     if (body.revision === 0) {

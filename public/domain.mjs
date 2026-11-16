@@ -1,7 +1,7 @@
 export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cashflow'];
 export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [] });
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [], budgets: [], snapshots: [] });
 export function todayKST(now = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);
 }
@@ -66,6 +66,29 @@ export function validatePortfolio(input) {
     });
     count += clean[kind].length;
   }
+  const validMoney=value=>Number.isSafeInteger(value)&&value>=0&&value<=1_000_000_000_000_000;
+  for (const key of ['budgets','snapshots']) {
+    if (input[key] === undefined) continue;
+    if (!Array.isArray(input[key]) || input[key].length>240) throw new Error('월별 기록은 최대 240개월까지 저장할 수 있습니다.');
+    const months=new Set();
+    clean[key]=input[key].map(row=>{
+      if (!row || !validMonth(row.month) || months.has(row.month)) throw new Error('월별 기록의 월을 확인해 주세요.');
+      months.add(row.month);
+      if (key==='budgets') {
+        if (!validMoney(row.expenseLimit) || !validMoney(row.savingsTarget)) throw new Error('예산과 저축 목표는 0 이상의 원 단위 정수로 입력해 주세요.');
+        return {month:row.month,expenseLimit:row.expenseLimit,savingsTarget:row.savingsTarget};
+      }
+      if (!validDate(row.asOf) || row.asOf.slice(0,7)!==row.month || row.asOf>todayKST()) throw new Error('자산 기록의 기준일은 해당 월의 오늘 이전 날짜로 입력해 주세요.');
+      if (!['auto','manual'].includes(row.source)) throw new Error('자산 기록의 구분을 확인해 주세요.');
+      const result={month:row.month,asOf:row.asOf,source:row.source};
+      for (const field of ['stock','deposits','retirement','loans','cards']) {
+        if (!validMoney(row[field])) throw new Error('월말 자산 금액을 확인해 주세요.');
+        result[field]=row[field];
+      }
+      if (row.note!=null && (typeof row.note!=='string'||row.note.length>500)) throw new Error('월말 메모는 500자 이내로 입력해 주세요.');
+      result.note=row.note||'';return result;
+    }).sort((a,b)=>a.month.localeCompare(b.month));
+  }
   if (count > 2000) throw new Error('최대 2,000개 항목까지 저장할 수 있습니다.');
   return clean;
 }
@@ -100,9 +123,62 @@ export function monthlyFlow(data,month) {
   const income=salary+otherIncome,expense=payments+otherExpense;
   return {salary,otherIncome,otherExpense,payments,income,expense,balance:income-expense};
 }
+export function validMonth(month) { return typeof month==='string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) && Number(month.slice(0,4))>=1900 && Number(month.slice(0,4))<=2199; }
+export function shiftMonth(month,offset) {
+  const [year,m]=month.split('-').map(Number);
+  return new Date(Date.UTC(year,m-1+offset,1)).toISOString().slice(0,7);
+}
+export function snapshotTotals(row) {
+  const gross=row.stock+row.deposits+row.retirement,debt=row.loans+row.cards;
+  return {...row,gross,debt,net:gross-debt};
+}
+export function captureSnapshot(data,date=todayKST(),source='auto') {
+  const t=totals(data);
+  return {month:date.slice(0,7),asOf:date,source,stock:t.stock,deposits:t.deposits,retirement:t.retirement,loans:t.loans,cards:t.cards,note:''};
+}
+export function recordCurrentSnapshot(data,date=todayKST()) {
+  const result=structuredClone(data),current=result.snapshots.find(row=>row.month===date.slice(0,7));
+  if (current?.source==='manual' || !['stocks','deposits','retirement','loans'].some(key=>result[key].length)) return result;
+  const snapshot=captureSnapshot(result,date);
+  if(current)result.snapshots=result.snapshots.map(row=>row.month===snapshot.month?snapshot:row);
+  else if(result.snapshots.length<240)result.snapshots.push(snapshot);
+  result.snapshots.sort((a,b)=>a.month.localeCompare(b.month));return result;
+}
+export function budgetPlan(data,month) {
+  const flow=monthlyFlow(data,month);
+  const paidCards=data.cards.filter(row=>row.paid&&row.dueDate.startsWith(month)).reduce((n,row)=>n+row.amount,0);
+  const expense=flow.expense+paidCards,budget=(data.budgets||[]).find(row=>row.month===month);
+  return {...flow,expense,balance:flow.income-expense,limit:budget?.expenseLimit??null,target:budget?.savingsTarget??null,remaining:budget?budget.expenseLimit-expense:null};
+}
+export function forecastMonths(data,startDate=todayKST(),count=12) {
+  const baseline=totals(data),loans=data.loans.map(row=>({...row}));
+  let deposits=baseline.deposits,cardDebt=baseline.cards;
+  const results=[];
+  for(let index=0;index<count;index++) {
+    const month=shiftMonth(startDate.slice(0,7),index);
+    const flows=cashflowForMonth(data,month).filter(row=>row.occursOn>startDate);
+    const income=flows.filter(row=>row.type!=='expense').reduce((n,row)=>n+row.amount,0);
+    const otherExpense=flows.filter(row=>row.type==='expense').reduce((n,row)=>n+row.amount,0);
+    let principal=0,interest=0;
+    for(const loan of loans) {
+      if(loan.balance<=0 || paymentDate(month,loan.day)<=startDate)continue;
+      const payment=Math.min(loan.balance,loan.principal);
+      principal+=payment;interest+=loan.interest;loan.balance-=payment;
+    }
+    const cardPayments=data.cards.filter(row=>!row.paid&&row.dueDate>startDate&&row.dueDate.startsWith(month)).reduce((n,row)=>n+row.amount,0);
+    cardDebt-=cardPayments;
+    const expense=otherExpense+principal+interest+cardPayments;
+    deposits+=income-expense;
+    const loanDebt=loans.reduce((n,row)=>n+row.balance,0);
+    const gross=baseline.stock+baseline.retirement+deposits,debt=loanDebt+cardDebt;
+    results.push({month,income,expense,principal,interest,otherExpense,cardPayments,deposits,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0});
+  }
+  return results;
+}
+
 export function samplePortfolio(date = todayKST()) {
   const month = date.slice(0,7);
-  return {version:1,
+  const sample={version:1,
     stocks:[{id:'demo-s1',name:'국내 주식',institution:'미래에셋증권',valuation:28650000,cost:25000000,note:'예시 데이터입니다.'},{id:'demo-s2',name:'미국 ETF',institution:'토스증권',valuation:19200000,cost:18000000,note:'원화 환산 평가액'}],
     loans:[{id:'demo-l1',name:'주택담보대출',institution:'신한은행',balance:62000000,principal:320000,interest:217000,rate:4.2,day:25,method:'원리금균등',note:''},{id:'demo-l2',name:'신용대출',institution:'카카오뱅크',balance:8000000,principal:150000,interest:34000,rate:5.1,day:20,method:'원금균등',note:''}],
     retirement:[{id:'demo-r1',name:'퇴직연금 DC',institution:'삼성생명',amount:34800000,asOf:date,note:'예상 평가액'}],
@@ -110,4 +186,7 @@ export function samplePortfolio(date = todayKST()) {
     cards:[{id:'demo-c1',name:'현대카드',amount:854000,dueDate:paymentDate(month,25),paid:false,note:''},{id:'demo-c2',name:'삼성카드',amount:326000,dueDate:paymentDate(month,20),paid:false,note:''}],
     cashflow:[{id:'demo-f1',name:'회사 월급',type:'salary',amount:4200000,date:paymentDate(month,25),repeat:'monthly',note:'실수령액 기준 예시'},{id:'demo-f2',name:'부업 수입',type:'other_income',amount:450000,date:paymentDate(month,15),repeat:'once',note:''},{id:'demo-f3',name:'월세',type:'expense',amount:600000,date:paymentDate(month,5),repeat:'monthly',note:'계좌이체로 납부'}]
   };
+  sample.budgets=Array.from({length:4},(_,i)=>({month:shiftMonth(month,i),expenseLimit:3000000,savingsTarget:1800000}));
+  sample.snapshots=Array.from({length:4},(_,i)=>{const m=shiftMonth(month,i-4);return {month:m,asOf:paymentDate(m,31),source:'manual',stock:47850000-(4-i)*1200000,deposits:48400000-(4-i)*800000,retirement:34800000-(4-i)*400000,loans:70000000+(4-i)*470000,cards:1180000,note:'가상 예시 기록'};});
+  return sample;
 }
