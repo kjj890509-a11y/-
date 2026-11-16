@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -148,4 +148,39 @@ test('legacy backups and clients retain fixed expenses and loan calculation mode
  const legacy=structuredClone(data);delete legacy.fixed;delete legacy.loans[0].interestMode;legacy.loans[0].balance=30000000;
  assert.equal((await handleApi(req('fixed-owner','PUT',{data:legacy,revision:1}),env)).status,200);
  const saved=await(await handleApi(req('fixed-owner'),env)).json();assert.equal(saved.data.fixed.length,1);assert.equal(saved.data.loans[0].interestMode,'estimate');assert.equal(saved.data.loans[0].interest,105000);
+});
+
+test('payday assets include same-day salary, loans, cards and fixed expenses but exclude later expenses',()=>{
+ const p=emptyPortfolio();p.deposits=[{id:'d',name:'통장',institution:'',balance:1000,rate:0,maturity:'',note:''}];
+ p.loans=[{id:'l',name:'대출',institution:'',balance:200,principal:100,interest:10,rate:5,day:25,method:'원금균등',note:''}];
+ p.cards=[{id:'c',name:'카드',amount:100,dueDate:'2026-11-25',paid:false,note:''}];
+ p.fixed=[{id:'f',name:'고정',amount:50,day:25,startMonth:'2026-11',endMonth:'',paymentSource:'account',note:''}];
+ p.cashflow=[{id:'s',name:'월급',type:'salary',amount:500,date:'2026-11-25',repeat:'monthly',note:''},{id:'i',name:'수입',type:'other_income',amount:20,date:'2026-11-20',repeat:'once',note:''},{id:'e',name:'이후 지출',type:'expense',amount:30,date:'2026-11-26',repeat:'once',note:''}];
+ const [nov,dec]=paydayForecasts(p,'2026-11-16',2);
+ assert.equal(nov.date,'2026-11-25');assert.equal(nov.salaryAmount,500);assert.equal(nov.deposits,1260);assert.equal(nov.loans,100);assert.equal(nov.cards,0);assert.equal(nov.net,1160);assert.equal(nov.previousDayDeposits,1020);assert.equal(nov.previousDayNet,720);assert.equal(nov.cumulativeIncome,520);assert.equal(nov.cumulativeExpense,260);
+ assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,1130);
+ assert.equal(dec.date,'2026-12-25');assert.equal(dec.deposits,1570);assert.equal(dec.loans,0);assert.equal(dec.net,1570);
+});
+test('multiple salaries on one day are grouped and filtering payday dates keeps all income in asset calculations',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'a',name:'월급 A',type:'salary',amount:100,date:'2026-11-20',repeat:'monthly',note:''},{id:'b',name:'월급 B',type:'salary',amount:200,date:'2026-11-20',repeat:'monthly',note:''},{id:'c',name:'일회 급여',type:'salary',amount:50,date:'2026-11-25',repeat:'once',note:''}];
+ const all=paydayForecasts(p,'2026-11-16',3);assert.deepEqual(all.map(r=>r.date),['2026-11-20','2026-11-25','2026-12-20']);assert.equal(all[0].salaryAmount,300);assert.equal(all[0].salaryNames.length,2);assert.equal(all[1].deposits,350);
+ const filtered=paydayForecasts(p,'2026-11-16',12,'c');assert.equal(filtered.length,1);assert.equal(filtered[0].deposits,350);assert.equal(filtered[0].salaryAmount,50);
+});
+test('payday forecasts exclude baseline-day salary to prevent double counting and handle missing upcoming salaries',()=>{
+ const p=emptyPortfolio();assert.deepEqual(paydayForecasts(p,'2026-11-16'),[]);
+ p.cashflow=[{id:'s',name:'월급',type:'salary',amount:100,date:'2026-11-16',repeat:'monthly',note:''}];
+ const rows=paydayForecasts(p,'2026-11-16');assert.equal(rows.length,12);assert.equal(rows[0].date,'2026-12-16');assert.equal(rows[0].deposits,100);
+ p.cashflow[0].repeat='once';assert.deepEqual(paydayForecasts(p,'2026-11-16'),[]);
+ p.cashflow[0].type='other_income';p.cashflow[0].date='2026-11-25';assert.deepEqual(paydayForecasts(p,'2026-11-16'),[]);
+});
+test('monthly payday dates clamp to month end including leap years',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'s',name:'월말 급여',type:'salary',amount:100,date:'2027-01-31',repeat:'monthly',note:''}];
+ assert.deepEqual(paydayForecasts(p,'2027-01-16',3).map(r=>r.date),['2027-01-31','2027-02-28','2027-03-31']);
+ assert.equal(paydayForecasts(p,'2028-02-01',1)[0].date,'2028-02-29');
+});
+test('date-based projections agree with month-end projections and preserve the input portfolio',()=>{
+ const p=samplePortfolio('2026-11-16'),original=structuredClone(p);
+ const dates=['2026-11-30','2026-12-31','2027-01-31'];assert.deepEqual(forecastOnDates(p,dates,'2026-11-16'),forecastMonths(p,'2026-11-16',3));
+ paydayForecasts(p,'2026-11-16');assert.deepEqual(p,original);
+ assert.throws(()=>forecastOnDates(p,['2026-11-15'],'2026-11-16'));assert.throws(()=>forecastOnDates(p,['2027-02-30'],'2026-11-16'));
 });

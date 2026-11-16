@@ -186,25 +186,56 @@ export function budgetPlan(data,month) {
   const expense=flow.expense+paidCards,budget=(data.budgets||[]).find(row=>row.month===month);
   return {...flow,expense,balance:flow.income-expense,limit:budget?.expenseLimit??null,target:budget?.savingsTarget??null,remaining:budget?budget.expenseLimit-expense:null};
 }
-export function forecastMonths(data,startDate=todayKST(),count=12) {
-  const baseline=totals(data),loanMonths=loanSchedule(data,startDate.slice(0,7),count,startDate);
-  let deposits=baseline.deposits,cardDebt=baseline.cards;
-  const results=[];
-  for(let index=0;index<count;index++) {
-    const month=shiftMonth(startDate.slice(0,7),index);
-    const flows=cashflowForMonth(data,month).filter(row=>row.occursOn>startDate);
-    const income=flows.filter(row=>row.type!=='expense').reduce((n,row)=>n+row.amount,0);
-    const otherExpense=flows.filter(row=>row.type==='expense').reduce((n,row)=>n+row.amount,0);
-    const {principal,interest,balance:loanDebt}=loanMonths[index];
-    const fixedCash=fixedForMonth(data,month).filter(row=>row.paymentSource==='account'&&row.occursOn>startDate).reduce((n,row)=>n+row.amount,0);
-    const cardPayments=data.cards.filter(row=>!row.paid&&row.dueDate>startDate&&row.dueDate.startsWith(month)).reduce((n,row)=>n+row.amount,0);
-    cardDebt-=cardPayments;
-    const expense=otherExpense+fixedCash+principal+interest+cardPayments;
-    deposits+=income-expense;
-    const gross=baseline.stock+baseline.retirement+deposits,debt=loanDebt+cardDebt;
-    results.push({month,income,expense,principal,interest,otherExpense,fixedCash,cardPayments,deposits,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0});
+export function forecastOnDates(data,targetDates,startDate=todayKST()) {
+ if(!validDate(startDate)||!Array.isArray(targetDates)||targetDates.some(date=>!validDate(date)||date<startDate))throw new Error('예상 기준일과 조회 날짜를 확인해 주세요.');
+ const dates=[...new Set(targetDates)].sort();if(!dates.length)return [];
+ const firstMonth=startDate.slice(0,7),lastMonth=dates.at(-1).slice(0,7);
+ const monthCount=(Number(lastMonth.slice(0,4))-Number(firstMonth.slice(0,4)))*12+Number(lastMonth.slice(5))-Number(firstMonth.slice(5))+1;
+ if(monthCount>120)throw new Error('예상 기간은 10년 이내로 선택해 주세요.');
+ const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate),events=[];
+ for(let index=0;index<monthCount;index++) {
+  const month=shiftMonth(firstMonth,index);
+  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
+  for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
+  for(const row of loanMonths[index].details)if(row.date>startDate&&row.payment>0)events.push({date:row.date,name:row.name,kind:'loan',amount:row.payment,income:false,principal:row.principal,interest:row.interest});
+ }
+ for(const row of data.cards)if(!row.paid&&row.dueDate>startDate&&row.dueDate<=dates.at(-1))events.push({date:row.dueDate,name:row.name,kind:'card',amount:row.amount,income:false});
+ events.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
+ const baseline=totals(data),sums={income:0,expense:0,principal:0,interest:0,otherExpense:0,fixedCash:0,cardPayments:0};
+ let deposits=baseline.deposits,loanDebt=baseline.loans,cardDebt=baseline.cards,pointer=0,previous={...sums};
+ return dates.map(date=>{
+  while(pointer<events.length&&events[pointer].date<=date){
+   const event=events[pointer++];
+   if(event.income){deposits+=event.amount;sums.income+=event.amount;}
+   else {deposits-=event.amount;sums.expense+=event.amount;}
+   if(event.kind==='loan'){loanDebt-=event.principal;sums.principal+=event.principal;sums.interest+=event.interest;}
+   if(event.kind==='card'){cardDebt-=event.amount;sums.cardPayments+=event.amount;}
+   if(event.kind==='fixed')sums.fixedCash+=event.amount;
+   if(event.kind==='expense')sums.otherExpense+=event.amount;
   }
-  return results;
+  const period=Object.fromEntries(Object.keys(sums).map(key=>[key,sums[key]-previous[key]]));previous={...sums};
+  const gross=baseline.stock+baseline.retirement+deposits,debt=loanDebt+cardDebt;
+  return {...period,date,month:date.slice(0,7),deposits,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,dayEvents:events.filter(event=>event.date===date)};
+ });
+}
+export function forecastMonths(data,startDate=todayKST(),count=12) {
+ const dates=Array.from({length:count},(_,index)=>paymentDate(shiftMonth(startDate.slice(0,7),index),31));
+ return forecastOnDates(data,dates,startDate);
+}
+export function paydayForecasts(data,startDate=todayKST(),count=12,salaryId='all') {
+ if(!validDate(startDate))throw new Error('월급 예상 기준일을 확인해 주세요.');
+ const lastDate=paymentDate(shiftMonth(startDate.slice(0,7),12),Number(startDate.slice(8))),salaryDays=new Set();
+ for(let index=0;index<=12;index++)for(const row of cashflowForMonth(data,shiftMonth(startDate.slice(0,7),index))) {
+  if(row.type==='salary'&&(salaryId==='all'||row.id===salaryId)&&row.occursOn>startDate&&row.occursOn<=lastDate)salaryDays.add(row.occursOn);
+ }
+ const dates=[...salaryDays].sort().slice(0,count);if(!dates.length)return [];
+ const previousDay=date=>new Date(new Date(date+'T00:00:00Z').getTime()-86400000).toISOString().slice(0,10);
+ const projections=forecastOnDates(data,dates.flatMap(date=>[previousDay(date),date]),startDate),byDate=new Map(projections.map(row=>[row.date,row]));
+ return dates.map(date=>{
+  const row=byDate.get(date),previous=byDate.get(previousDay(date));
+  const salaryEvents=row.dayEvents.filter(event=>event.kind==='salary');
+  return {...row,salaryAmount:salaryEvents.reduce((n,event)=>n+event.amount,0),salaryNames:salaryEvents.map(event=>event.name),previousDayDeposits:previous.deposits,previousDayNet:previous.net};
+ });
 }
 
 export function samplePortfolio(date = todayKST()) {
