@@ -1,0 +1,93 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+import {parseHTML} from 'linkedom';
+import * as domain from '../public/domain.mjs';
+import * as loansPage from '../public/loans-page.mjs';
+import * as workspace from '../public/workspace.mjs';
+import * as navigation from '../public/navigation.mjs';
+import * as dashboard from '../public/dashboard-view.mjs';
+import * as disclosure from '../public/disclosure.mjs';
+import * as charts from '../public/chart.mjs';
+import * as statsPage from '../public/statistics-page.mjs';
+import * as advisorPage from '../public/advisor-page.mjs';
+import {renderLoanForecastPanel} from '../public/loan-forecast.mjs';
+const tick=()=>new Promise(setImmediate);
+async function start(data=domain.samplePortfolio()){
+ const {document,window,Event}=parseHTML(readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));
+ window.scrollTo=()=>{};
+ for(const dialog of document.querySelectorAll('dialog')){dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
+ const state={data,revision:1,writes:0};
+ const context=vm.createContext({...loansPage,...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#overview'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,setTimeout,clearTimeout,fetch:async(path,init)=>{
+  assert.equal(path,'/api/portfolio');
+  if(init?.method==='PUT'){state.writes++;state.data=domain.validatePortfolio(JSON.parse(init.body).data);state.revision++;}
+  return {ok:true,json:async()=>({data:state.data,revision:state.revision})};
+ }});
+ vm.runInContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,''),context);await tick();
+ const click=selector=>{const element=document.querySelector(selector);assert.ok(element,selector);element.dispatchEvent(new Event('click',{bubbles:true}));};
+ const select=key=>click(`[data-action="home-detail"][data-detail="${key}"]`);
+ return {document,window,Event,context,state,click,select};
+}
+
+test('home cards replace only the detail area and reset without navigation or writes',async()=>{
+ const {document,context,state,select}=await start();
+ const cards=document.querySelector('.home-stats'),heading=document.querySelector('h1'),nav=document.querySelector('#main-nav');
+ for(const key of ['net','deposits','debt','cashflow']){
+  const previous=document.querySelector('#home-dashboard');select(key);
+  assert.equal(context.location.hash,'#overview');
+  assert.equal(document.querySelector('main').dataset.view,'overview');
+  assert.equal(document.querySelector('.home-stats'),cards);
+  assert.equal(document.querySelector('h1'),heading);assert.equal(document.querySelectorAll('h1').length,1);
+  assert.equal(document.querySelector('#main-nav'),nav);
+  assert.notEqual(document.querySelector('#home-dashboard'),previous);
+  assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,key);
+  assert.ok(document.querySelector('[data-home-detail-title]'));
+ }
+ select('all');assert.ok(document.querySelector('.home-budget'));
+ assert.equal(document.querySelector('.home-stat[aria-pressed="true"]'),null);
+ assert.equal(state.writes,0);
+ // Asset allocation drill-downs share the same interaction.
+ select('stocks');assert.match(document.querySelector('[data-home-detail-title]').textContent,/주식/);
+ select('all');select('retirement');assert.match(document.querySelector('[data-home-detail-title]').textContent,/퇴직/);
+});
+
+test('inline account search and editors use the selected category; masking survives switches',async()=>{
+ const {document,Event,select,click}=await start();
+ select('deposits');const search=document.querySelector('#record-search');
+ search.value='no-match-987';search.dispatchEvent(new Event('input',{bubbles:true}));
+ assert.match(document.querySelector('#records-body').textContent,/검색 결과가 없습니다/);
+ select('net');select('deposits');assert.ok(document.querySelector('#records-body [data-action="edit"]'));
+ click('#records-body [data-action="edit"]');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);assert.ok(document.querySelector('#field-maturity'));
+ click('[data-close="editor"]');click('.home-detail-heading [data-action="add"]');assert.ok(document.querySelector('#field-maturity'));
+ click('[data-close="editor"]');document.querySelector('#privacy-toggle').onclick();
+ assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'deposits');
+ assert.ok([...document.querySelectorAll('#records-body td.numeric')].some(cell=>cell.textContent==='••••••'));
+ select('net');assert.ok([...document.querySelectorAll('.home-net-breakdown b')].every(el=>el.textContent.includes('••••••')));
+ assert.ok([...document.querySelectorAll('[data-chart-point]')].every(el=>el.dataset.amount==='••••••'));
+});
+
+test('inline debt filters, forecast and card updates retain the selected home detail',async()=>{
+ const {document,Event,context,state,select,click}=await start();
+ select('debt');assert.ok(document.querySelector('#loan-forecast-select'));
+ const search=document.querySelector('#record-search');search.value='no loan match';search.dispatchEvent(new Event('input',{bubbles:true}));
+ assert.match(document.querySelector('#loan-list').textContent,/검색 결과/);
+ select('net');select('debt');click('[data-action="loan-forecast"]');
+ assert.equal(context.location.hash,'#overview');assert.ok(document.querySelector('.home-stat[aria-pressed="true"][data-detail="debt"]'));
+ const before=domain.totals(state.data).cards;click('#home-dashboard [data-action="toggle-paid"]');await tick();
+ assert.equal(state.writes,1);assert.ok(domain.totals(state.data).cards<before);
+ assert.equal(context.location.hash,'#overview');assert.ok(document.querySelector('[data-home-detail-title]').textContent.includes('부채'));
+});
+
+test('monthly detail includes salaries and expenses, and empty categories remain usable',async()=>{
+ const {document,state,select,click}=await start();select('cashflow');
+ assert.ok(document.querySelector('.home-detail-table').textContent.includes(state.data.cashflow[0].name));
+ assert.match(document.querySelector('.home-detail-table').textContent,/대출 원금·이자/);
+ const first=document.querySelector('.home-detail-table h2').textContent;click('[data-action="next-month"]');
+ assert.notEqual(document.querySelector('.home-detail-table h2').textContent,first);
+ assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'cashflow');
+ const empty=await start(domain.emptyPortfolio());empty.select('deposits');
+ assert.match(empty.document.querySelector('#home-dashboard').textContent,/아직 등록된/);
+ assert.ok(empty.document.querySelector('#home-dashboard [data-action="add"][data-kind="deposits"]'));
+ empty.select('debt');assert.match(empty.document.querySelector('#home-dashboard').textContent,/미결제 카드대금이 없습니다/);
+});
