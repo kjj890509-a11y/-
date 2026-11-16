@@ -1,0 +1,9 @@
+node_modules/
+server/static-assets.mjs
+dist/
+.local/
+.sites-state/
+.env*
+!.env.example
+*.tar.gz
+*.zip

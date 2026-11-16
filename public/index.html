@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#165c46"><meta name="description" content="흩어진 내 자산을 한곳에. 주식, 예금, 퇴직금, 대출과 카드 결제일을 관리하는 모아.">
+  <title>모아 — 나의 자산관리</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar" aria-label="주 메뉴">
+    <a class="brand" href="#overview" aria-label="모아 홈"><span class="brand-symbol">m<span>°</span></span><span>모아<span class="brand-sub">MY ASSET NOTE</span></span></a>
+    <div class="workspace-label">나의 자산 공간 <span>PERSONAL</span></div>
+    <nav id="main-nav"></nav>
+    <div class="sidebar-bottom"><div class="private-badge"><span class="lock-icon" aria-hidden="true">⌑</span><div>나만의 자산 노트<small>본인 계정으로 안전하게 보관</small></div></div><button class="text-button" id="data-settings">백업 및 데이터 관리 <span>↗</span></button><a class="signout" href="/signout-with-chatgpt?return_to=/" target="_top">로그아웃</a></div>
+  </aside>
+  <div class="app-shell">
+    <header class="topbar"><div class="breadcrumb">내 자산 <span>/</span> <strong id="breadcrumb">한눈에 보기</strong></div><div class="topbar-right"><span id="save-state" role="status"><i></i> 연결 중</span><button id="privacy-toggle" class="icon-button" aria-label="금액 숨기기" title="금액 숨기기"></button><button id="mobile-settings" class="icon-button" aria-label="백업 및 데이터 관리" title="백업 및 데이터 관리">⋯</button><div class="avatar" aria-label="개인 계정">MY</div></div></header>
+    <main id="main"><div class="initial-loading"><span class="spinner"></span><p>자산 노트를 불러오고 있어요</p></div></main>
+    <footer>모아 <span>·</span> 차곡차곡, 나의 내일을 모으다.<span class="footer-right">모든 금액은 원화(KRW) 기준입니다.</span></footer>
+  </div>
+  <dialog id="editor" aria-labelledby="editor-title"><div class="dialog-heading"><div><span class="eyebrow">MY ASSET NOTE</span><h2 id="editor-title"></h2></div><button type="button" class="icon-button" data-close="editor" aria-label="닫기">✕</button></div><form id="record-form"><div id="form-fields" class="form-grid"></div><p id="form-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-close="editor">취소</button><button class="button primary" type="submit">저장하기 <span>↗</span></button></div></form></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-heading"><h2 id="confirm-title"></h2></div><p id="confirm-body" class="dialog-copy"></p><div class="dialog-actions"><button class="button secondary" id="confirm-cancel">취소</button><button class="button danger" id="confirm-ok">삭제하기</button></div></dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><div><span class="eyebrow">YOUR DATA, YOUR CONTROL</span><h2 id="settings-title">백업 및 데이터 관리</h2></div><button class="icon-button" data-close="settings-dialog" aria-label="닫기">✕</button></div><div class="settings-item"><div><h3>내 자산 백업</h3><p>전체 내역을 JSON 파일로 내려받습니다.<br>금융정보가 포함되므로 안전한 곳에 보관해 주세요.</p></div><button class="button secondary" id="export-data">내보내기 ↓</button></div><div class="settings-item"><div><h3>백업 복원</h3><p>모아에서 내보낸 백업 파일을 불러옵니다.<br>현재 내역은 백업 내역으로 교체됩니다.</p></div><button class="button secondary" id="import-data">불러오기 ↑</button><input id="import-file" type="file" accept="application/json,.json" hidden></div><div class="settings-item"><div><h3>예시로 둘러보기</h3><p>실제 내역을 바꾸지 않고 기능을 살펴보세요.</p></div><button class="button secondary" id="open-demo">예시 보기 ↗</button></div><p class="storage-note">내역은 로그인 계정별로 서버에 저장됩니다. 금융기관 자동 연동 없이 직접 입력하는 자산 노트입니다.</p></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body></html>
