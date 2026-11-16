@@ -6,7 +6,7 @@ const strategies={rate:'높은 금리 우선',balance:'적은 잔액 우선'};
 const metrics={loans:'대출 잔액',deposits:'예금 잔액',net:'순자산'};
 export function initialAdvisorState(){return {options:{monthlyExtra:0,lumpSum:0,reserve:0,months:12},strategy:'rate',metric:'loans',model:'gpt-6-astra',apiKey:'',question:'대출 이자 부담을 줄이려면 어떤 순서로 상환하는 것이 좋을까요? 예금을 유지하면서 실행할 상환 계획을 설명해 주세요.',advice:null,error:'',busy:false};}
 export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=false,hideAmounts=false}) {
-  if(hideAmounts)return '<div class="page-heading"><div><h1>상환 전략·AI</h1><p class="subtitle">금액 숨김을 해제하면 상담 내용과 상환 비교를 볼 수 있습니다.</p></div></div>';
+  if(hideAmounts)return '<div class="page-heading"><div><h1>AI 상담</h1><p class="subtitle">금액 숨김을 해제하면 상담 내용과 상환 비교를 볼 수 있습니다.</p></div><button type="button" class="button primary" data-action="reveal-advisor">금액 표시하고 상담하기</button></div>';
   const money=value=>esc(formatMoney(value));
   const active=data.loans.some(loan=>loan.balance>0);
   const controls=`<section class="panel advisor-controls"><form id="advisor-form"><fieldset ${state.busy?'disabled':''}><div class="stats-filter-grid">
@@ -19,7 +19,7 @@ export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=fal
     <label class="advisor-question">상담 질문<textarea name="question" rows="3" maxlength="2000">${esc(state.question)}</textarea></label>
     </div><p class="advisor-key-note">API 키는 이 탭의 메모리에서만 사용하며 서버·백업에 저장하지 않습니다. 상담을 요청하면 자산 요약과 비교 계산 결과를 OpenAI로 보내며, 연결한 API 프로젝트의 사용량으로 청구됩니다.</p>
     <div class="stats-filter-actions"><button class="button secondary" type="button" data-advisor-disconnect>키 연결 해제</button><button class="button secondary" type="submit">그래프 계산</button><button class="button primary" type="button" data-advisor-consult ${state.busy||!active||demo?'disabled':''}>${state.busy?'AI 상담 중…':'AI 상담받기'}</button></div></fieldset></form></section>`;
-  const heading='<div class="page-heading"><div><span class="eyebrow">MOA / AI ADVISOR</span><h1>상환 전략·AI</h1><p class="subtitle">상환 순서를 비교하고 예금·대출·순자산이 어떻게 달라지는지 확인하세요.</p></div></div>';
+  const heading='<div class="page-heading"><div><span class="eyebrow">MOA / AI ADVISOR</span><h1>AI 상담</h1><p class="subtitle">상환 순서를 비교하고 예금·대출·순자산이 어떻게 달라지는지 확인하세요.</p></div></div>';
   let scenarios;
   try{scenarios=repaymentScenarios(data,state.options);}catch(error){return heading+controls+`<p class="inline-warning" role="alert">${esc(error.message)}</p>`;}
   const plan=scenarios[state.strategy]||scenarios.rate,metric=Object.hasOwn(metrics,state.metric)?state.metric:'loans';
@@ -27,7 +27,7 @@ export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=fal
   const card=(label,value,note='')=>`<div class="metric-box"><span class="label">${label}</span><strong>${value}</strong>${note?`<small>${note}</small>`:''}</div>`;
   const points=plan.rows.map(row=>({label:row.month.slice(2).replace('-','.'),detailLabel:row.month+' · '+strategies[state.strategy],value:row[metric],forecast:false}));
   const baseline=scenarios.baseline.rows.map(row=>({value:row[metric]}));
-  return heading+controls+`${!active?'<div class="stats-note">상환할 대출을 먼저 <a href="#loans">대출 관리</a>에 등록해 주세요.</div>':''}${demo?'<div class="stats-note">예시 데이터의 상환 계획입니다. 실제 AI 상담은 예시 모드를 종료한 뒤 이용해 주세요.</div>':''}
+  return heading+controls+`${!active?'<div class="stats-note" data-advisor-notice>상환할 대출을 먼저 <a href="#loans">대출 관리</a>에 등록해 주세요.</div>':''}${demo?'<div class="stats-note" data-advisor-notice>예시 데이터의 상환 계획입니다. 실제 AI 상담은 예시 모드를 종료한 뒤 이용해 주세요.</div>':''}
     ${state.error?`<p class="inline-warning" role="alert">${esc(state.error)}</p>`:''}
     ${state.busy?'<div class="stats-note" role="status">비교 계산 결과를 전달하고 AI 답변을 기다리고 있습니다.</div>':''}
     ${state.advice?`<section class="panel advisor-answer"><div class="panel-header"><h2>AI 추천 · ${strategies[state.advice.recommendation]||''}</h2></div><p>${esc(state.advice.summary)}</p><ul>${state.advice.reasons.slice(0,5).map(text=>`<li>${esc(text)}</li>`).join('')}</ul>${state.advice.checks.length?`<h3>실행 전 확인할 내용</h3><ul>${state.advice.checks.slice(0,5).map(text=>`<li>${esc(text)}</li>`).join('')}</ul>`:''}</section>`:''}

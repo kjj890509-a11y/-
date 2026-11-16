@@ -1,3 +1,4 @@
+import * as loansPage from '../public/loans-page.mjs';
 import * as workspace from '../public/workspace.mjs';
 import * as navigation from '../public/navigation.mjs';
 import * as dashboard from '../public/dashboard-view.mjs';
@@ -111,15 +112,18 @@ test('the advisor page keeps key material out of rendered HTML and hides advice 
 test('a completed AI recommendation switches the comparison graph without persisting the API key',async()=>{
  const {document,window,Event}=parseHTML(readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));
  window.scrollTo=()=>{};const storageWrites=[];let requests=0;
- const context=vm.createContext({...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#advisor'},localStorage:{getItem:()=>null,setItem:(...args)=>storageWrites.push(args)},Intl,structuredClone,crypto,setTimeout,clearTimeout,fetch:async(path,init)=>{
+ const context=vm.createContext({...loansPage,...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#advisor'},localStorage:{getItem:()=>null,setItem:(...args)=>storageWrites.push(args)},Intl,structuredClone,crypto,setTimeout,clearTimeout,fetch:async(path,init)=>{
   if(path==='/api/advisor'){requests++;const body=JSON.parse(init.body);assert.equal(body.apiKey,fakeKey);assert.equal(body.options.monthlyExtra,500);return {ok:true,json:async()=>({advice,revision:1})};}
   return {ok:true,json:async()=>({data:data(),revision:1})};
  }});
  vm.runInContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,''),context);await new Promise(setImmediate);
  const visibleStep=()=>[...document.querySelectorAll('[data-ui-stage-panel]')].filter(panel=>!panel.hidden).map(panel=>panel.dataset.uiStagePanel);
  const stage=number=>document.querySelector(`.ui-steps [data-ui-stage="${number}"]`).dispatchEvent(new Event('click',{bubbles:true}));
- assert.deepEqual(visibleStep(),['1']);
- assert.equal(document.querySelector('#advisor-api-key').closest('[data-ui-stage-panel]').hidden,true);
+ assert.deepEqual(visibleStep(),['3']);
+ assert.equal(document.querySelector('#advisor-api-key').closest('[data-ui-stage-panel]').hidden,false);
+ assert.equal(document.querySelector('.section-tabs').closest('[data-ui-stage-panel]'),null);
+ assert.equal(document.querySelector('.section-tabs [href="#advisor"]').textContent,'AI 상담');
+ stage(1);
  document.querySelector('[name="monthlyExtra"]').value='500';
  document.querySelector('#advisor-form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
  assert.deepEqual(visibleStep(),['2']);
@@ -140,9 +144,15 @@ test('a completed AI recommendation switches the comparison graph without persis
  assert.equal(document.querySelector('.stats-trend .forecast-key').textContent,'기존 계획');
  assert.equal(storageWrites.length,0);
  document.getElementById('privacy-toggle').onclick();assert.equal(document.querySelector('#advisor-form'),null);
- document.getElementById('privacy-toggle').onclick();
+ document.querySelector('[data-action="reveal-advisor"]').dispatchEvent(new Event('click',{bubbles:true}));
  stage(3);
  document.querySelector('[data-advisor-disconnect]').dispatchEvent(new Event('click',{bubbles:true}));
  assert.equal(document.querySelector('#advisor-api-key').value,'');
  assert.ok(storageWrites.every(([key])=>key==='moa-hide-amounts'));
+ context.location.hash='#loans';window.dispatchEvent(new Event('hashchange'));
+ assert.equal(document.querySelector('.heading-actions a[href="#advisor"]').textContent,'AI 상담');
+ assert.equal(document.querySelector('.topbar a[href="#advisor"]').textContent,'AI 상담');
+ context.location.hash='#advisor';window.dispatchEvent(new Event('hashchange'));
+ assert.deepEqual(visibleStep(),['3']);
+ assert.equal(document.querySelector('.section-tabs').closest('[data-ui-stage-panel]'),null);
 });

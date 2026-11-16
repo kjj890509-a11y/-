@@ -3,7 +3,7 @@ let sourceSequence=0;
 function closeDialog(dialog,state){if(!dialog)return;if(state.modal===dialog.id)state.modal='';if(dialog.id==='ui-info-dialog')dialog.querySelector('[data-ui-info-content]').replaceChildren();if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');}
 function stateFor(document){
  if(states.has(document))return states.get(document);
- const state={view:'',sections:new Map(),modal:'',advisorStep:1};states.set(document,state);
+ const state={view:'',sections:new Map(),modal:'',advisorStep:3};states.set(document,state);
  document.addEventListener('click',event=>{
   const target=event.target.closest('[data-ui-close],[data-ui-open],[data-info-sources],[data-info-template],[data-ui-stage]');if(!target)return;
   event.preventDefault();
@@ -67,7 +67,7 @@ export function rememberDisclosure(root){
 function advisorStages(root,state){
  const controls=root.querySelector('.advisor-controls'),form=root.querySelector('#advisor-form');if(!controls||root.querySelector('.ui-steps'))return;
  const document=root.ownerDocument,nav=document.createElement('nav');nav.className='ui-steps';nav.setAttribute('aria-label','상환 상담 진행 단계');
- for(const [index,title]of ['상환 조건','그래프 비교','AI 상담'].entries()){const button=document.createElement('button');button.type='button';button.dataset.uiStage=String(index+1);button.textContent=`${index+1}. ${title}`;nav.append(button);}
+ for(const [number,title]of [[3,'AI 상담'],[1,'상환 조건'],[2,'그래프 비교']]){const button=document.createElement('button');button.type='button';button.dataset.uiStage=String(number);button.textContent=title;nav.append(button);}
  controls.before(nav);
  const panels=[1,2,3].map(number=>{const panel=document.createElement('section');panel.dataset.uiStagePanel=String(number);root.append(panel);return panel;});
  panels[0].append(controls);
@@ -78,8 +78,8 @@ function advisorStages(root,state){
  for(const selector of ['[data-advisor-disconnect]','[data-advisor-consult]']){const button=form.querySelector(selector);if(button){button.disabled=button.disabled||form.querySelector('fieldset').disabled;connection.querySelector('.stats-filter-actions').append(button);}}
  const calculate=form.querySelector('button[type="submit"]');if(calculate)calculate.textContent='상환안 비교하기 →';
  for(const element of [...root.children]){
-  if(element===nav||element.matches('[data-ui-stage-panel],.page-heading,.inline-warning'))continue;
-  if(element.matches('.advisor-answer,[role="status"]'))panels[2].append(element);
+  if(element===nav||element.matches('[data-ui-stage-panel],.page-heading,.inline-warning,.section-tabs'))continue;
+  if(element.matches('.advisor-answer,[role="status"],[data-advisor-notice]'))panels[2].append(element);
   else panels[1].append(element);
  }
  const next=document.createElement('button');next.type='button';next.className='button primary stage-next';next.dataset.uiStage='3';next.textContent='AI 상담으로 이어가기 →';panels[1].append(next);
@@ -107,7 +107,7 @@ function statisticsFilters(root,state){
 }
 export function enhanceDisclosure(root,{view=''}={}){
  const document=root.ownerDocument,state=stateFor(document);
- if(state.view!==view){state.modal='';state.focus=null;}state.view=view;
+ if(state.view!==view){state.modal='';state.focus=null;if(view==='advisor')state.advisorStep=3;}state.view=view;
  document.querySelectorAll('dialog.info-dialog').forEach(dialog=>{if(dialog.hasAttribute('open'))closeDialog(dialog,state);else dialog.querySelector('[data-ui-info-content]').replaceChildren();});
  if(view==='advisor')advisorStages(root,state);
  if(view==='advisor'&&root.querySelector('.inline-warning')&&!root.querySelector('.stats-trend')){state.advisorStep=1;setStage(root,1);}
