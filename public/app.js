@@ -229,13 +229,21 @@ function advisorPage(){
  advisorState??=initialAdvisorState();
  return renderAdvisorPage(portfolio,advisorState,{formatMoney:money,formatCompact:compact,demo,hideAmounts:hidden});
 }
+async function checkAdvisorService(){
+ if(advisorState?.service!=='unknown')return;
+ advisorState.service='checking';
+ try{
+  const response=await fetch('/api/advisor');const result=await response.json();
+  advisorState.service=response.ok&&typeof result.configured==='boolean'?(result.configured?'ready':'unconfigured'):'error';
+ }catch{advisorState.service='error';}
+ if(view==='advisor')render();
+}
 async function requestAdvisor(next){
  if(advisorState?.busy)return;
  if(demo){toast('예시 모드를 종료한 뒤 실제 자산으로 상담해 주세요.');return;}
- if(!next.apiKey){advisorState={...next,error:'보유한 OpenAI API 키를 입력해 주세요.'};render();return;}
  advisorState={...next,busy:true,advice:null,error:''};render();
  try{
-  const response=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey:next.apiKey,model:next.model,question:next.question,options:next.options,revision})});
+  const response=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:next.question,options:next.options,revision})});
   const result=await response.json();
   if(!response.ok)throw new Error(result.error||'AI 상담을 완료하지 못했습니다.');
   if(result.revision!==revision)throw new Error('상담 중 자산이 변경됐습니다. 현재 조건으로 다시 상담해 주세요.');
@@ -342,7 +350,7 @@ function calendar(){
  return `${heading('입출금 달력','월급·기타 수입·지출과 대출·카드 결제일을 함께 확인하세요.',false)}${demoBanner()}<div class="calendar-layout"><section class="panel"><div class="panel-header"><h2>입출금 달력</h2>${monthToolbar()}</div><div class="calendar-grid">${['일','월','화','수','목','금','토'].map(d=>`<span class="calendar-day-label">${d}</span>`).join('')}${cells}</div><div class="calendar-key"><span><i></i>지출</span><span class="income-color">+ 수입</span></div></section><section class="panel"><div class="panel-header"><h2>${m}월 입출금 내역</h2><span class="calendar-event-count">${events.length}건</span></div><div class="schedule-summary"><span>총지출 예정</span><strong>${money(flow.expense)}</strong><p class="cash-hint">총수입 ${money(flow.income)} · 남는 금액 ${money(flow.balance)}</p></div><div class="calendar-list">${events.length?events.map(paymentRow).join(''):'<div class="empty-inline">이번 달 등록된 일정이 없어요.</div>'}</div><p class="panel-note">입력한 수입·지출 예정액 기준입니다. 대출 상환은 월 원금·이자의 반복 표시이며, 실제 입출금 여부와 잔액은 직접 확인해 주세요.</p></section></div>`;
 }
 
-function render(){unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():category(view));enhanceDisclosure($('main'),{view});mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor')mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});}
+function render(){unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():category(view));enhanceDisclosure($('main'),{view});mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -400,6 +408,7 @@ document.addEventListener('click',async e=>{
  const close=e.target.closest('[data-close]');if(close){$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='check-advisor'){advisorState.service='unknown';render();return;}
  if(action==='home-detail'){selectHomeDetail(button.dataset.detail);return;}
  if(action==='reveal-advisor')$('privacy-toggle').click();
  if(action==='add-loan-payment'||action==='edit-loan-payment')openLoanPaymentEditor(id);

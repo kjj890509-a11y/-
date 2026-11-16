@@ -4,7 +4,7 @@ import {renderTrendChart} from './chart.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const strategies={rate:'높은 금리 우선',balance:'적은 잔액 우선'};
 const metrics={loans:'대출 잔액',deposits:'예금 잔액',net:'순자산'};
-export function initialAdvisorState(){return {options:{monthlyExtra:0,lumpSum:0,reserve:0,months:12},strategy:'rate',metric:'loans',model:'gpt-6-astra',apiKey:'',question:'대출 이자 부담을 줄이려면 어떤 순서로 상환하는 것이 좋을까요? 예금을 유지하면서 실행할 상환 계획을 설명해 주세요.',advice:null,error:'',busy:false};}
+export function initialAdvisorState(){return {options:{monthlyExtra:0,lumpSum:0,reserve:0,months:12},strategy:'rate',metric:'loans',service:'unknown',question:'대출 이자 부담을 줄이려면 어떤 순서로 상환하는 것이 좋을까요? 예금을 유지하면서 실행할 상환 계획을 설명해 주세요.',advice:null,error:'',busy:false};}
 export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=false,hideAmounts=false}) {
   if(hideAmounts)return '<div class="page-heading"><div><h1>AI 상담</h1><p class="subtitle">금액 숨김을 해제하면 상담 내용과 상환 비교를 볼 수 있습니다.</p></div><button type="button" class="button primary" data-action="reveal-advisor">금액 표시하고 상담하기</button></div>';
   const money=value=>esc(formatMoney(value));
@@ -14,11 +14,9 @@ export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=fal
     <label>지금 한 번 더 갚을 금액 · 원<input name="lumpSum" inputmode="numeric" value="${esc(state.options.lumpSum)}" required></label>
     <label>예금에 남겨둘 최소 금액 · 원<input name="reserve" inputmode="numeric" value="${esc(state.options.reserve)}" required></label>
     <label>비교 기간<select name="months">${[12,24,36].map(value=>`<option value="${value}" ${state.options.months===value?'selected':''}>${value}개월</option>`).join('')}</select></label>
-    <label class="stats-filter-wide">OpenAI API 키<input id="advisor-api-key" name="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="보유한 API 키 입력"></label>
-    <label class="stats-filter-wide">사용할 모델<input name="model" value="${esc(state.model)}" required></label>
     <label class="advisor-question">상담 질문<textarea name="question" rows="3" maxlength="2000">${esc(state.question)}</textarea></label>
-    </div><p class="advisor-key-note">API 키는 이 탭의 메모리에서만 사용하며 서버·백업에 저장하지 않습니다. 상담을 요청하면 자산 요약과 비교 계산 결과를 OpenAI로 보내며, 연결한 API 프로젝트의 사용량으로 청구됩니다.</p>
-    <div class="stats-filter-actions"><button class="button secondary" type="button" data-advisor-disconnect>키 연결 해제</button><button class="button secondary" type="submit">그래프 계산</button><button class="button primary" type="button" data-advisor-consult ${state.busy||!active||demo?'disabled':''}>${state.busy?'AI 상담 중…':'AI 상담받기'}</button></div></fieldset></form></section>`;
+    </div><div class="advisor-service" data-advisor-service><span class="advisor-model">GPT-6.1 Terra · Extra high</span><p role="status">${state.service==='ready'?'상담할 내용을 입력해 주세요.':state.service==='unconfigured'?'AI 상담을 준비하고 있습니다. 연결이 완료되면 이용할 수 있어요.':state.service==='error'?'상담 연결 상태를 확인하지 못했습니다.':'상담 연결을 확인하고 있습니다…'}</p>${['unconfigured','error'].includes(state.service)?'<button type="button" class="button secondary" data-action="check-advisor">연결 다시 확인</button>':''}</div><p class="advisor-key-note">상담을 요청하면 질문과 내 자산 요약·상환 비교 결과가 OpenAI로 전송됩니다. 서비스에 연결된 AI로 상담하며, 답변은 참고 자료로 활용해 주세요.</p>
+    <div class="stats-filter-actions"><button class="button secondary" type="submit">그래프 계산</button><button class="button primary" type="button" data-advisor-consult ${state.busy||!active||demo||state.service!=='ready'?'disabled':''}>${state.busy?'AI 상담 중…':'AI 상담받기'}</button></div></fieldset></form></section>`;
   const heading='<div class="page-heading"><div><span class="eyebrow">MOA / AI ADVISOR</span><h1>AI 상담</h1><p class="subtitle">상환 순서를 비교하고 예금·대출·순자산이 어떻게 달라지는지 확인하세요.</p></div></div>';
   let scenarios;
   try{scenarios=repaymentScenarios(data,state.options);}catch(error){return heading+controls+`<p class="inline-warning" role="alert">${esc(error.message)}</p>`;}
@@ -40,14 +38,13 @@ export function renderAdvisorPage(data,state,{formatMoney,formatCompact,demo=fal
 }
 export function mountAdvisorControls(root,state,{onChange,onConsult,onFeedback=()=>{}}) {
   const form=root.querySelector('#advisor-form');if(!form)return;
-  root.querySelector('[name="apiKey"]').value=state.apiKey;
   const read=()=>{
     const value=name=>root.querySelector(`[name="${name}"]`).value;
-    return {...state,apiKey:value('apiKey').trim(),model:value('model').trim(),question:value('question'),options:{monthlyExtra:Number(value('monthlyExtra').replaceAll(',','')),lumpSum:Number(value('lumpSum').replaceAll(',','')),reserve:Number(value('reserve').replaceAll(',','')),months:Number(value('months'))}};
+    return {...state,question:value('question'),options:{monthlyExtra:Number(value('monthlyExtra').replaceAll(',','')),lumpSum:Number(value('lumpSum').replaceAll(',','')),reserve:Number(value('reserve').replaceAll(',','')),months:Number(value('months'))}};
   };
+  root.querySelectorAll('input,select,textarea').forEach(field=>field.addEventListener('input',()=>Object.assign(state,read())));
   form.addEventListener('submit',event=>{event.preventDefault();onChange({...read(),advice:null,error:''});onFeedback('상환안 비교를 계산했어요.');});
-  root.querySelector('[data-advisor-consult]').addEventListener('click',()=>{if(!state.busy)onConsult(read());});
-  root.querySelector('[data-advisor-disconnect]').addEventListener('click',()=>{onChange({...read(),apiKey:'',error:''});onFeedback('이 탭의 API 키를 지웠어요.');});
+  root.querySelector('[data-advisor-consult]').addEventListener('click',()=>{if(!state.busy&&state.service==='ready')onConsult(read());});
   root.querySelectorAll('[data-advisor-strategy]').forEach(button=>button.addEventListener('click',()=>onChange({...read(),strategy:button.dataset.advisorStrategy})));
   root.querySelector('#advisor-metric')?.addEventListener('change',event=>onChange({...read(),metric:event.target.value}));
 }

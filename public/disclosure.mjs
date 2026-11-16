@@ -71,11 +71,12 @@ function advisorStages(root,state){
  controls.before(nav);
  const panels=[1,2,3].map(number=>{const panel=document.createElement('section');panel.dataset.uiStagePanel=String(number);root.append(panel);return panel;});
  panels[0].append(controls);
- const connection=document.createElement('section');connection.className='panel advisor-connection';connection.innerHTML='<div class="panel-header"><h2>AI 상담 연결</h2></div><div class="stats-filter-grid"></div><div class="stats-filter-actions"></div>';
+ const connection=document.createElement('section');connection.className='panel advisor-connection';connection.innerHTML='<div class="panel-header"><h2>무엇이 궁금하신가요?</h2></div><div class="stats-filter-grid"></div><div class="stats-filter-actions"></div>';
  panels[2].append(connection);
- for(const name of ['apiKey','model','question']){const field=form.querySelector(`[name="${name}"]`);if(field){field.removeAttribute('required');field.disabled=form.querySelector('fieldset').disabled;connection.querySelector('.stats-filter-grid').append(field.closest('label'));}}
+ for(const name of ['question']){const field=form.querySelector(`[name="${name}"]`);if(field){field.removeAttribute('required');field.disabled=form.querySelector('fieldset').disabled;connection.querySelector('.stats-filter-grid').append(field.closest('label'));}}
+ const service=form.querySelector('[data-advisor-service]');if(service)connection.querySelector('.panel-header').after(service);
  const keyNote=form.querySelector('.advisor-key-note');if(keyNote)connection.append(keyNote);
- for(const selector of ['[data-advisor-disconnect]','[data-advisor-consult]']){const button=form.querySelector(selector);if(button){button.disabled=button.disabled||form.querySelector('fieldset').disabled;connection.querySelector('.stats-filter-actions').append(button);}}
+ for(const selector of ['[data-advisor-consult]']){const button=form.querySelector(selector);if(button){button.disabled=button.disabled||form.querySelector('fieldset').disabled;connection.querySelector('.stats-filter-actions').append(button);}}
  const calculate=form.querySelector('button[type="submit"]');if(calculate)calculate.textContent='상환안 비교하기 →';
  for(const element of [...root.children]){
   if(element===nav||element.matches('[data-ui-stage-panel],.page-heading,.inline-warning,.section-tabs'))continue;

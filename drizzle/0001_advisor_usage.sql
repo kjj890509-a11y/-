@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS advisor_usage (
+  actor TEXT PRIMARY KEY NOT NULL,
+  day TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_request_ms INTEGER NOT NULL DEFAULT 0,
+  lease_id TEXT NOT NULL DEFAULT '',
+  lease_until INTEGER NOT NULL DEFAULT 0
+);

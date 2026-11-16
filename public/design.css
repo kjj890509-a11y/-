@@ -304,3 +304,7 @@ footer,footer .footer-right { font-size:var(--font-xs); color:var(--muted); }foo
 .home-net-breakdown small { display:block; margin-top:4px; color:var(--muted); font-size:var(--font-xs); }
 .home-net-breakdown button:hover,.asset-breakdown>button:hover { background:var(--soft-surface); }
 @media(max-width:640px) { .home-detail-toolbar,.home-detail-heading { gap:12px; margin-bottom:20px; }.home-detail-heading h2 { font-size:var(--font-lg); }.home-detail-toolbar>span { flex:1; min-width:160px; } }
+
+.advisor-service { display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; padding:16px 0; margin-bottom:8px; }
+.advisor-model { color:var(--green-dark); background:var(--soft-surface); border-radius:6px; padding:5px 10px; font-size:var(--font-sm); font-weight:600; }
+.advisor-service p { color:var(--muted); font-size:var(--font-sm); }
