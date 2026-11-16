@@ -20,6 +20,11 @@ export async function handleApi(request, env) {
     let body;
     try {body = JSON.parse(raw);} catch {return responseJSON({error:'데이터 형식을 확인해 주세요.'},400);}
     if (!Number.isSafeInteger(body.revision) || body.revision < 0) return responseJSON({error:'저장 버전이 올바르지 않습니다.'},400);
+    if (body.data && typeof body.data === 'object' && body.data.cashflow === undefined && body.revision > 0) {
+      const previous = await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
+      if (!previous || previous.revision !== body.revision) return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
+      body.data = {...body.data, cashflow:JSON.parse(previous.data).cashflow || []};
+    }
     let clean;
     try {clean = validatePortfolio(body.data);} catch(error) {return responseJSON({error:error.message},400);}
     const stamp = new Date().toISOString();

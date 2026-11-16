@@ -1,6 +1,7 @@
-export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards'];
-export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직금', deposits: '예금', cards: '카드' };
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [] });
+export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cashflow'];
+export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출' };
+export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [] });
 export function todayKST(now = new Date()) {
   return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);
 }
@@ -9,13 +10,14 @@ export function validDate(value) {
   const d = new Date(value + 'T00:00:00Z');
   return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
-const moneyFields = { stocks: ['valuation', 'cost'], loans: ['balance', 'principal', 'interest'], retirement: ['amount'], deposits: ['balance'], cards: ['amount'] };
-const textFields = { stocks: ['institution', 'note'], loans: ['institution', 'method', 'note'], retirement: ['institution', 'note'], deposits: ['institution', 'note'], cards: ['note'] };
+const moneyFields = { stocks: ['valuation', 'cost'], loans: ['balance', 'principal', 'interest'], retirement: ['amount'], deposits: ['balance'], cards: ['amount'], cashflow:['amount'] };
+const textFields = { stocks: ['institution', 'note'], loans: ['institution', 'method', 'note'], retirement: ['institution', 'note'], deposits: ['institution', 'note'], cards: ['note'], cashflow:['note'] };
 export function validatePortfolio(input) {
   if (!input || input.version !== 1 || typeof input !== 'object') throw new Error('지원하지 않는 백업 형식입니다.');
   const clean = emptyPortfolio();
   let count = 0;
   for (const kind of KINDS) {
+    if (kind === 'cashflow' && input.cashflow === undefined) continue;
     if (!Array.isArray(input[kind])) throw new Error('자산 목록 형식을 확인해 주세요.');
     const ids = new Set();
     clean[kind] = input[kind].map(row => {
@@ -45,6 +47,12 @@ export function validatePortfolio(input) {
         if (!validDate(row.dueDate)) throw new Error('올바른 카드 결제일을 입력해 주세요.');
         if (typeof row.paid !== 'boolean') throw new Error('결제 상태를 확인해 주세요.');
         result.dueDate = row.dueDate; result.paid = row.paid;
+      }
+      if (kind === 'cashflow') {
+        if (!Object.hasOwn(FLOW_LABELS,row.type)) throw new Error('월급·기타 수입·기타 지출 중 선택해 주세요.');
+        if (!['once','monthly'].includes(row.repeat)) throw new Error('반복 여부를 선택해 주세요.');
+        if (!validDate(row.date)) throw new Error('올바른 수입·지출 날짜를 입력해 주세요.');
+        result.type=row.type; result.repeat=row.repeat; result.date=row.date;
       }
       if (kind === 'retirement') {
         if (!validDate(row.asOf)) throw new Error('퇴직금 기준일을 입력해 주세요.');
@@ -77,8 +85,20 @@ export function paymentDate(month, day) {
 export function eventsForMonth(data, month) {
   return [
     ...data.loans.filter(row => row.balance > 0 && row.principal + row.interest > 0).map(row => ({id: row.id, name: row.name, date: paymentDate(month, row.day), amount: row.principal + row.interest, type: 'loans', paid: false})),
-    ...data.cards.filter(row => row.dueDate.startsWith(month)).map(row => ({id: row.id, name: row.name, date: row.dueDate, amount: row.amount, type: 'cards', paid: row.paid}))
+    ...data.cards.filter(row => row.dueDate.startsWith(month)).map(row => ({id: row.id, name: row.name, date: row.dueDate, amount: row.amount, type: 'cards', paid: row.paid})),
+    ...cashflowForMonth(data,month).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
   ].sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+}
+export function cashflowForMonth(data,month) {
+  return (data.cashflow || []).filter(row=>row.repeat==='monthly'?row.date.slice(0,7)<=month:row.date.startsWith(month)).map(row=>({...row,occursOn:row.repeat==='monthly'?paymentDate(month,Number(row.date.slice(8))):row.date})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
+}
+export function monthlyFlow(data,month) {
+  const records=cashflowForMonth(data,month);
+  const sum=type=>records.filter(row=>row.type===type).reduce((n,row)=>n+row.amount,0);
+  const salary=sum('salary'),otherIncome=sum('other_income'),otherExpense=sum('expense');
+  const payments=eventsForMonth(data,month).filter(row=>row.type!=='cashflow'&&!row.paid).reduce((n,row)=>n+row.amount,0);
+  const income=salary+otherIncome,expense=payments+otherExpense;
+  return {salary,otherIncome,otherExpense,payments,income,expense,balance:income-expense};
 }
 export function samplePortfolio(date = todayKST()) {
   const month = date.slice(0,7);
@@ -87,6 +107,7 @@ export function samplePortfolio(date = todayKST()) {
     loans:[{id:'demo-l1',name:'주택담보대출',institution:'신한은행',balance:62000000,principal:320000,interest:217000,rate:4.2,day:25,method:'원리금균등',note:''},{id:'demo-l2',name:'신용대출',institution:'카카오뱅크',balance:8000000,principal:150000,interest:34000,rate:5.1,day:20,method:'원금균등',note:''}],
     retirement:[{id:'demo-r1',name:'퇴직연금 DC',institution:'삼성생명',amount:34800000,asOf:date,note:'예상 평가액'}],
     deposits:[{id:'demo-d1',name:'생활비 통장',institution:'토스뱅크',balance:8400000,rate:2,maturity:'',note:''},{id:'demo-d2',name:'정기예금',institution:'우리은행',balance:40000000,rate:3.5,maturity:`${Number(date.slice(0,4))+1}-05-20`,note:''}],
-    cards:[{id:'demo-c1',name:'현대카드',amount:854000,dueDate:paymentDate(month,25),paid:false,note:''},{id:'demo-c2',name:'삼성카드',amount:326000,dueDate:paymentDate(month,20),paid:false,note:''}]
+    cards:[{id:'demo-c1',name:'현대카드',amount:854000,dueDate:paymentDate(month,25),paid:false,note:''},{id:'demo-c2',name:'삼성카드',amount:326000,dueDate:paymentDate(month,20),paid:false,note:''}],
+    cashflow:[{id:'demo-f1',name:'회사 월급',type:'salary',amount:4200000,date:paymentDate(month,25),repeat:'monthly',note:'실수령액 기준 예시'},{id:'demo-f2',name:'부업 수입',type:'other_income',amount:450000,date:paymentDate(month,15),repeat:'once',note:''},{id:'demo-f3',name:'월세',type:'expense',amount:600000,date:paymentDate(month,5),repeat:'monthly',note:'계좌이체로 납부'}]
   };
 }
