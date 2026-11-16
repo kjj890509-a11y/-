@@ -20,11 +20,13 @@ export async function handleApi(request, env) {
     let body;
     try {body = JSON.parse(raw);} catch {return responseJSON({error:'데이터 형식을 확인해 주세요.'},400);}
     if (!Number.isSafeInteger(body.revision) || body.revision < 0) return responseJSON({error:'저장 버전이 올바르지 않습니다.'},400);
-    if (body.data && typeof body.data === 'object' && (['cashflow','fixed','budgets','snapshots'].some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&row.interestMode===undefined))) && body.revision > 0) {
+    if (body.data && typeof body.data === 'object' && (['cashflow','fixed','budgets','snapshots'].some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&row.interestMode===undefined)) || (Array.isArray(body.data.cashflow)&&body.data.cashflow.some(row=>row&&row.includeInForecast===undefined))) && body.revision > 0) {
       const previous = await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
       if (!previous || previous.revision !== body.revision) return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
       const stored=JSON.parse(previous.data);
       for(const key of ['cashflow','fixed','budgets','snapshots'])if(body.data[key]===undefined)body.data[key]=stored[key]||[];
+      const oldFlows=new Map((stored.cashflow||[]).map(row=>[row.id,row]));
+      if(Array.isArray(body.data.cashflow))body.data.cashflow=body.data.cashflow.map(row=>row&&row.includeInForecast===undefined?{...row,includeInForecast:oldFlows.get(row.id)?.includeInForecast??true}:row);
       const oldLoans=new Map((stored.loans||[]).map(row=>[row.id,row]));
       if(Array.isArray(body.data.loans))body.data.loans=body.data.loans.map(row=>row&&row.interestMode===undefined?{...row,interestMode:oldLoans.get(row.id)?.interestMode||'manual'}:row);
     }

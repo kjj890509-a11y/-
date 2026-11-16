@@ -63,6 +63,8 @@ export function validatePortfolio(input) {
         if (!['once','monthly'].includes(row.repeat)) throw new Error('반복 여부를 선택해 주세요.');
         if (!validDate(row.date)) throw new Error('올바른 수입·지출 날짜를 입력해 주세요.');
         result.type=row.type; result.repeat=row.repeat; result.date=row.date;
+        if(row.includeInForecast!==undefined&&typeof row.includeInForecast!=='boolean')throw new Error('예상 계산 반영 여부를 확인해 주세요.');
+        result.includeInForecast=row.includeInForecast??true;
       }
       if (kind === 'retirement') {
         if (!validDate(row.asOf)) throw new Error('퇴직금 기준일을 입력해 주세요.');
@@ -123,8 +125,11 @@ export function eventsForMonth(data, month) {
     ...cashflowForMonth(data,month).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
   ].sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
-export function cashflowForMonth(data,month) {
-  return (data.cashflow || []).filter(row=>row.repeat==='monthly'?row.date.slice(0,7)<=month:row.date.startsWith(month)).map(row=>({...row,occursOn:row.repeat==='monthly'?paymentDate(month,Number(row.date.slice(8))):row.date})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
+export function cashflowForMonth(data,month,includeExcluded=false) {
+  return (data.cashflow || []).filter(row=>includeExcluded||row.includeInForecast!==false).filter(row=>row.repeat==='monthly'?row.date.slice(0,7)<=month:row.date.startsWith(month)).map(row=>({...row,occursOn:row.repeat==='monthly'?paymentDate(month,Number(row.date.slice(8))):row.date})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
+}
+export function scheduledCashflows(data,date=todayKST(),range='upcoming') {
+ return (data.cashflow||[]).filter(row=>row.repeat==='once'&&['other_income','expense'].includes(row.type)).filter(row=>range==='all'||(range==='past'?row.date<=date:row.date>date)).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
 }
 export function monthlyFlow(data,month) {
   const records=cashflowForMonth(data,month);

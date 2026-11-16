@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -183,4 +183,32 @@ test('date-based projections agree with month-end projections and preserve the i
  const dates=['2026-11-30','2026-12-31','2027-01-31'];assert.deepEqual(forecastOnDates(p,dates,'2026-11-16'),forecastMonths(p,'2026-11-16',3));
  paydayForecasts(p,'2026-11-16');assert.deepEqual(p,original);
  assert.throws(()=>forecastOnDates(p,['2026-11-15'],'2026-11-16'));assert.throws(()=>forecastOnDates(p,['2027-02-30'],'2026-11-16'));
+});
+
+test('scheduled one-off income and expenses apply on their own dates without repeating next month',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'salary',name:'월급',type:'salary',amount:500,date:'2026-11-25',repeat:'monthly',note:''},{id:'bonus',name:'추가 지급',type:'other_income',amount:200,date:'2026-11-24',repeat:'once',includeInForecast:true,note:''},{id:'trip',name:'예정 지출',type:'expense',amount:100,date:'2026-11-26',repeat:'once',includeInForecast:true,note:''}];
+ assert.equal(paydayForecasts(p,'2026-11-16',1)[0].net,700);
+ const [nov,dec]=forecastMonths(p,'2026-11-16',2);assert.equal(nov.net,600);assert.equal(dec.net,1100);
+ p.cashflow[1].date='2026-11-26';assert.equal(paydayForecasts(p,'2026-11-16',1)[0].net,500);
+});
+test('excluded uncertain plans remain editable but do not enter budgets, calendar or asset forecasts',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'bonus',name:'미확정 상여금',type:'other_income',amount:200,date:'2026-11-24',repeat:'once',includeInForecast:false,note:''},{id:'cost',name:'검토 중 지출',type:'expense',amount:100,date:'2026-11-26',repeat:'once',includeInForecast:false,note:''}];
+ assert.equal(scheduledCashflows(p,'2026-11-16').length,2);assert.equal(cashflowForMonth(p,'2026-11').length,0);assert.equal(cashflowForMonth(p,'2026-11',true).length,2);assert.equal(eventsForMonth(p,'2026-11').length,0);assert.equal(budgetPlan(p,'2026-11').income,0);assert.equal(budgetPlan(p,'2026-11').expense,0);assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,0);
+ p.cashflow[0].includeInForecast=true;assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,200);
+ p.cashflow[1].includeInForecast=true;assert.equal(forecastMonths(p,'2026-11-16',1)[0].net,100);
+});
+test('scheduled lists reuse existing one-off flows and separate future and past without including recurring salary',()=>{
+ const p=emptyPortfolio();p.cashflow=[{id:'past',name:'지난 입금',type:'other_income',amount:1,date:'2026-11-10',repeat:'once',note:''},{id:'today',name:'오늘 지출',type:'expense',amount:2,date:'2026-11-16',repeat:'once',note:''},{id:'future',name:'나중 입금',type:'other_income',amount:3,date:'2027-02-10',repeat:'once',note:''},{id:'recurring',name:'고정 수입',type:'other_income',amount:4,date:'2026-11-20',repeat:'monthly',note:''},{id:'salary',name:'급여',type:'salary',amount:5,date:'2026-11-25',repeat:'once',note:''}];
+ assert.deepEqual(scheduledCashflows(p,'2026-11-16').map(r=>r.id),['future']);assert.equal(scheduledCashflows(p,'2026-11-16','all').length,3);assert.deepEqual(scheduledCashflows(p,'2026-11-16','past').map(r=>r.id),['past','today']);
+});
+test('legacy flows default to inclusion while invalid inclusion flags are rejected',()=>{
+ const p=samplePortfolio('2026-11-16'),clean=validatePortfolio(p);assert.equal(clean.cashflow[0].includeInForecast,true);
+ p.cashflow[0].includeInForecast='false';assert.throws(()=>validatePortfolio(p));
+});
+test('legacy clients preserve excluded plans and the same flow is stored only once',async()=>{
+ const env={DB:database()},data=samplePortfolio('2026-11-16');data.cashflow[1].includeInForecast=false;
+ assert.equal((await handleApi(req('plan-owner','PUT',{data,revision:0}),env)).status,200);
+ const legacy=structuredClone(data);for(const row of legacy.cashflow)delete row.includeInForecast;legacy.cashflow[1].note='일정 변경 검토';
+ assert.equal((await handleApi(req('plan-owner','PUT',{data:legacy,revision:1}),env)).status,200);
+ const saved=await(await handleApi(req('plan-owner'),env)).json();assert.equal(saved.data.cashflow.length,3);assert.equal(saved.data.cashflow.find(r=>r.id==='demo-f2').includeInForecast,false);assert.equal(saved.data.cashflow.find(r=>r.id==='demo-f2').note,'일정 변경 검토');
 });
