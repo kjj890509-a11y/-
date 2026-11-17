@@ -1,7 +1,7 @@
 export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cashflow', 'fixed'];
 export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직연금·퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cashflow: [], fixed: [], budgets: [], snapshots: [], loanPayments: [], dashboard: null });
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], snapshots: [], loanPayments: [], dashboard: null });
 export function validateDashboard(input) {
   if (input === null || input === undefined) return null;
   if (input.version !== 1 || !Array.isArray(input.widgets) || input.widgets.length > 16) throw new Error('통계 카드는 최대 16개까지 저장할 수 있습니다.');
@@ -115,6 +115,28 @@ export function validatePortfolio(input) {
     });
     count += clean[kind].length;
   }
+  if(input.cardAccounts!==undefined){
+    if(!Array.isArray(input.cardAccounts)||input.cardAccounts.length>100)throw new Error('내 카드는 최대 100개까지 등록할 수 있습니다.');
+    const ids=new Set();
+    clean.cardAccounts=input.cardAccounts.map(row=>{
+      if(!row||typeof row.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(row.id)||ids.has(row.id))throw new Error('내 카드 ID를 확인해 주세요.');ids.add(row.id);
+      if(typeof row.name!=='string'||!row.name.trim()||row.name.length>100)throw new Error('카드 이름을 100자 이내로 입력해 주세요.');
+      if(!Number.isInteger(row.day)||row.day<1||row.day>31)throw new Error('카드의 기본 결제일은 1~31일로 입력해 주세요.');
+      if(row.note!==undefined&&(typeof row.note!=='string'||row.note.length>500))throw new Error('카드 메모는 500자 이내로 입력해 주세요.');
+      if(row.archived!==undefined&&typeof row.archived!=='boolean')throw new Error('카드 보관 상태를 확인해 주세요.');
+      return {id:row.id,name:row.name.trim(),day:row.day,note:row.note||'',archived:row.archived??false};
+    });
+  }
+  const accountIds=new Set(clean.cardAccounts.map(row=>row.id)),bills=new Set();
+  for(let index=0;index<clean.cards.length;index++){
+    const accountId=input.cards[index].cardAccountId;
+    if(accountId===undefined||accountId==='')continue;
+    if(typeof accountId!=='string'||!accountIds.has(accountId))throw new Error('청구 내역에 연결한 내 카드를 확인해 주세요.');
+    const key=accountId+':'+clean.cards[index].dueDate.slice(0,7);
+    if(bills.has(key))throw new Error('같은 카드의 같은 결제 월에는 청구 내역을 한 건만 등록할 수 있습니다.');bills.add(key);
+    clean.cards[index].cardAccountId=accountId;
+  }
+  count+=clean.cardAccounts.length;
   const validMoney=value=>Number.isSafeInteger(value)&&value>=0&&value<=1_000_000_000_000_000;
   for (const key of ['budgets','snapshots']) {
     if (input[key] === undefined) continue;
