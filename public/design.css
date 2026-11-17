@@ -6,6 +6,8 @@
   --green: #635bff; --green-dark: #5145cd; --canvas: #f7f8fa;
   --surface: #ffffff; --soft-surface: #f1efff; --line: #ebeef1;
   --track: #ebe9ff; --red: #b02a37; --blue: #635bff;
+  --accent-border: #c8c3ff; --accent-muted: #8b83ec; --chart-secondary: #8176db;
+  --income: #18764b; --income-soft: #eaf4ed; --expense: #b02a37; --expense-soft: #fbebeb;
   --asset-stock: #a78bfa; --asset-cash: #635bff; --asset-retirement: #20a4b8;
   --card-shadow: 0 1px 2px #30313d04;
   --radius: 6px; --sidebar-width: 216px;
