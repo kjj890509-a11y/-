@@ -134,3 +134,8 @@ test('row order round-trips through account preferences and remains compatible w
  const legacy=preference();delete legacy.tables.deposits.rowOrder;assert.deepEqual(validateLedgerPreferences(legacy).tables.deposits.rowOrder,[]);
  for(const invalid of [['cards:foreign'],['deposits:demo-d1','deposits:demo-d1'],['deposits:<img>'],Array.from({length:2001},(_,i)=>'deposits:d'+i)])assert.throws(()=>validateLedgerPreferences({version:1,tables:{deposits:{...pref.tables.deposits,rowOrder:invalid}}}));
 });
+test('each saved view can be deleted directly, with inactive views isolated and failed deletion kept intact',async()=>{
+ const t=await ui();for(const name of ['첫 보기','두 번째 보기']){t.click('[data-ledger-action="save-dialog"]');const form=t.root.querySelector('[data-ledger-save-form]');form.querySelector('[name="viewName"]').value=name;form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));await tick();}
+ const [first,second]=t.state.savedViews;assert.equal(t.state.activeView,second.id);t.click(`[data-ledger-action="delete-view"][data-id="${first.id}"]`);await tick();assert.equal(t.state.savedViews.length,1);assert.equal(t.state.savedViews[0].id,second.id);assert.equal(t.state.activeView,second.id);assert.equal(t.bulk.length,0);assert.equal(t.saved.at(-1).savedViews.length,1);
+ t.failSave();t.click(`[data-ledger-action="delete-view"][data-id="${second.id}"]`);await tick();assert.equal(t.state.savedViews.length,1);assert.equal(t.state.activeView,second.id);assert.match(t.root.querySelector('[role=alert]').textContent,/충돌/);unmountLedger(t.root);
+});

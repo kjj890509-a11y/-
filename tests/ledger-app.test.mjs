@@ -48,3 +48,7 @@ test('live ledger saves and reloads account views, exports the whole filtered se
  // Cancel a destructive selection action; no write occurs.
  change('[data-ledger-select-page]',true);const before=db.prepare('SELECT revision FROM portfolios').get().revision;click('[data-ledger-action="bulk-delete"]');await tick();click('#confirm-cancel');await tick();assert.equal(db.prepare('SELECT revision FROM portfolios').get().revision,before);
 });
+test('deleting a saved card view persists only preferences and leaves every financial row unchanged',async()=>{
+ const t=await setup(),before=t.db.prepare('SELECT * FROM portfolios').get();t.click('[data-ledger-action="save-dialog"]');t.document.querySelector('[name=viewName]').value='지울 카드 보기';t.document.querySelector('[data-ledger-save-form]').dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));await tick();await tick();assert.equal(JSON.parse(t.db.prepare('SELECT data FROM view_preferences').get().data).tables.cards.savedViews.length,1);
+ t.click('.ledger-view-delete');await tick();await tick();assert.equal(JSON.parse(t.db.prepare('SELECT data FROM view_preferences').get().data).tables.cards.savedViews.length,0);assert.deepEqual(t.db.prepare('SELECT * FROM portfolios').get(),before);t.db.close();
+});

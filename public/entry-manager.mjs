@@ -52,7 +52,7 @@ function mergeDraft(data,draft){
 }
 export function entryDraftRow(state,data,kind,id){
  const draft=state.drafts.get(keyFor(kind,id));if(!draft)return data[kind]?.find(r=>r.id===id);
- const check=emptyPortfolio();check[kind]=[mergeDraft(data,draft)];return validatePortfolio(check)[kind][0];
+ const check=emptyPortfolio();check.cardAccounts=data.cardAccounts||[];check[kind]=[mergeDraft(data,draft)];return validatePortfolio(check)[kind][0];
 }
 export function applyEntryDrafts(data,state){
  const next=structuredClone(data);
@@ -60,7 +60,7 @@ export function applyEntryDrafts(data,state){
   const row=mergeDraft(data,draft);
   next[draft.kind][next[draft.kind].findIndex(r=>r.id===draft.id)]=row;
   // Use the same validation and derived loan calculations as individual forms.
-  const check=emptyPortfolio();check[draft.kind]=[row];
+  const check=emptyPortfolio();check.cardAccounts=data.cardAccounts||[];check[draft.kind]=[row];
   try{validatePortfolio(check);}catch(error){throw new Error(`${row.name||draft.base.name}: ${error.message}`);}
  }
  return validatePortfolio(next);
