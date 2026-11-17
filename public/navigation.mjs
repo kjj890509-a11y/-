@@ -40,3 +40,5 @@ import {createCardBillingState,renderCardBilling,mountCardBilling,renderCardAcco
 export {createCardBillingState,renderCardBilling,mountCardBilling,renderCardAccounts,saveCardAccount,setCardArchived};
 
 export {renderMonthPicker,mountMonthPickers,syncMonthPicker,closeMonthPicker} from './month-picker.mjs';
+
+export {mountRecordLayout,orderLayoutRows} from './record-layout.mjs';

@@ -1,3 +1,4 @@
+import {recordLayoutSpecs} from '../public/record-layout-model.mjs';
 import {validateLedgerPreferences} from '../public/ledger-model.mjs';
 const preferencesJSON=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 export async function handlePreferences(request,env){
@@ -10,6 +11,7 @@ export async function handlePreferences(request,env){
   if(!request.headers.get('Content-Type')?.startsWith('application/json'))return preferencesJSON({error:'JSON 형식이 필요합니다.'},415);
   const raw=await request.text();if(raw.length>200000)return preferencesJSON({error:'보기 설정이 너무 큽니다.'},413);
   let body,data;try{body=JSON.parse(raw);data=validateLedgerPreferences(body.data);if(!Number.isSafeInteger(body.revision)||body.revision<0)throw new Error('보기 버전을 확인해 주세요.');}catch(error){return preferencesJSON({error:error.message},400);}
+  if(body.revision>0){const previous=await env.DB.prepare('SELECT data, revision FROM view_preferences WHERE user_id=?').bind(user).first();if(!previous||previous.revision!==body.revision)return preferencesJSON({error:'다른 기기에서 보기가 변경됐습니다. 새로고침 후 다시 저장해 주세요.'},409);const stored=JSON.parse(previous.data);for(const scope of Object.keys(recordLayoutSpecs))if(body.data.tables[scope]===undefined&&stored.tables?.[scope]!==undefined)data.tables[scope]=stored.tables[scope];data=validateLedgerPreferences(data);}
   const result=body.revision===0?await env.DB.prepare('INSERT INTO view_preferences (user_id,data,revision) VALUES (?,?,1) ON CONFLICT(user_id) DO NOTHING').bind(user,JSON.stringify(data)).run():await env.DB.prepare('UPDATE view_preferences SET data=?, revision=revision+1 WHERE user_id=? AND revision=?').bind(JSON.stringify(data),user,body.revision).run();
   if(!result.meta.changes)return preferencesJSON({error:'다른 기기에서 보기가 변경됐습니다. 새로고침 후 다시 저장해 주세요.'},409);
   return preferencesJSON({data,revision:body.revision+1});

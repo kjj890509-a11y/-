@@ -1,5 +1,6 @@
+import {recordLayoutSpecs} from './record-layout-model.mjs';
 import {KINDS,todayKST,paymentDate,isCardIncludedExpense} from './domain.mjs';
-export const ledgerKinds=[...KINDS,'all','planned'];
+export const ledgerKinds=[...KINDS,'all','planned',...Object.keys(recordLayoutSpecs)];
 export const ledgerLabels={stocks:'주식·투자',loans:'대출',retirement:'퇴직금·연금',deposits:'예금·현금',cards:'카드 청구',cashflow:'수입·지출',fixed:'정기 지출',all:'전체 내역',planned:'예정 거래'};
 export const ledgerColumns={
  stocks:[['name','계좌·종목명'],['cost','매입금액'],['valuation','평가액'],['profit','평가손익']],
@@ -10,7 +11,8 @@ export const ledgerColumns={
  cashflow:[['name','항목명'],['type','구분'],['amount','금액'],['date','입출금일'],['repeat','반복'],['paymentSource','결제 방식']],
  fixed:[['name','고정지출명'],['amount','월 금액'],['date','납부일'],['period','적용 기간'],['paymentSource','결제 방식']],
  all:[['name','항목명'],['kind','카테고리'],['institution','금융기관'],['amount','금액'],['date','관련 일자'],['status','상태']],
- planned:[['date','예정일'],['name','항목명·메모'],['type','구분'],['amount','금액'],['status','예상 반영']]
+ planned:[['date','예정일'],['name','항목명·메모'],['type','구분'],['amount','금액'],['status','예상 반영']],
+ ...Object.fromEntries(Object.entries(recordLayoutSpecs).map(([scope,spec])=>[scope,spec.columns.map(key=>[key,key])]))
 };
 export const defaultLedgerState=()=>({query:'',category:'all',status:'all',institution:'',type:'',repeat:'',start:'',end:'',min:'',max:'',sort:'newest',page:1,pageSize:20,selected:[],rowOrder:[],columns:[],hidden:[],widths:{},density:'comfortable',savedViews:[],viewName:'',error:''});
 export function ledgerEntries(data,scope,month=todayKST().slice(0,7)){
@@ -61,7 +63,7 @@ export function validateLedgerPreferences(input){
   const item=input.tables[scope];if(item===undefined)continue;
   const columns=ledgerColumns[scope].map(([key])=>key);
   const list=value=>{if(!Array.isArray(value)||value.length>columns.length||new Set(value).size!==value.length||value.some(key=>!columns.includes(key)))throw new Error('열 설정을 확인해 주세요.');return value;};
-  const rowOrder=item.rowOrder??[];const allowedKinds=scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope];
+  const rowOrder=item.rowOrder??[];const allowedKinds=recordLayoutSpecs[scope]?.kinds||(scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope]);
   if(!Array.isArray(rowOrder)||rowOrder.length>2000||new Set(rowOrder).size!==rowOrder.length||rowOrder.some(key=>typeof key!=='string'||!allowedKinds.some(kind=>key.startsWith(kind+':'))||!/^([a-z]+):[a-zA-Z0-9_-]{1,80}$/.test(key)))throw new Error('행 순서를 확인해 주세요.');
   const hidden=list(item.hidden||[]);if(hidden.length>=columns.length)throw new Error('최소 한 개의 열을 표시해 주세요.');
   const widths={};for(const key of columns)if(item.widths?.[key]!==undefined){const w=item.widths[key];if(!Number.isInteger(w)||w<90||w>600)throw new Error('열 너비를 확인해 주세요.');widths[key]=w;}
