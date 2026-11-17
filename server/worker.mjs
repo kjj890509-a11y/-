@@ -1,9 +1,11 @@
 import {handleApi} from './api.mjs';
+import {handlePreferences} from './preferences.mjs';
 import {handleAdvisor} from './advisor.mjs';
 import {assets} from './static-assets.mjs';
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/api/preferences') return handlePreferences(request,env);
     if (url.pathname === '/api/advisor') return handleAdvisor(request,env);
     if (url.pathname.startsWith('/api/')) return handleApi(request,env);
     const asset = assets[url.pathname === '/' ? '/index.html' : url.pathname];

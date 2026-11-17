@@ -56,9 +56,9 @@ test('inline account search and editors use the selected category; masking survi
  const {document,Event,select,click}=await start();
  select('deposits');const search=document.querySelector('#record-search');
  search.value='no-match-987';search.dispatchEvent(new Event('input',{bubbles:true}));
- assert.match(document.querySelector('#records-body').textContent,/검색 결과가 없습니다/);
- select('net');select('deposits');assert.ok(document.querySelector('#records-body [data-action="edit"]'));
- click('#records-body [data-action="edit"]');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);assert.ok(document.querySelector('#field-maturity'));
+ assert.match(document.querySelector('#records-body').textContent,/조건에 맞는 내역이 없습니다/);
+ select('net');select('deposits');click('[data-ledger-action="reset"]');assert.ok(document.querySelector('#records-body [data-ledger-action="edit"]'));
+ click('#records-body [data-ledger-action="edit"]');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);assert.ok(document.querySelector('#field-maturity'));
  click('[data-close="editor"]');click('.home-detail-heading [data-action="add"]');assert.ok(document.querySelector('#field-maturity'));
  click('[data-close="editor"]');document.querySelector('#privacy-toggle').onclick();
  assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'deposits');
@@ -71,7 +71,7 @@ test('inline debt filters, forecast and card updates retain the selected home de
  const {document,Event,context,state,select,click}=await start();
  select('debt');assert.ok(document.querySelector('#loan-forecast-select'));
  const search=document.querySelector('#record-search');search.value='no loan match';search.dispatchEvent(new Event('input',{bubbles:true}));
- assert.match(document.querySelector('#loan-list').textContent,/검색 결과/);
+ assert.match(document.querySelector('[data-ledger-scope="loans"] #records-body').textContent,/조건에 맞는 내역이 없습니다/);
  select('net');select('debt');click('[data-action="loan-forecast"]');
  assert.equal(context.location.hash,'#overview');assert.ok(document.querySelector('.home-stat[aria-pressed="true"][data-detail="debt"]'));
  const before=domain.totals(state.data).cards;click('#home-dashboard [data-action="toggle-paid"]');await tick();
@@ -87,7 +87,7 @@ test('monthly detail includes salaries and expenses, and empty categories remain
  assert.notEqual(document.querySelector('.home-detail-table h2').textContent,first);
  assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'cashflow');
  const empty=await start(domain.emptyPortfolio());empty.select('deposits');
- assert.match(empty.document.querySelector('#home-dashboard').textContent,/아직 등록된/);
+ assert.match(empty.document.querySelector('#home-dashboard').textContent,/조건에 맞는 내역이 없습니다/);
  assert.ok(empty.document.querySelector('#home-dashboard [data-action="add"][data-kind="deposits"]'));
  empty.select('debt');assert.match(empty.document.querySelector('#home-dashboard').textContent,/미결제 카드대금이 없습니다/);
 });
@@ -113,4 +113,25 @@ test('inline table CSV download respects the filtered rows and hidden amounts',a
  const content=await state.downloads[0].text();
  assert.ok(content.includes(state.data.deposits[0].name));assert.ok(content.includes('••••••'));
  assert.ok(!content.includes(String(state.data.deposits[0].balance)));assert.equal(state.writes,0);
+});
+
+test('calendar selects dates, filters and adjacent-month keyboard days without saving; add form uses the selected date',async()=>{
+ const {document,context,state,click,Event}=await start();
+ vm.runInContext("view='schedule';month='2028-02';render()",context);
+ click('[data-action="calendar-day"][data-date="2028-02-29"]');assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-02-29');
+ const status=document.querySelector('#calendar-status');for(const option of status.querySelectorAll('option'))option.toggleAttribute('selected',option.value==='expense');status.dispatchEvent(new Event('change',{bubbles:true}));assert.equal(document.querySelector('#calendar-status').value,'expense');
+ const key=new Event('keydown',{bubbles:true});key.key='ArrowRight';document.querySelector('[data-date="2028-02-29"][data-action=calendar-day]').dispatchEvent(key);
+ assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-03-01');
+ click('[data-action=calendar-add][data-type=expense]');assert.equal(document.querySelector('#field-date').value,'2028-03-01');assert.equal(state.writes,0);
+});
+
+
+test('calendar category and list controls combine with status, month selection and reset without writing finance',async()=>{
+ const {document,context,state,click,Event}=await start();vm.runInContext("view='schedule';render()",context);
+ click('[data-action=calendar-category][data-category=cards]');click('[data-action=calendar-mode][data-mode=list]');
+ assert.equal(document.querySelector('.cf-grid'),null);assert.ok(document.querySelector('.cf-month-list'));
+ assert.ok([...document.querySelectorAll('.cf-event')].every(row=>row.dataset.kind==='cards'));
+ click('[data-action=calendar-reset]');assert.equal(document.querySelector('[data-action=calendar-category][aria-pressed=true]').dataset.category,'all');
+ const monthField=document.querySelector('#calendar-month');monthField.value='2028-02';monthField.dispatchEvent(new Event('change',{bubbles:true}));assert.equal(document.querySelector('#calendar-month').value,'2028-02');
+ click('[data-action=calendar-mode][data-mode=month]');assert.equal(document.querySelectorAll('.cf-day:not(.is-outside)').length,29);assert.equal(state.writes,0);
 });

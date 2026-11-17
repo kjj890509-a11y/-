@@ -28,7 +28,7 @@ test('the retirement editor saves a monthly company contribution and reveals its
  }});
  vm.runInContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,''),context);
  await new Promise(setImmediate);
- const edit=()=>document.querySelector('[data-action="edit"][data-kind="retirement"]').dispatchEvent(new Event('click',{bubbles:true}));
+ const edit=()=>document.querySelector('[data-ledger-scope="retirement"] [data-ledger-action="edit"]').dispatchEvent(new Event('click',{bubbles:true}));
  edit();
  const monthly=document.getElementById('field-monthlyContribution'),date=document.getElementById('field-contributionDate');
  assert.equal(monthly.value,'0');assert.ok(date.closest('.field').hidden);assert.equal(date.required,false);
@@ -38,7 +38,7 @@ test('the retirement editor saves a monthly company contribution and reveals its
  const form=document.getElementById('record-form');await form.onsubmit({preventDefault(){},target:form});
  assert.equal(writes,1);assert.equal(stored.retirement[0].monthlyContribution,250000);assert.equal(stored.retirement[0].contributionDate,firstDate);
  assert.equal(stored.retirement[0].amount,10000000);assert.equal(stored.deposits[0].balance,1000);
- const monthlyCell=document.querySelector('#records-body tr').querySelectorAll('td')[3];
+ const monthlyCell=document.querySelector('#records-body tr [data-column="monthlyContribution"]');
  assert.match(monthlyCell.textContent,/250,000원/);assert.match(monthlyCell.textContent,/매월 25일/);
  assert.equal(document.querySelector('.metric-strip .metric-box:nth-child(2) strong').textContent,'250,000원');
  edit();assert.equal(document.getElementById('field-contributionDate').value,firstDate);

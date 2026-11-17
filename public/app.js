@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -44,10 +44,14 @@ let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
+let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDrafts={},entrySession=[];
+let entryManagerState=createEntryManagerState();
+let calendarSelected='',calendarFilter='all',calendarCategory='all',calendarMode='month';
 let chartHorizon=6,loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
 let advisorState;
 let workspaceState=createWorkspaceState();
+let recordWorkspace=createLedgerWorkspace(),recordCleanups=[];
 const navLabels = viewLabels;
 function money(value, unit = '원') { return hidden ? '••••••' : `${wonFormat.format(value)}${unit}`; }
 function compact(value) { if(hidden)return '••••'; if(Math.abs(value)>=1e8)return `${(value/1e8).toFixed(2)}억`; if(Math.abs(value)>=1e4)return `${wonFormat.format(Math.round(value/1e4))}만`;return wonFormat.format(value); }
@@ -69,7 +73,7 @@ async function loadData(){
   try{
     const res=await fetch('/api/portfolio');const data=await res.json();
     if(!res.ok)throw new Error(data.error||'내역을 불러오지 못했습니다.');
-    portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();
+    portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
   }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button></div>`;renderNav();}
 }
 async function persist(next,dashboardOnly=false){
@@ -116,7 +120,7 @@ function assetTrend(horizon=6,historyOnly=false){
  return renderTrendChart(points,{formatMoney:money,formatCompact:compact,historyOnly});
 }
 function overview(){
- return renderDashboard(portfolio,{money,compact,svg,chart:homeSelection==='all'?assetTrend(chartHorizon):'',horizon:chartHorizon,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
+ return renderDashboard(portfolio,{money,compact,svg,chart:homeSelection==='all'?assetTrend(chartHorizon):'',horizon:chartHorizon,hideAmounts:hidden,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
 }
 function homeDetailHeading(title,description,kind){
  return `<div class="home-detail-heading"><div><h2 tabindex="-1" data-home-detail-title>${title}</h2><p class="subtitle">${description}</p></div>${kind?`<button class="button primary" data-action="add" data-kind="${kind}">${svg('plus')}${LABELS[kind]} 추가</button>`:''}</div>`;
@@ -130,7 +134,7 @@ function homeDetail(){
  }
  if(homeSelection==='debt'){
   const cards=portfolio.cards.filter(row=>!row.paid).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
-  return homeDetailHeading('부채 상세','대출의 남은 원금과 미결제 카드대금을 함께 확인하세요.','loans')+`<div class="planning-metrics">${metric('남은 부채 합계',money(t.debt))}${metric('대출 잔액',money(t.loans))}${metric('미결제 카드대금',money(t.cards))}</div>`+renderLoanManagement(portfolio,{formatMoney:money,query,forecastPanel:loanForecastPanel()})+`<section class="table-panel home-detail-table"><div class="table-heading"><h2>미결제 카드 <span>${cards.length}건</span></h2><button class="button secondary" data-action="add" data-kind="cards">카드 청구 추가</button></div>${cards.length?`<div class="table-scroll"><table><caption class="sr-only">미결제 카드 상세</caption><thead><tr>${tableHeaders.cards.map(label=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${cards.map(row=>rowHTML('cards',row)).join('')}</tbody></table></div>`:'<div class="empty-inline">미결제 카드대금이 없습니다.</div>'}</section>`;
+  return homeDetailHeading('부채 상세','대출의 남은 원금과 미결제 카드대금을 함께 확인하세요.','loans')+`<div class="planning-metrics">${metric('남은 부채 합계',money(t.debt))}${metric('대출 잔액',money(t.loans))}${metric('미결제 카드대금',money(t.cards))}</div>`+recordLedgerHost('loans')+renderLoanManagement(portfolio,{formatMoney:money,query,forecastPanel:loanForecastPanel()})+`<section class="table-panel home-detail-table"><div class="table-heading"><h2>미결제 카드 <span>${cards.length}건</span></h2><button class="button secondary" data-action="add" data-kind="cards">카드 청구 추가</button></div>${cards.length?`<div class="table-scroll"><table><caption class="sr-only">미결제 카드 상세</caption><thead><tr>${tableHeaders.cards.map(label=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${cards.map(row=>rowHTML('cards',row)).join('')}</tbody></table></div>`:'<div class="empty-inline">미결제 카드대금이 없습니다.</div>'}</section>`;
  }
  if(homeSelection==='cashflow'){
   const events=eventsForMonth(portfolio,month).sort((a,b)=>a.date.localeCompare(b.date));
@@ -141,6 +145,7 @@ function homeDetail(){
 function selectHomeDetail(selection){
  if(view!=='overview'||!['all','net','deposits','debt','cashflow','stocks','retirement','cards'].includes(selection))return;
  homeSelection=selection;query='';if(selection==='cashflow')month=todayKST().slice(0,7);
+ for(const cleanup of recordCleanups)cleanup();recordCleanups=[];
  rememberDisclosure($('main'));
  // Replace only the detail region so the summary controls and current route stay in place.
  const template=document.createElement('template');template.innerHTML=overview();
@@ -149,12 +154,63 @@ function selectHomeDetail(selection){
   const selected=button.dataset.detail===selection;
   button.classList.toggle('is-selected',selected);button.setAttribute('aria-pressed',String(selected));button.querySelector('[data-home-indicator]').textContent=selected?'✓':'↓';
  });
- enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountTrendCharts($('main'));
+ enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountTrendCharts($('main'));mountFinancialMotion($('main'),{revision,hideAmounts:hidden});
  const target=$('home-dashboard');target.querySelector('[data-home-detail-title]')?.focus({preventScroll:true});
  // Keep the summary cards visible on wide screens; bring details into view on smaller screens.
  const top=target.getBoundingClientRect().top;
  if(top<84||top>(window.innerHeight||800)*.7)target.scrollIntoView?.({behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
  if(selection==='all')document.querySelector('.home-stat')?.focus({preventScroll:true});
+}
+function recordLedgerHost(scope){return `<section class="table-panel record-ledger-panel"><div class="table-heading"><h2>${ledgerLabels[scope]} 목록</h2>${recordWorkspace.error?`<span class="form-error" role="alert">${escapeHTML(recordWorkspace.error)}</span><button class="button secondary small" data-action="retry-views">다시 연결</button>`:''}${KINDS.includes(scope)?`<button class="button primary small" data-action="add" data-kind="${scope}">내역 추가</button>`:''}</div><div data-ledger-scope="${scope}"></div></section>`;}
+function recordsPage(){return heading('전체 내역','모든 카테고리의 내역을 필터·정렬하고 원하는 보기로 저장하세요.')+demoBanner()+recordLedgerHost('all');}
+async function loadRecordPreferences(){
+ if(recordWorkspace.loaded||demo)return;recordWorkspace.loaded=true;const targetWorkspace=recordWorkspace;
+ try{const response=await fetch('/api/preferences'),result=await response.json();if(recordWorkspace!==targetWorkspace||demo)return;if(!response.ok)throw new Error(result.error||'보기 설정에 연결하지 못했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.ready=true;recordWorkspace.error='';recordWorkspace.revision=result.revision;for(const [scope,pref]of Object.entries(recordWorkspace.preferences.tables)){Object.assign(ledgerState(recordWorkspace,scope),pref);if(pref.rowOrder?.length)recordWorkspace.states[scope].sort='manual';}if(document.querySelector('[data-ledger-scope]'))render();}
+ catch{if(recordWorkspace!==targetWorkspace)return;recordWorkspace.error='보기 설정 연결 실패';if(document.querySelector('[data-ledger-scope]'))render();}
+}
+async function saveRecordPreferences(scope,pref){
+ if(!demo&&!recordWorkspace.ready)throw new Error('먼저 보기 설정을 불러온 뒤 저장해 주세요.');
+ if(recordWorkspace.saving)throw new Error('보기 설정을 저장 중입니다.');
+ const data=structuredClone(recordWorkspace.preferences);data.tables[scope]=pref;validateLedgerPreferences(data);
+ if(demo){recordWorkspace.preferences=data;return;}
+ recordWorkspace.saving=true;
+ try{const response=await fetch('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,revision:recordWorkspace.revision})}),result=await response.json();if(!response.ok)throw new Error(result.error||'보기 저장에 실패했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.revision=result.revision;}
+ finally{recordWorkspace.saving=false;}
+}
+function ledgerCells(entry){
+ const template=document.createElement('template');template.innerHTML='<table><tbody>'+rowHTML(entry.kind,entry.row)+'</tbody></table>';
+ return [...template.content.querySelectorAll('td')].slice(0,-1).map(td=>td.innerHTML);
+}
+function ledgerCell(scope,entry,key){
+ if(scope==='all'){
+  if(key==='kind')return escapeHTML(ledgerLabels[entry.kind]);if(key==='amount')return money(entry.amount);if(key==='date')return entry.date||'—';if(key==='status')return escapeHTML(statusLabels[ledgerStatus(entry)]);return escapeHTML(entry.row[key]||'—');
+ }
+ if(scope==='planned'){
+  if(key==='name')return `<strong>${escapeHTML(entry.row.name)}</strong><small>${escapeHTML(entry.row.note||'')}</small>`;
+  if(key==='date')return entry.date;if(key==='amount')return money(entry.amount);if(key==='type')return entry.row.type==='expense'?'예정 지출':'추가 수입';return `<button class="status-pill" data-action="toggle-planned" data-id="${escapeHTML(entry.row.id)}">${entry.row.includeInForecast===false?'예상 제외':'예상 반영'} ↻</button>`;
+ }
+ return ledgerCells(entry)[ledgerColumns[scope].findIndex(([k])=>k===key)]||'—';
+}
+function mountRecordLedgers(){
+ for(const root of document.querySelectorAll('[data-ledger-scope]')){
+  const scope=root.dataset.ledgerScope,state=ledgerState(recordWorkspace,scope),data=scope==='cashflow'?{...portfolio,cashflow:cashflowForMonth(portfolio,month,true)}:scope==='fixed'?{...portfolio,fixed:fixedForMonth(portfolio,month)}:portfolio;
+  const entries=ledgerEntries(data,scope,month);state.selected=state.selected.filter(key=>entries.some(entry=>entry.key===key));
+  recordCleanups.push(mountLedger(root,entries,state,{scope,today:todayKST(),money,cell:(entry,key)=>ledgerCell(scope,entry,key),onEdit:entry=>openEditor(entry.kind,entry.row.id),onDetail:entry=>openRecordDetail(scope,entry),onSave:pref=>saveRecordPreferences(scope,pref),onFeedback:toast,onExport:(rows,keys)=>exportLedger(scope,rows,keys),onBulk:async(action,selected)=>{
+   if(action==='delete'&&!await confirmAction(`${selected.length}개 내역을 삭제할까요?`,'선택한 내역을 삭제합니다. 필터 밖의 선택 항목도 포함될 수 있습니다.'))return;
+   const next=structuredClone(portfolio);for(const entry of selected){const index=next[entry.kind].findIndex(row=>row.id===entry.row.id);if(index<0)continue;const row=next[entry.kind][index];if(action==='delete')next[entry.kind].splice(index,1);if(entry.kind==='cards'&&['paid','unpaid'].includes(action))row.paid=action==='paid';if(entry.kind==='cashflow'&&['include','exclude'].includes(action))row.includeInForecast=action==='include';}
+   try{await persist(next);state.selected=[];render();toast('선택한 내역에 적용했어요.');}catch(error){toast(error.message);}
+  }}));
+ }
+}
+function exportLedger(scope,rows,keys){
+ const template=document.createElement('template');template.innerHTML=`<table><thead><tr>${keys.map(key=>`<th>${escapeHTML(ledgerColumns[scope].find(([k])=>k===key)[1])}</th>`).join('')}</tr></thead><tbody>${rows.map(entry=>`<tr>${keys.map(key=>`<td>${ledgerCell(scope,entry,key)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+ for(const button of template.content.querySelectorAll('tbody button'))button.replaceWith(document.createTextNode(button.textContent));
+ downloadTable(tableCSV(template.content.querySelector('table')),ledgerLabels[scope]+' 조회');
+}
+function openRecordDetail(scope,entry){
+ let dialog=$('record-detail');if(dialog)dialog.remove();dialog=document.createElement('dialog');dialog.id='record-detail';dialog.className='record-detail-drawer';dialog.setAttribute('aria-labelledby','record-detail-title');
+ dialog.innerHTML=`<div class="dialog-heading"><div><small>${escapeHTML(ledgerLabels[entry.kind])}</small><h2 id="record-detail-title">${escapeHTML(entry.row.name)}</h2></div><button class="icon-button" data-close="record-detail" aria-label="상세 닫기">✕</button></div><dl class="record-detail-fields">${ledgerColumns[entry.kind].map(([key,label])=>`<div><dt>${escapeHTML(label)}</dt><dd>${ledgerCell(entry.kind,entry,key)}</dd></div>`).join('')}</dl>${entry.row.note?`<p>${escapeHTML(entry.row.note)}</p>`:''}<div class="dialog-actions"><button class="button primary" data-detail-edit>내역 수정</button></div>`;
+ dialog.querySelector('[data-detail-edit]').onclick=()=>{dialog.close();openEditor(entry.kind,entry.row.id);};document.body.append(dialog);dialog.showModal();
 }
 function workspacePage(){return demoBanner()+renderWorkspace(portfolio,workspaceState,{formatMoney:money,formatCompact:compact});}
 function assetsPage(){return renderAssets(portfolio,{money,svg,demoBanner:demoBanner()});}
@@ -190,7 +246,7 @@ function scheduledPage(){
  const today=todayKST(),all=scheduledCashflows(portfolio,today,'all'),upcoming=all.filter(row=>row.date>today&&row.includeInForecast!==false);
  const income=upcoming.filter(row=>row.type==='other_income').reduce((n,row)=>n+row.amount,0),expense=upcoming.filter(row=>row.type==='expense').reduce((n,row)=>n+row.amount,0);
  const rows=scheduledCashflows(portfolio,today,scheduledRange).filter(row=>scheduledType==='all'||row.type===scheduledType);
- return `<div class="page-heading"><div><h1>예정 거래</h1><p class="subtitle">미래에 들어올 추가 수입과 나갈 돈을 날짜별로 기록하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="add-planned" data-type="expense">${svg('plus')} 예정 지출</button><button class="button primary" data-action="add-planned" data-type="other_income">${svg('plus')} 예정 수입</button></div></div>${demoBanner()}<div class="planning-metrics">${metric('앞으로의 추가 수입',money(income),'오늘 이후 · 예상 계산에 포함된 내역')}${metric('앞으로의 예정 지출',money(expense),'일회성 지출 · 고정지출과 별도')}${metric('예정 거래 차액',money(income-expense),'등록된 추가 수입 − 예정 지출',income<expense?'text-danger':'income-color')}${metric('다음 반영 예정일',upcoming[0]?.date.replaceAll('-','.')||'미등록','오늘 이후 첫 반영 일정')}</div><div class="forecast-banner">${svg('planned')}<div><strong>예정일에 맞춰 예상 자산에 반영합니다.</strong><p>‘예상에 반영’한 내역은 월 예산·월급날·월별 전망과 캘린더에 포함됩니다. 확실하지 않은 금액은 계산에서 제외해 두었다가 다시 포함할 수 있습니다.</p></div><span class="forecast-badge">일회성 일정</span></div><section class="table-panel"><div class="table-heading"><h2>예정 내역 <span>${rows.length}건 · 전체 ${all.length}건</span></h2><div class="scheduled-filters"><select id="scheduled-range" aria-label="예정 내역 기간"><option value="upcoming" ${scheduledRange==='upcoming'?'selected':''}>오늘 이후</option><option value="all" ${scheduledRange==='all'?'selected':''}>전체 내역</option><option value="past" ${scheduledRange==='past'?'selected':''}>오늘·지난 내역</option></select><select id="scheduled-type" aria-label="예정 내역 구분"><option value="all" ${scheduledType==='all'?'selected':''}>수입·지출 전체</option><option value="other_income" ${scheduledType==='other_income'?'selected':''}>추가 수입</option><option value="expense" ${scheduledType==='expense'?'selected':''}>예정 지출</option></select></div></div>${rows.length?`<div class="table-scroll"><table><thead><tr><th>예정일</th><th>항목명 · 메모</th><th>구분</th><th class="numeric">금액</th><th>예상 계산</th><th></th></tr></thead><tbody>${rows.map(row=>`<tr class="${row.includeInForecast===false?'excluded-plan':''}"><td><strong>${row.date}</strong><small>${row.date>today?'예정':row.date===today?'오늘 · 현재 잔액 확인':'일자 경과'}</small></td><td><strong>${escapeHTML(row.name)}</strong><small>${escapeHTML(row.note||'')}</small></td><td><span class="status-pill ${row.type==='other_income'?'paid':''}">${row.type==='other_income'?'추가 수입':'예정 지출'}</span></td><td class="numeric ${row.type==='other_income'?'income-color':''}">${row.type==='other_income'?'+':'−'} ${money(row.amount)}</td><td><button class="status-pill ${row.includeInForecast===false?'':'paid'}" style="border:0" data-action="toggle-planned" data-id="${escapeHTML(row.id)}" aria-label="${escapeHTML(row.name)} ${row.includeInForecast===false?'예상에 포함':'예상에서 제외'}">${row.includeInForecast===false?'계산 제외':'반영 중'} ↻</button></td><td><div class="row-actions"><button data-action="edit-planned" data-id="${escapeHTML(row.id)}" aria-label="${escapeHTML(row.name)} 예정 내역 수정">${svg('edit')}</button><button data-action="delete" data-kind="cashflow" data-id="${escapeHTML(row.id)}" aria-label="${escapeHTML(row.name)} 삭제">${svg('delete')}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty-state"><div class="empty-symbol">${svg('planned')}</div><h3>해당하는 예정 거래이 없어요.</h3><p>상여금·환급금·추가 지급액이나<br>여행비·경조사비 같은 지출을 미리 등록하세요.</p><button class="button primary" data-action="add-planned" data-type="other_income">${svg('plus')} 예정 수입 등록</button><button class="button secondary" data-action="add-planned" data-type="expense">예정 지출 등록</button></div>`}</section><p class="category-note">수입·지출의 일회성 ‘기타 수입·기타 지출’ 내역을 함께 관리합니다. 같은 금액을 다른 화면에 다시 등록하지 않아도 됩니다. 금액은 실제 입출금 전까지 현재 예금 잔액을 변경하지 않으며, 오늘 일정은 이미 현재 잔액에 반영된 것으로 취급합니다. 일자가 지난 내역은 오늘·지난 내역에서 확인하고, 실제 잔액은 직접 갱신해 주세요. 카드 청구액·고정지출과 같은 금액을 중복 입력하지 마세요.</p>`;
+ return `<div class="page-heading"><div><h1>예정 거래</h1><p class="subtitle">미래에 들어올 추가 수입과 나갈 돈을 날짜별로 기록하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="add-planned" data-type="expense">${svg('plus')} 예정 지출</button><button class="button primary" data-action="add-planned" data-type="other_income">${svg('plus')} 예정 수입</button></div></div>${demoBanner()}<div class="planning-metrics">${metric('앞으로의 추가 수입',money(income),'오늘 이후 · 예상 계산에 포함된 내역')}${metric('앞으로의 예정 지출',money(expense),'일회성 지출 · 고정지출과 별도')}${metric('예정 거래 차액',money(income-expense),'등록된 추가 수입 − 예정 지출',income<expense?'text-danger':'income-color')}${metric('다음 반영 예정일',upcoming[0]?.date.replaceAll('-','.')||'미등록','오늘 이후 첫 반영 일정')}</div><div class="forecast-banner">${svg('planned')}<div><strong>예정일에 맞춰 예상 자산에 반영합니다.</strong><p>‘예상에 반영’한 내역은 월 예산·월급날·월별 전망과 캘린더에 포함됩니다. 확실하지 않은 금액은 계산에서 제외해 두었다가 다시 포함할 수 있습니다.</p></div><span class="forecast-badge">일회성 일정</span></div>${recordLedgerHost('planned')}<p class="category-note">수입·지출의 일회성 ‘기타 수입·기타 지출’ 내역을 함께 관리합니다. 같은 금액을 다른 화면에 다시 등록하지 않아도 됩니다. 금액은 실제 입출금 전까지 현재 예금 잔액을 변경하지 않으며, 오늘 일정은 이미 현재 잔액에 반영된 것으로 취급합니다. 일자가 지난 내역은 오늘·지난 내역에서 확인하고, 실제 잔액은 직접 갱신해 주세요. 카드 청구액·고정지출과 같은 금액을 중복 입력하지 마세요.</p>`;
 }
 function openScheduledEditor(id,type='other_income'){
  const row=id?portfolio.cashflow.find(item=>item.id===id):null;
@@ -331,26 +387,29 @@ function loanForecastPanel(){
 
 function filteredRecords(kind){return (kind==='cashflow'?cashflowForMonth(portfolio,month,true):kind==='fixed'?fixedForMonth(portfolio,month):portfolio[kind]).filter(r=>(r.name+' '+(r.institution||'')+' '+(r.note||'')).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>kind==='cards'?a.dueDate.localeCompare(b.dueDate):0);}
 function category(kind,{embedded=false}={}){
- if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.').replace('<div class="heading-actions">','<div class="heading-actions"><a class="button secondary" href="#advisor">AI 상담</a>'),demoBanner:demoBanner(),forecastPanel:loanForecastPanel()});
+ if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.').replace('<div class="heading-actions">','<div class="heading-actions"><a class="button secondary" href="#advisor">AI 상담</a>'),demoBanner:demoBanner(),recordsTable:recordLedgerHost('loans'),forecastPanel:loanForecastPanel()});
  const data=filteredRecords(kind);
  const notes={fixed:'매월 납부일이 없는 달은 말일로 표시합니다. 시작월·종료월은 해당 월을 포함합니다. 카드 청구액에 포함되는 항목은 고정지출 분석에만 포함하고 카드대금과 중복 합산하지 않습니다. 수입·지출에 같은 항목을 이미 등록했다면 중복 입력하지 마세요.',cashflow:'월급은 실수령액으로 입력해 주세요. 매월 반복은 시작일이 속한 달부터 같은 날짜에 반영하며, 해당 날짜가 없는 달에는 말일로 표시합니다. 기타 지출은 카드대금·대출상환액과 중복되지 않게 입력해 주세요. 수입·지출 기록은 예금 잔액이나 순자산을 자동으로 바꾸지 않습니다.',stocks:'증권사 계좌별 총액 또는 종목별 금액 중 한 가지 방식으로 등록해 주세요. 같은 자산을 중복 등록하면 합계도 중복됩니다. 해외 자산은 원화로 환산해 입력해 주세요.',loans:'월별 예상 이자는 매달 남은 잔액 × 연 이율 ÷ 12로 계산합니다. 이번 납부 이자는 은행 청구액을 직접 입력할 수 있습니다. 실제 이자는 일수·금리 변경에 따라 다를 수 있습니다. 월별 표는 현재 잔액 기준이며 실제 상환 이력이 아닙니다. 일정이 지나도 현재 대출잔액을 자동 차감하지 않습니다.',retirement:'퇴직금 예상액과 퇴직연금 계좌 평가액은 중복되지 않도록 입력해 주세요. 입력 금액은 세전·세후 여부에 따라 실제 수령액과 다를 수 있습니다. 회사 월 납입액은 첫 납입 예정일부터 매월 예상 퇴직연금에 더하며, 예금이나 현재 잔액을 자동 변경하지 않습니다.',deposits:'연 예상 이자는 현재 잔액과 연 이율을 사용한 세전 단순 추정치입니다. 실제 이자는 상품 조건과 입출금 내역에 따라 달라집니다.',cards:'카드 청구액은 정확한 날짜별로 등록해 주세요. 상태를 눌러 결제 완료로 바꿀 수 있습니다. 완료된 카드대금은 부채에서 제외되며, 예금 잔액은 직접 수정해 주세요.'};
- return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div><section class="table-panel"><div class="table-heading"><h2>${LABELS[kind]} 내역 <span>${['cashflow','fixed'].includes(kind)?data.length+'건 · 전체 등록 '+portfolio[kind].length+'건':portfolio[kind].length+'건'}</span></h2><input class="search-input" id="record-search" type="search" placeholder="이름 · 금융기관 검색" aria-label="내역 검색" value="${escapeHTML(query)}"></div>${portfolio[kind].length?`<div class="table-scroll"><table><thead><tr>${tableHeaders[kind].map((h,i)=>`<th class="${i>0&&/금액|평가액|손익|잔액|이율|원금|이자|상환액|납입액/.test(h)?'numeric':''}">${h}</th>`).join('')}</tr></thead><tbody id="records-body">${data.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">${['cashflow','fixed'].includes(kind)&&!query?'이 달에 해당하는 내역이 없습니다.':'검색 결과가 없습니다.'}</td></tr>`}</tbody></table></div>`:`<div class="empty-state"><div class="empty-symbol">${svg(kind)}</div><h3>아직 등록된 ${LABELS[kind]} 내역이 없어요</h3><p>첫 내역을 추가하고<br>나의 자산을 차곡차곡 모아 보세요.</p><button class="button primary" data-action="add" data-kind="${kind}">${svg('plus')} ${LABELS[kind]} 추가하기</button></div>`}</section><p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
+ return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div>${recordLedgerHost(kind)}<p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
 }
 function calendar(){
- const [year,m]=month.split('-').map(Number),today=todayKST();
- const events=eventsForMonth(portfolio,month),flow=monthlyFlow(portfolio,month);
- const start=new Date(Date.UTC(year,m-1,1)).getUTCDay(),days=new Date(Date.UTC(year,m,0)).getUTCDate();
- const count=Math.ceil((start+days)/7)*7;
- const cells=Array.from({length:count},(_,i)=>{
-  const day=i-start+1;if(day<1||day>days)return '<div class="calendar-cell muted"></div>';
-  const date=`${month}-${String(day).padStart(2,'0')}`,daily=events.filter(e=>e.date===date);
-  const income=daily.filter(e=>e.income).reduce((n,e)=>n+e.amount,0),expense=daily.filter(e=>!e.income&&!e.paid).reduce((n,e)=>n+e.amount,0);
-  return `<div class="calendar-cell ${date===today?'today':''}"><span class="day-number">${day}</span>${income?`<span class="calendar-amount calendar-income">+${compact(income)}원</span>`:''}${expense?`<span class="calendar-amount">−${compact(expense)}원</span>`:''}${daily.length?`${!income&&!expense?'<span class="calendar-amount">결제 완료</span>':''}<span class="calendar-count">${daily.length}건</span>`:''}</div>`;
- }).join('');
- return `${heading('입출금 달력','월급·기타 수입·지출과 대출·카드 결제일을 함께 확인하세요.',false)}${demoBanner()}<div class="calendar-layout"><section class="panel"><div class="panel-header"><h2>입출금 달력</h2>${monthToolbar()}</div><div class="calendar-grid">${['일','월','화','수','목','금','토'].map(d=>`<span class="calendar-day-label">${d}</span>`).join('')}${cells}</div><div class="calendar-key"><span><i></i>지출</span><span class="income-color">+ 수입</span></div></section><section class="panel"><div class="panel-header"><h2>${m}월 입출금 내역</h2><span class="calendar-event-count">${events.length}건</span></div><div class="schedule-summary"><span>총지출 예정</span><strong>${money(flow.expense)}</strong><p class="cash-hint">총수입 ${money(flow.income)} · 남는 금액 ${money(flow.balance)}</p></div><div class="calendar-list">${events.length?events.map(paymentRow).join(''):'<div class="empty-inline">이번 달 등록된 일정이 없어요.</div>'}</div><p class="panel-note">입력한 수입·지출 예정액 기준입니다. 대출 상환은 월 원금·이자의 반복 표시이며, 실제 입출금 여부와 잔액은 직접 확인해 주세요.</p></section></div>`;
+ return `${heading('입출금 달력','등록한 수입과 지출 계획을 날짜별로 확인하세요.',false)}${demoBanner()}${renderCashCalendar(portfolio,{month,selectedDate:calendarSelected,filter:calendarFilter,category:calendarCategory,mode:calendarMode,money,compact})}`;
 }
 
-function render(){unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
+function openEntryManagerDetail(kind,id,row){
+ openEditor(kind,id,row);entryDetailEditing=true;
+ $('record-form').querySelector('button[type="submit"]').textContent='변경 목록에 담기';
+ const notice=$('form-fields').querySelector('.form-notice');
+ if(notice)notice.textContent='이 화면의 변경은 수정 목록에 담깁니다. 통합 입력·수정의 변경 저장을 누르면 다른 내역과 함께 반영됩니다.';
+}
+function mountEntryWorkspace(){
+ if(view!=='entry')return;
+ recordCleanups.push(mountEntryManager($('entry-manager'),()=>portfolio,entryManagerState,{
+  money,hidden,onSave:next=>persist(next),onRender:()=>{if(view==='entry')render();},onReload:loadData,onFeedback:toast,
+  onDetail:openEntryManagerDetail
+ }));
+}
+function render(){unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -360,11 +419,12 @@ const fields={
  deposits:[['name','계좌명','text',true,'예: 생활비 통장 / 정기예금'],['institution','금융기관','text',false,'예: 토스뱅크'],['balance','현재 잔액','money',true,'0'],['rate','연 이율','rate',true,'0'],['maturity','만기일','date',false,''],['note','메모','textarea',false,'선택 입력']],
  cards:[['name','카드사 · 카드명','text',true,'예: 현대카드 M'],['amount','결제예정액','money',true,'0'],['dueDate','결제일','date',true,''],['paid','결제 상태','paid',false,''],['note','메모','textarea',false,'선택 입력']]
 };
-function openEditor(kind,id){
+function openEditor(kind,id,rowOverride){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
+ entryEditing=false;entryDetailEditing=false;
  if(!KINDS.includes(kind)){showAddMenu();return;}
  editorKind=kind;editingId=id||null;
- const row=id?portfolio[kind].find(r=>r.id===id):{};
+ const row=rowOverride||(id?portfolio[kind].find(r=>r.id===id):{});
  if(!row)return;
  $('editor-title').textContent=`${LABELS[kind]} ${id?'수정':'추가'}`;$('form-error').textContent='';
  $('form-fields').innerHTML=fields[kind].map(([key,label,type,required,placeholder])=>{
@@ -390,20 +450,62 @@ function showAddMenu(){
  $('form-fields').innerHTML=`<div class="add-menu full-width">${(view==='assets'?['deposits','stocks','retirement']:KINDS).map(k=>`<button type="button" class="button secondary" data-action="choose-kind" data-kind="${k}">${svg(k)}${navLabels[k]}<span>↗</span></button>`).join('')}</div>`;
  $('record-form').onsubmit=e=>e.preventDefault();$('record-form').querySelector('button[type="submit"]').hidden=true;openDialog('editor');
 }
+function rememberEntryDraft(){
+ if(!entryEditing)return;
+ entryDrafts[entryActiveType]=Object.fromEntries(fields[editorKind].map(([key])=>[key,$('field-'+key)?.value??'']));
+}
+function setEntryField(key,value){
+ const field=$('field-'+key);if(!field)return;
+ if(field.tagName==='SELECT')for(const option of field.querySelectorAll('option'))option.toggleAttribute('selected',option.value===String(value));
+ field.value=String(value);
+}
+function startEntryEditor(type,{capture=true,message=''}={}){
+ if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
+ const preset=entryPresets.find(p=>p.id===type);if(!preset)return;
+ if(capture&&entryEditing&&$('editor').open)rememberEntryDraft();
+ entryEditing=false;if($('editor').open)$('editor').close();
+ entryActiveType=type;month=todayKST().slice(0,7);openEditor(preset.kind);entryEditing=true;
+ $('editor-title').textContent=preset.label+' 등록';
+ if(preset.kind==='cashflow')$('field-type').closest('.field').hidden=true;
+ const defaults={...preset.defaults};if(preset.future)defaults.date=shiftCalendarDay(todayKST(),1);
+ for(const [key,value]of Object.entries({...defaults,...entryDrafts[type]}))setEntryField(key,value);
+ const controls=document.createElement('div');controls.className='entry-editor-controls full-width';
+ controls.innerHTML=`<label for="entry-type">입력할 내역<select id="entry-type">${entryGroups.map(group=>`<optgroup label="${group.label}">${entryPresets.filter(p=>p.group===group.id).map(p=>`<option value="${p.id}" ${p.id===type?'selected':''}>${p.label}</option>`).join('')}</optgroup>`).join('')}</select></label><label class="entry-continue-label"><input type="checkbox" id="entry-continue" checked>저장 후 계속 입력</label>`;
+ $('form-fields').prepend(controls);
+ if(message){const note=document.createElement('p');note.className='entry-save-message full-width';note.setAttribute('role','status');note.textContent=message;controls.after(note);}
+ const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.textContent='저장하고 다음 입력';
+ if(preset.kind==='loans')syncLoanPlan();else syncRetirementContribution();
+ $('field-name')?.focus();
+}
 async function submitRecord(e){
  e.preventDefault();if(saving)return;
+ const fromEntry=entryEditing,entryType=entryActiveType,recordKind=editorKind,keepEntering=fromEntry&&Boolean($('entry-continue')?.checked);
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
- for(const [key,,type]of fields[editorKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
- if(editorKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
- const next=structuredClone(portfolio);const i=next[editorKind].findIndex(r=>r.id===editingId);if(i>=0)next[editorKind][i]=record;else next[editorKind].push(record);
- const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;$('form-error').textContent='';
- try{await persist(next);$('editor').close();toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');}catch(error){$('form-error').textContent=error.message;}finally{submit.disabled=false;}
+ for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
+ if(recordKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
+ if(entryDetailEditing){
+  try{const check=structuredClone(portfolio);check[recordKind][check[recordKind].findIndex(r=>r.id===record.id)]=record;const clean=validatePortfolio(check)[recordKind].find(r=>r.id===record.id);stageEntryRecord(entryManagerState,portfolio,recordKind,clean);entryDetailEditing=false;$('editor').close();render();toast('변경 목록에 담았어요. 변경 저장을 누르면 한 번에 반영됩니다.');}catch(error){$('form-error').textContent=error.message;}return;
+ }
+ const next=structuredClone(portfolio);const i=next[recordKind].findIndex(r=>r.id===editingId);if(i>=0)next[recordKind][i]=record;else next[recordKind].push(record);
+ const submit=e.target.querySelector('button[type="submit"]'),disabled=fromEntry?[...e.target.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]):[[submit,submit.disabled]];
+ if(fromEntry)rememberEntryDraft();for(const [el]of disabled)el.disabled=true;$('form-error').textContent='';
+ try{
+  await persist(next);
+  const stillOpen=$('editor').open;entryEditing=false;$('editor').close();
+  if(fromEntry){
+   delete entryDrafts[entryType];entrySession=[{kind:recordKind,id:record.id,label:entryPresets.find(p=>p.id===entryType).label},...entrySession].slice(0,30);
+   if(view==='entry')render();
+   if(keepEntering&&stillOpen)startEntryEditor(entryType,{capture:false,message:(demo?'예시 내역 · ':'')+record.name+' 저장 완료. 다음 내역을 입력하세요.'});
+  }
+  toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');
+ }catch(error){$('form-error').textContent=error.message;}finally{for(const [el,wasDisabled]of disabled)if(el.isConnected)el.disabled=wasDisabled;}
 }
-function startDemo(){workspaceState=createWorkspaceState();
+
+function startDemo(){entrySession=[];entryDrafts={};entryEditing=false;entryDetailEditing=false;entryManagerState=createEntryManagerState();workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();
  if(!demo){realData=portfolio;realRevision=revision;demo=true;portfolio=validatePortfolio(samplePortfolio());}
  loading=false;view='overview';location.hash='overview';$('settings-dialog').close();status('예시 보기 중');render();
 }
-async function exitDemo(){workspaceState=createWorkspaceState();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
+async function exitDemo(){entrySession=[];entryDrafts={};entryEditing=false;entryDetailEditing=false;entryManagerState=createEntryManagerState();workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
 function downloadTable(csv,title){
  if(!csv){toast('내려받을 내역이 없습니다.');return;}
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -434,9 +536,20 @@ $('search-dialog').addEventListener('click',event=>{
 });
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openDashboardSearch();}});
 document.addEventListener('click',async e=>{
- const close=e.target.closest('[data-close]');if(close){$(close.dataset.close).close();return;}
+ const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='editor')entryDetailEditing=false;if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='entry-mode'){if(entryManagerState.busy)return;entryManagerState.mode=button.dataset.mode==='new'?'new':'manage';render();$('main').querySelector('[data-mode="'+entryManagerState.mode+'"]')?.focus();return;}
+ if(action==='entry-existing'){if(hidden){toast('금액 표시를 켠 뒤 상세 수정해 주세요.');return;}try{const row=entryDraftRow(entryManagerState,portfolio,kind,id);entryManagerState.mode='manage';entryManagerState.category=kind;entryManagerState.query='';entryManagerState.page=1;render();openEntryManagerDetail(kind,id,row);}catch(error){toast(error.message);}return;}
+ if(action==='entry-start'){startEntryEditor(button.dataset.entryType);return;}
+ if(action==='calendar-day'){calendarSelected=button.dataset.date;calendarMode='month';render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();return;}
+ if(action==='calendar-mode'){calendarMode=button.dataset.mode==='list'?'list':'month';render();document.querySelector(`[data-action="calendar-mode"][data-mode="${calendarMode}"]`)?.focus();return;}
+ if(action==='calendar-category'){calendarCategory=button.dataset.category;render();document.querySelector(`[data-action="calendar-category"][data-category="${calendarCategory}"]`)?.focus();return;}
+ if(action==='calendar-reset'){calendarCategory='all';calendarFilter='all';render();return;}
+ if(action==='calendar-filter'){calendarFilter=button.dataset.filter;render();document.querySelector(`[data-action="calendar-filter"][data-filter="${calendarFilter}"]`)?.focus();return;}
+ if(action==='calendar-all'){calendarSelected='all';render();document.querySelector('[data-action="calendar-all"]')?.focus();return;}
+ if(action==='calendar-add'){openEditor('cashflow');$('record-form').querySelector('button[type="submit"]').hidden=false;$('field-type').value=button.dataset.type;$('field-date').value=button.dataset.date;$('field-repeat').value='once';return;}
+ if(action==='retry-views'){recordWorkspace.loaded=false;loadRecordPreferences();return;}
  if(action==='navigate-view'){location.hash=button.dataset.view;return;}
  if(action==='check-advisor'){advisorState.service='unknown';render();return;}
  if(action==='home-detail'){selectHomeDetail(button.dataset.detail);return;}
@@ -468,11 +581,16 @@ document.addEventListener('click',async e=>{
  if(action==='demo')startDemo();if(action==='exit-demo')exitDemo();if(action==='retry')loadData();
  if(['prev-month','next-month','this-month'].includes(action)){if(action==='this-month')month=todayKST().slice(0,7);else{const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+(action==='next-month'?1:-1),1));month=d.toISOString().slice(0,7);}render();}
 });
-document.addEventListener('change',e=>{if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
+document.addEventListener('keydown',e=>{
+ const cell=e.target.closest?.('[data-action="calendar-day"]');if(!cell)return;
+ const offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(offset===undefined)return;
+ e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
+});
+document.addEventListener('change',e=>{if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
  if(e.target.id==='field-monthlyContribution')syncRetirementContribution();
  if(['field-balance','field-rate','field-remainingMonths','field-graceMonths','field-principal','field-day'].includes(e.target.id))syncLoanPlan();
- if(e.target.id==='record-search'){query=e.target.value;const kind=view==='overview'?(homeSelection==='debt'?'loans':homeSelection):view;const rows=filteredRecords(kind);if(kind==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
+ if((e.target.id==='record-search'&&!e.target.hasAttribute('data-ledger-field'))||e.target.id==='loan-card-search'){query=e.target.value;const kind=view==='overview'?(homeSelection==='debt'?'loans':homeSelection):view;const rows=filteredRecords(kind);if(kind==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
  if(e.target.matches('#record-form input[inputmode="numeric"]')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}
 });
 $('privacy-toggle').onclick=()=>{hidden=!hidden;localStorage.setItem('moa-hide-amounts',String(hidden));if(!loading)render();else renderNav();};
@@ -492,5 +610,7 @@ $('import-file').onchange=async e=>{
   $('settings-dialog').close();if(await confirmAction('백업 내역으로 교체할까요?',`현재 내역을 지우고 백업 파일의 ${count}건으로 교체합니다. 기존 내역이 필요하면 취소 후 먼저 내보내 주세요.`,'교체하기')){await persist(data);toast(`${count}건의 내역을 복원했어요.`);}
  }catch(error){toast(error instanceof SyntaxError?'올바른 JSON 백업 파일을 선택해 주세요.':error.message);}
 };
-function setView(){const hash=location.hash.slice(1);view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
+$('editor').addEventListener('cancel',()=>{entryDetailEditing=false;if(entryEditing){rememberEntryDraft();entryEditing=false;}});
+window.addEventListener('beforeunload',event=>{if(entryManagerState.drafts.size){event.preventDefault();event.returnValue='';}});
+function setView(){const hash=location.hash.slice(1);if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
 window.addEventListener('hashchange',setView);setView();renderNav();loadData();

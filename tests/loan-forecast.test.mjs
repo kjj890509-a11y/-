@@ -95,10 +95,10 @@ test('the loan management page mounts the forecast and preserves amount hiding',
   assert.equal(document.querySelector('[data-loan-card="first"] [data-loan-amount="balance"]').textContent,'1,200원');
   assert.equal(document.querySelector('[data-loan-card="first"] [data-loan-amount="payment"]').textContent,'412원');
   assert.equal(document.querySelector('[data-loan-card="second"] [data-loan-amount="payment"]').textContent,'309원');
-  assert.equal(document.querySelectorAll('#main table').length, 0);
+  assert.equal(document.querySelectorAll('#main .ledger-table').length, 1);
   assert.ok([...document.querySelectorAll('.loan-card-details')].every(details=>!details.hasAttribute('open')));
   document.querySelector('.loan-card-details').setAttribute('open','');
-  const search=document.getElementById('record-search');search.value='직접 입력';search.dispatchEvent(new Event('input',{bubbles:true}));
+  const search=document.getElementById('loan-card-search');search.value='직접 입력';search.dispatchEvent(new Event('input',{bubbles:true}));
   assert.equal(document.querySelectorAll('[data-loan-card]').length,1);
   assert.equal(document.querySelector('[data-loan-card]').dataset.loanCard,'second');
   search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));
@@ -127,7 +127,7 @@ test('the loan management page mounts the forecast and preserves amount hiding',
   assert.equal(document.querySelector('#ui-info-dialog [data-ui-info-content]').textContent,'');
   assert.ok([...document.querySelectorAll('.loan-forecast-panel [data-field]')].every(td => td.textContent.startsWith('••••••')));
   assert.ok([...document.querySelectorAll('[data-loan-amount]')].every(field=>field.textContent.startsWith('••••••')));
-  assert.equal(requestCount, 1);
+  assert.equal(requestCount, 2); // Portfolio and independent saved-view preferences.
 });
 
 test('each loan visibly subtracts its own principal and includes interest only in its payment',()=>{

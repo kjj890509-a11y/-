@@ -21,12 +21,12 @@ const advisorJSON=(body,status=200)=>new Response(JSON.stringify(body),{status,h
 export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={}) {
   const userId=request.headers.get('oai-authenticated-user-id');
   if(!userId)return advisorJSON({error:'로그인 후 상담을 이용해 주세요.'},401);
-  if(request.method==='GET')return advisorJSON({configured:advisorConfigured(env),model:ADVISOR_MODEL,reasoning:ADVISOR_REASONING});
+  if(request.method==='GET')return advisorJSON({configured:advisorConfigured(env),...(!advisorConfigured(env)?{code:'advisor_not_configured'}:{}),model:ADVISOR_MODEL,reasoning:ADVISOR_REASONING});
   if(request.method!=='POST')return advisorJSON({error:'상담 요청은 POST로 보내 주세요.'},405);
   if(request.headers.get('Origin')!==new URL(request.url).origin||request.headers.get('Sec-Fetch-Site')==='cross-site')return advisorJSON({error:'요청 출처를 확인할 수 없습니다.'},403);
   if(!request.headers.get('Content-Type')?.startsWith('application/json'))return advisorJSON({error:'JSON 형식이 필요합니다.'},415);
   if(!env.DB)return advisorJSON({error:'저장된 자산에 연결할 수 없습니다.'},503);
-  if(!advisorConfigured(env))return advisorJSON({error:'AI 상담의 서버 연결이 아직 준비되지 않았습니다. 운영자에게 문의해 주세요.',code:'advisor_not_configured'},503);
+  if(!advisorConfigured(env))return advisorJSON({error:'운영자의 AI 서비스 연결이 설정되지 않았습니다. 서버 연결을 완료한 뒤 다시 이용해 주세요.',code:'advisor_not_configured'},503);
   let body,data,scenarios,revision;
   try {
     const raw=await request.text();if(raw.length>16000)return advisorJSON({error:'상담 요청이 너무 깁니다.'},413);
@@ -55,7 +55,16 @@ export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={
     });
     if(!response.ok){
       const status=response.status;
-      return advisorJSON({error:status===401?'AI 상담 서비스의 연결을 확인 중입니다. 운영자에게 문의해 주세요.':status===403||status===404?'AI 상담 모델 연결을 확인 중입니다. 운영자에게 문의해 주세요.':status===429?'OpenAI API 사용 한도 또는 요청 한도에 도달했습니다. 사용량을 확인한 뒤 다시 시도해 주세요.':'OpenAI 상담 요청을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'},status===401||status===403||status===404?503:502);
+      const detail=await response.json().catch(()=>({}));
+      const providerCode=detail?.error?.code;
+      const failure=status===401?['provider_auth_failed','AI 서비스 인증에 실패했습니다. 운영자가 연결 키를 확인해야 합니다.',503]
+        :status===403?['provider_access_denied','선택한 AI 모델의 접근 권한이 없습니다. 운영자가 모델 권한을 확인해야 합니다.',503]
+        :status===404?['provider_model_unavailable','설정된 AI 모델을 사용할 수 없습니다. 운영자가 모델 연결을 확인해야 합니다.',503]
+        :status===429&&providerCode==='insufficient_quota'?['provider_quota_exhausted','OpenAI API 사용 한도가 소진되었습니다. 운영자가 API 결제 잔액과 사용 한도를 확인해야 합니다.',503]
+        :status===429?['provider_rate_limited','AI 요청이 몰리고 있습니다. 잠시 후 다시 시도해 주세요.',429]
+        :status===400?['provider_request_rejected','AI 모델이 상담 요청 설정을 지원하지 않습니다. 운영자가 모델·추론 설정을 확인해야 합니다.',503]
+        :['provider_error','OpenAI 상담 요청을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.',502];
+      return advisorJSON({code:failure[0],error:failure[1]},failure[2]);
     }
     const result=await response.json();
     if(result.status&&result.status!=='completed')return advisorJSON({error:'AI 답변이 끝까지 생성되지 않았습니다. 다시 상담해 주세요.'},502);
@@ -64,5 +73,5 @@ export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={
     const advice=JSON.parse(text);
     if(!['rate','balance'].includes(advice.recommendation)||typeof advice.summary!=='string'||!Array.isArray(advice.reasons)||!Array.isArray(advice.checks)||[...advice.reasons,...advice.checks].some(item=>typeof item!=='string'))return advisorJSON({error:'AI 답변 형식이 올바르지 않습니다. 다시 상담해 주세요.'},502);
     return advisorJSON({advice,model:ADVISOR_MODEL,reasoning:ADVISOR_REASONING,asOf:scenarios.asOf,revision});
-  } catch {return advisorJSON({error:'AI 상담 연결이 지연되거나 중단됐습니다. 잠시 후 다시 시도해 주세요.'},502);}finally{await release();}
+  } catch(error) {return advisorJSON({code:error?.name==='TimeoutError'?'provider_timeout':'provider_response_failed',error:error?.name==='TimeoutError'?'AI 상담 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.':'AI 상담 연결 또는 답변 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'},502);}finally{await release();}
 }
