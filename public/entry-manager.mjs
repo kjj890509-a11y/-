@@ -1,3 +1,4 @@
+import {renderMonthPicker} from './month-picker.mjs';
 import {KINDS,LABELS,FLOW_LABELS,validatePortfolio,emptyPortfolio} from './domain.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const order=['cashflow','fixed','deposits','stocks','retirement','loans','cards'];
@@ -82,6 +83,7 @@ function cell(item,column,state,{money,hidden}){
  if(kind==='loans'&&['remainingMonths','nextPaymentDate'].includes(field)&&row.calculationMode!=='term')return '<td class="entry-unavailable">상세에서 설정</td>';
  let input;
  if(hidden&&type==='money')input='<span class="entry-hidden-value">••••••</span>';
+ else if(type==='month')input=renderMonthPicker({id:'entry-'+kind+'-'+row.id+'-'+field,value,label:row.name+' · '+label,required:field==='startMonth',disabled:state.busy,rangeStartId:field==='endMonth'?'entry-'+kind+'-'+row.id+'-startMonth':'',inputAttributes:attrs,emptyLabel:field==='endMonth'?'종료월 없음':'월 선택',clearLabel:'종료월 없음'});
  else if(type==='select'||type==='boolean')input=`<select ${attrs}>${definition[2].map(([v,label])=>`<option value="${v}" ${String(value)===v?'selected':''}>${label}</option>`).join('')}</select>`;
  else input=`<input ${attrs} type="${['date','month'].includes(type)?type:'text'}" value="${esc(type==='money'&&typeof value==='number'?won.format(value):value)}" ${['money','number'].includes(type)?'inputmode="decimal"':`maxlength="${field==='note'?500:100}"`} ${field==='name'?'required':''} autocomplete="off">`;
  const old=type==='money'?money(row[field]||0):type==='select'||type==='boolean'?definition[2].find(([v])=>String(row[field])===v)?.[1]:String(row[field]??'')||'없음';
