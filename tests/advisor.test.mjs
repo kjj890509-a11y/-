@@ -247,3 +247,14 @@ test('provider quota, rate, model and request-setting failures have distinct saf
   const body=await response.json();assert.equal(body.code,expected);assert.ok(!JSON.stringify(body).includes(fakeKey));assert.equal(response.status,expected==='provider_rate_limited'?429:503);
  }
 });
+test('AI can authenticate a dedicated relay without an exported OpenAI key and never exposes relay configuration to customers',async()=>{
+ const {env,db}=environment();delete env.OPENAI_API_KEY;env.ADVISOR_RELAY_URL='https://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay';env.ADVISOR_RELAY_TOKEN='moa_'+'t'.repeat(43);
+ const status=await handleAdvisor(new Request('https://moa.test/api/advisor',{headers:{'oai-authenticated-user-id':'owner'}}),env);const raw=await status.text();assert.match(raw,/"configured":true/);assert.ok(!raw.includes(env.ADVISOR_RELAY_TOKEN)&&!raw.includes(env.ADVISOR_RELAY_URL));
+ const response=await handleAdvisor(request(),env,{fetchImpl:async(url,init)=>{assert.equal(url,env.ADVISOR_RELAY_URL);assert.equal(init.headers.Authorization,'Bearer '+env.ADVISOR_RELAY_TOKEN);assert.equal(init.headers['X-Moa-Relay-Token'],undefined);const payload=JSON.parse(init.body);assert.equal(payload.reasoning.effort,'xhigh');assert.equal(payload.model,'gpt-6.1-terra');return Response.json({status:'completed',output_text:JSON.stringify(advice)});}});assert.equal(response.status,200);assert.deepEqual((await response.json()).advice,advice);assert.equal(db.prepare('SELECT revision FROM portfolios').get().revision,1);db.close();
+});
+test('invalid relay destinations and customer connection overrides cannot route AI requests',async()=>{
+ for(const url of ['http://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay','https://attacker.test/functions/v1/moa-advisor-relay','https://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay?token=bad']){
+  const {env,db}=environment();delete env.OPENAI_API_KEY;env.ADVISOR_RELAY_URL=url;env.ADVISOR_RELAY_TOKEN='moa_'+'t'.repeat(43);let calls=0;assert.equal((await handleAdvisor(request(),env,{fetchImpl:async()=>{calls++;throw Error();}})).status,503);assert.equal(calls,0);db.close();
+ }
+ const {env,db}=environment();assert.equal((await handleAdvisor(request({relayUrl:'https://attacker.test'}),env)).status,400);db.close();
+});
