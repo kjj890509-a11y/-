@@ -5,10 +5,10 @@ const won=new Intl.NumberFormat('ko-KR');
 const amountKeys={cashflow:'amount',fixed:'amount',deposits:'balance',stocks:'valuation',retirement:'amount',loans:'balance',cards:'amount'};
 const spec={
  name:['이름','text'],institution:['금융기관·회사','text'],note:['메모','text'],balance:['현재 잔액','money'],valuation:['현재 평가액','money'],cost:['총매입금액','money'],amount:['금액','money'],rate:['연 이율 · %','number'],maturity:['만기일','date'],monthlyContribution:['회사 월 납입액','money'],contributionDate:['첫 납입 예정일','date'],asOf:['금액 기준일','date'],remainingMonths:['남은 납부 횟수','number'],nextPaymentDate:['다음 납부일','date'],day:['매월 납부일','number'],dueDate:['결제일','date'],date:['일자·반복 시작일','date'],startMonth:['시작월','month'],endMonth:['종료월','month'],
- type:['수입·지출 구분','select',Object.entries(FLOW_LABELS)],repeat:['반복','select',[['once','한 번'],['monthly','매월']]],paid:['결제 상태','boolean',[['false','결제 예정'],['true','결제 완료']]],includeInForecast:['예상 반영','boolean',[['true','포함'],['false','제외']]],paymentSource:['결제 방식','select',[['account','계좌 결제'],['card','카드 청구 포함']]]
+ type:['수입·지출 구분','select',Object.entries(FLOW_LABELS)],repeat:['반복','select',[['once','한 번'],['monthly','매월']]],paid:['결제 상태','boolean',[['false','결제 예정'],['true','결제 완료']]],includeInForecast:['예상 반영','boolean',[['true','포함'],['false','제외']]],paymentSource:['결제 방식','select',[['account','계좌 결제'],['card','카드 청구액에 포함 · 중복 제외']]]
 };
 const columns={
- all:['name','institution','primary','note'],cashflow:['name','type','amount','date','repeat','includeInForecast','note'],fixed:['name','amount','day','paymentSource','startMonth','endMonth','note'],deposits:['name','institution','balance','rate','maturity','note'],stocks:['name','institution','cost','valuation','note'],retirement:['name','institution','amount','monthlyContribution','contributionDate','asOf','note'],loans:['name','institution','balance','rate','remainingMonths','nextPaymentDate','day','note'],cards:['name','amount','dueDate','paid','note']
+ all:['name','institution','primary','note'],cashflow:['name','type','amount','date','repeat','paymentSource','includeInForecast','note'],fixed:['name','amount','day','paymentSource','startMonth','endMonth','note'],deposits:['name','institution','balance','rate','maturity','note'],stocks:['name','institution','cost','valuation','note'],retirement:['name','institution','amount','monthlyContribution','contributionDate','asOf','note'],loans:['name','institution','balance','rate','remainingMonths','nextPaymentDate','day','note'],cards:['name','amount','dueDate','paid','note']
 };
 export const createEntryManagerState=()=>({mode:'manage',category:'all',query:'',sort:'default',page:1,pageSize:20,changedOnly:false,drafts:new Map(),busy:false,error:'',message:''});
 const keyFor=(kind,id)=>kind+':'+id;
@@ -78,6 +78,7 @@ function cell(item,column,state,{money,hidden}){
  const {kind,row,key}=item,field=column==='primary'?amountKeys[kind]:column,definition=spec[field],draft=state.drafts.get(key),dirty=draft&&Object.hasOwn(draft.changes,field),value=dirty?draft.changes[field]:row[field]??'',type=definition[1],label=(column==='primary'?amountLabel[kind]:definition[0]);
  const attrs=`data-entry-value data-entry-key="${esc(key)}" data-entry-field="${field}" aria-label="${esc(row.name+' · '+label)}" ${state.busy?'disabled':''}`;
  if(field==='institution'&&['cashflow','fixed','cards'].includes(kind))return '<td class="entry-unavailable">—</td>';
+ if(field==='paymentSource'&&kind==='cashflow'&&(draft?.changes.type??row.type)!=='expense')return '<td class="entry-unavailable">—</td>';
  if(kind==='loans'&&['remainingMonths','nextPaymentDate'].includes(field)&&row.calculationMode!=='term')return '<td class="entry-unavailable">상세에서 설정</td>';
  let input;
  if(hidden&&type==='money')input='<span class="entry-hidden-value">••••••</span>';
@@ -124,7 +125,7 @@ export function mountEntryManager(root,getData,state,options){
  };
  const change=event=>{
   if(state.busy)return;const t=event.target;
-  if(t.matches('[data-entry-value]')){input(event);return;}
+  if(t.matches('[data-entry-value]')){input(event);if(t.dataset.entryField==='type'){draw();root.querySelector(`[data-entry-key="${t.dataset.entryKey}"][data-entry-field=type]`)?.focus();}return;}
   if(t.matches('[data-entry-sort]'))state.sort=t.value;else if(t.matches('[data-entry-changed-only]'))state.changedOnly=t.checked;else return;state.page=1;draw();
  };
  const click=async event=>{

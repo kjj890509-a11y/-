@@ -1,4 +1,4 @@
-import {todayKST, validDate, validMonth, shiftMonth, paymentDate, cashflowForMonth, fixedForMonth, loanSchedule, retirementContributionsForMonth} from './domain.mjs';
+import {todayKST, validDate, validMonth, shiftMonth, paymentDate, cashflowForMonth, fixedForMonth, loanSchedule, retirementContributionsForMonth, isCardIncludedExpense} from './domain.mjs';
 
 export const statisticsKinds = {all:'전체 항목',loans:'대출 상환',expense:'생활 지출',income:'수입',cards:'카드대금',retirement:'회사 퇴직연금 납입'};
 export const statisticsMetrics = {expense:'지출·상환 합계',income:'수입 합계',loanPayment:'대출 상환액',principal:'대출 상환 원금',interest:'대출 이자',retirementContribution:'회사 퇴직연금 납입액'};
@@ -72,8 +72,8 @@ export function buildStatistics(data, filters, today = todayKST()) {
     events.push({principal:0,interest:0,note:'',institution:'',informational:false,forecast:false,...row});
   };
   if (kind !== 'loans' && !bank) for (const {month} of months) {
-    for (const row of cashflowForMonth(data,month)) add({source:'cashflow',recordId:row.id,item:'cashflow:'+row.id,date:row.occursOn,name:row.name,note:row.note,type:row.type==='expense'?'expense':'income',amount:row.amount,status:'등록 일정'});
-    for (const row of fixedForMonth(data,month)) add({source:'fixed',recordId:row.id,item:'fixed:'+row.id,date:row.occursOn,name:row.name,note:row.note,type:'expense',amount:row.amount,informational:row.paymentSource==='card',status:row.paymentSource==='card'?'카드 청구 포함':'고정지출 일정'});
+    for (const row of cashflowForMonth(data,month)) add({source:'cashflow',recordId:row.id,item:'cashflow:'+row.id,date:row.occursOn,name:row.name,note:row.note,type:row.type==='expense'?'expense':'income',amount:row.amount,informational:isCardIncludedExpense(row),status:isCardIncludedExpense(row)?'카드 청구액에 포함 · 중복 제외':'등록 일정'});
+    for (const row of fixedForMonth(data,month)) add({source:'fixed',recordId:row.id,item:'fixed:'+row.id,date:row.occursOn,name:row.name,note:row.note,type:'expense',amount:row.amount,informational:row.paymentSource==='card',status:row.paymentSource==='card'?'카드 청구액에 포함 · 중복 제외':'고정지출 일정'});
     for (const row of retirementContributionsForMonth(data,month)) add({source:'retirement',recordId:row.id,item:'retirement:'+row.id,date:row.date,name:row.name,institution:data.retirement.find(account=>account.id===row.id)?.institution||'',type:'retirement',amount:row.amount,status:'회사 납입 일정'});
   }
   if (kind !== 'loans' && !bank) for (const row of data.cards) add({source:'cards',recordId:row.id,item:'cards:'+row.id,date:row.dueDate,name:row.name,note:row.note,type:'expense',amount:row.amount,status:row.paid?'결제 완료':'결제 예정'});
