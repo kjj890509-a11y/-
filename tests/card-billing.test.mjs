@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {parseHTML} from 'linkedom';
 import {emptyPortfolio,validatePortfolio,totals,eventsForMonth,todayKST} from '../public/domain.mjs';
-import {createCardBillingState,saveCardAccount,setCardArchived,stageCardBill,stageCardBillDeletion,applyCardBills,renderCardBilling} from '../public/card-billing.mjs';
+import {createCardBillingState,saveCardAccount,setCardArchived,stageCardBill,stageCardBillDeletion,stageSelectedCardBills,applyCardBills,renderCardBilling} from '../public/card-billing.mjs';
 import {handleApi} from '../server/api.mjs';
 const account={id:'card-a',name:'현대 M',day:31,note:''};
 const cardData=()=>saveCardAccount(emptyPortfolio(),account);
@@ -33,13 +33,13 @@ test('monthly table escapes profile names, masks amounts, and retains drafts for
  const p=saveCardAccount(emptyPortfolio(),{...account,name:'<img src=x>'}),state=createCardBillingState();state.month='2027-01';stageCardBill(state,p,account.id,'amount','912345');state.month='2027-02';stageCardBill(state,p,account.id,'amount','777');const {document}=parseHTML(renderCardBilling(p,state,{money:()=>'••••••',hidden:true}));assert.equal(document.querySelector('img'),null);assert.equal(document.querySelector('[data-card-bill-field=amount]'),null);assert.match(document.querySelector('[data-card-bill-count]').textContent,/2건/);assert.doesNotMatch(document.documentElement.outerHTML,/912345/);
 });
 function database(){
- const db=new DatabaseSync(':memory:');
+ const db=new DatabaseSync(':memory:');let reads=0;
  for(const file of ['0000_assets.sql','0001_advisor_usage.sql'])db.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
  const DB={prepare(sql){return {bind(...v){return {
-  async first(){return db.prepare(sql).get(...v)||null;},
+  async first(){reads++;return db.prepare(sql).get(...v)||null;},
   async run(){return {meta:{changes:Number(db.prepare(sql).run(...v).changes)}};}
  };}};}};
- return {db,DB};
+ return {db,DB,get reads(){return reads;}};
 }
 const req=(method='GET',body,user='owner')=>new Request('https://moa.test/api/portfolio',{method,headers:{'oai-authenticated-user-id':user,Origin:'https://moa.test','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
 test('account storage preserves fixed cards and links from old clients while enforcing revisions and backup round trips',async()=>{
@@ -71,4 +71,18 @@ test('the real portfolio API persists cross-month statements and scoped deletion
 test('first save of a pre-upgrade bill pins its stored month even when an older client changes the payment date',async()=>{
  const {db,DB}=database(),p=cardData();p.cards=[{id:'legacy',name:'기존 청구',amount:1000,dueDate:'2026-11-13',paid:false,note:'',cardAccountId:account.id}];db.prepare('INSERT INTO portfolios(user_id,data,revision,updated_at) VALUES(?,?,?,?)').run('owner',JSON.stringify(p),7,'2026-11-01T00:00:00Z');
  const data=structuredClone(p);data.cards[0].dueDate='2026-12-13';assert.equal((await handleApi(req('PUT',{data,revision:7}),{DB})).status,200);const saved=await(await handleApi(req(),{DB})).json();assert.equal(saved.data.cards[0].billingMonth,'2026-11');assert.equal(saved.data.cards[0].dueDate,'2026-12-13');db.close();
+});
+
+test('bulk edits change only selected cards and payment month shifts keep each day with leap-month clamping',()=>{
+ let p=cardData();p=saveCardAccount(p,{id:'card-b',name:'카드 B',day:10,note:''});p=saveCardAccount(p,{id:'card-c',name:'카드 C',day:25,note:''});const state=createCardBillingState();state.month='2028-01';for(const row of p.cardAccounts)stageCardBill(state,p,row.id,'amount','1000');let index=0;p=applyCardBills(p,state,{createId:()=> 'bill-'+(++index)});state.drafts.clear();const before=structuredClone(p);
+ state.selected.add(account.id);state.selected.add('card-b');assert.equal(stageSelectedCardBills(state,p,'paymentMonth','2028-02'),2);let next=applyCardBills(p,state);assert.deepEqual(next.cards.map(row=>row.dueDate),['2028-02-29','2028-02-10','2028-01-25']);assert.ok(next.cards.every(row=>row.billingMonth==='2028-01'));
+ stageSelectedCardBills(state,p,'paid','true');stageSelectedCardBills(state,p,'amount','0');next=applyCardBills(p,state);assert.deepEqual(next.cards.map(row=>[row.amount,row.paid]),[[0,true],[0,true],[1000,false]]);assert.deepEqual(p,before);
+ const pending=structuredClone([...state.drafts]);assert.throws(()=>stageSelectedCardBills(state,p,'dueDate','2028-02-30'),/결제일/);assert.deepEqual([...state.drafts],pending);assert.throws(()=>stageSelectedCardBills(state,p,'amount','-1'),/원 단위/);assert.deepEqual([...state.drafts],pending);state.selected.clear();assert.throws(()=>stageSelectedCardBills(state,p,'paid','true'),/선택/);
+});
+test('bulk deletion clears selected drafts and statements while preserving card profiles',()=>{
+ let p=saveCardAccount(cardData(),{id:'card-b',name:'카드 B',day:10,note:''});const state=createCardBillingState();state.month='2028-01';stageCardBill(state,p,account.id,'amount','1234');p=applyCardBills(p,state,{createId:()=> 'existing'});state.drafts.clear();stageCardBill(state,p,'card-b','amount','5678');state.selected.add(account.id);state.selected.add('card-b');stageSelectedCardBills(state,p,'delete');assert.equal(state.selected.size,0);assert.equal(state.drafts.size,1);assert.ok(state.drafts.get('2028-01:'+account.id).deleted);const next=applyCardBills(p,state);assert.equal(next.cards.length,0);assert.deepEqual(next.cardAccounts,p.cardAccounts);assert.equal(p.cards.length,1);
+});
+test('a legacy portfolio save shares one database read across compatibility upgrades',async()=>{
+ const fixture=database(),{db,DB}=fixture,state=createCardBillingState();let p=cardData();state.month='2028-01';stageCardBill(state,p,account.id,'amount','1234');p=applyCardBills(p,state,{createId:()=> 'legacy'});assert.equal((await handleApi(req('PUT',{data:p,revision:0}),{DB})).status,200);
+ const legacy=structuredClone(p);for(const key of ['dashboard','cardAccounts','cashflow','fixed','budgets','snapshots','loanPayments'])delete legacy[key];delete legacy.cards[0].cardAccountId;delete legacy.cards[0].billingMonth;const before=fixture.reads;assert.equal((await handleApi(req('PUT',{data:legacy,revision:1}),{DB})).status,200);assert.equal(fixture.reads-before,1);const saved=await(await handleApi(req(),{DB})).json();assert.equal(saved.data.cards[0].cardAccountId,account.id);assert.equal(saved.data.cards[0].billingMonth,'2028-01');db.close();
 });
