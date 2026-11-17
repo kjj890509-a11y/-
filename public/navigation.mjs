@@ -1,6 +1,6 @@
 // One hierarchy shared by desktop navigation, mobile navigation and section tabs.
 export const viewLabels = {
- overview:'자산 한눈에',entry:'통합 입력',workspace:'맞춤 대시보드',assets:'전체 자산',deposits:'예금·현금',stocks:'주식·투자',retirement:'퇴직금·연금',
+ overview:'자산 한눈에',entry:'통합 입력·수정',workspace:'맞춤 대시보드',assets:'전체 자산',deposits:'예금·현금',stocks:'주식·투자',retirement:'퇴직금·연금',
  records:'전체 내역',cashflow:'수입·지출 내역',fixed:'정기 지출',planned:'예정 거래',schedule:'입출금 달력',
  loans:'대출 현황',cards:'카드 청구',advisor:'AI 상담',
  budget:'월 예산',forecast:'월별 전망',payday:'급여일 전망',statistics:'기간별 분석',history:'자산 기록'
@@ -30,8 +30,8 @@ export {createLedgerWorkspace,ledgerState,ledgerPreference,renderLedger,mountLed
 import {calendarModel,renderCashCalendar,shiftCalendarDay} from './calendar.mjs';
 export {calendarModel,renderCashCalendar,shiftCalendarDay};
 
-import {entryPresets,entryGroups,renderEntryHub} from './entry-hub.mjs';
-export {entryPresets,entryGroups,renderEntryHub};
+import {entryPresets,entryGroups,renderEntryHub,createEntryManagerState,mountEntryManager,stageEntryRecord,entryDraftRow} from './entry-hub.mjs';
+export {entryPresets,entryGroups,renderEntryHub,createEntryManagerState,mountEntryManager,stageEntryRecord,entryDraftRow};
 
 import {mountFinancialMotion,unmountFinancialMotion} from './motion.mjs';
 export {mountFinancialMotion,unmountFinancialMotion};
