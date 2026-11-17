@@ -2,7 +2,7 @@ import {mergeLayoutOrder} from './record-layout-model.mjs';
 export {recordLayoutSpecs,entryLayoutColumns,layoutScope,freshRecordLayout,orderLayoutRows} from './record-layout-model.mjs';
 export const layoutDots='<span class="drag-nine-dots" aria-hidden="true">'+Array.from({length:9},()=>'<i></i>').join('')+'</span>';
 export const layoutRowHandle=label=>`<button type="button" class="record-row-handle" aria-label="${String(label).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')} 순서 이동. 위아래 방향키 지원" title="드래그로 이동 · 위아래 방향키 지원">${layoutDots}</button>`;
-export const layoutToolbar=()=>'<div class="record-layout-toolbar"><span data-layout-message role="status">점 9개로 행·열을 이동할 수 있습니다.</span><button type="button" class="button secondary small" data-layout-save>배치 저장</button></div>';
+export const layoutToolbar=()=>'<div class="record-layout-toolbar"><span data-layout-message role="status"></span><button type="button" class="button secondary small" data-layout-save>배치 저장</button></div>';
 export function mountRecordLayout(root,state,{allKeys,onChange,onSave,onFeedback=()=>{},loadSortable=()=>import('/sortable.mjs'),disabled=false}){
  let active=true,sortables=[],saving=false;const rows=()=>[...root.querySelectorAll('[data-layout-row]')],visible=rows().map(row=>row.dataset.layoutRow);
  const message=root.querySelector('[data-layout-message]'),save=root.querySelector('[data-layout-save]');

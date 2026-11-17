@@ -116,7 +116,7 @@ export function enhanceDisclosure(root,{view=''}={}){
  for(const form of root.querySelectorAll('#advisor-form,#statistics-filter-form'))if(!form.dataset.uiSubmit){form.dataset.uiSubmit='true';form.addEventListener('submit',()=>{if(form.id==='advisor-form')state.advisorStep=2;else closeDialog(form.closest('dialog'),state);});}
 
 
- for(const source of root.querySelectorAll('.panel-note,.category-note,.loan-schedule-note,.stats-note,.advisor-key-note,.intro-note,.dashboard-notice,.table-hint')){
+ for(const source of root.querySelectorAll('.panel-note,.category-note,.loan-schedule-note,.stats-note,.advisor-key-note,.intro-note,.dashboard-notice,.table-hint,.forecast-banner p')){
   if(source.closest('dialog')||source.getAttribute('role')==='status'||source.textContent.includes('대출을 먼저')||source.textContent.includes('예시 모드'))continue;
   const section=source.closest('.panel,.table-panel'),target=section?.querySelector('.panel-header h2,.table-heading h2')||root.querySelector('h1');
   help(source,target,'계산·표시 기준');

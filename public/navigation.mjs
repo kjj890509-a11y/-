@@ -42,3 +42,5 @@ export {createCardBillingState,renderCardBilling,mountCardBilling,renderCardAcco
 export {renderMonthPicker,mountMonthPickers,syncMonthPicker,closeMonthPicker} from './month-picker.mjs';
 
 export {mountRecordLayout,orderLayoutRows} from './record-layout.mjs';
+
+export {applyPageLayout} from './page-layout.mjs';
