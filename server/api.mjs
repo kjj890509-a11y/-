@@ -43,13 +43,18 @@ export async function handleApi(request, env) {
       const oldLoans=new Map((stored.loans||[]).map(row=>[row.id,row]));
       if(Array.isArray(body.data.loans))body.data.loans=body.data.loans.map(row=>{if(!row)return row;const old=oldLoans.get(row.id);const kept=row.calculationMode===undefined&&old?.calculationMode==='term'?{calculationMode:old.calculationMode,remainingMonths:old.remainingMonths,graceMonths:old.graceMonths,nextPaymentDate:old.nextPaymentDate}:{};return {...row,...kept,interestMode:row.interestMode??old?.interestMode??'manual'};});
     }
-    if(body.data&&typeof body.data==='object'&&body.revision>0&&(body.data.cardAccounts===undefined||(Array.isArray(body.data.cards)&&body.data.cards.some(row=>row&&row.cardAccountId===undefined)))){
+    if(body.data&&typeof body.data==='object'&&body.revision>0&&(body.data.cardAccounts===undefined||(Array.isArray(body.data.cards)&&body.data.cards.some(row=>row&&(row.cardAccountId===undefined||row.billingMonth===undefined))))){
       const previous=await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
       if(!previous||previous.revision!==body.revision)return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
       const stored=JSON.parse(previous.data);
       if(body.data.cardAccounts===undefined)body.data.cardAccounts=stored.cardAccounts||[];
       const oldCards=new Map((stored.cards||[]).map(row=>[row.id,row])),accountIds=new Set((Array.isArray(body.data.cardAccounts)?body.data.cardAccounts:[]).map(row=>row?.id));
-      if(Array.isArray(body.data.cards))body.data.cards=body.data.cards.map(row=>row&&row.cardAccountId===undefined&&accountIds.has(oldCards.get(row.id)?.cardAccountId)?{...row,cardAccountId:oldCards.get(row.id).cardAccountId}:row);
+      if(Array.isArray(body.data.cards))body.data.cards=body.data.cards.map(row=>{
+        if(!row)return row;const old=oldCards.get(row.id),kept={};
+        if(row.cardAccountId===undefined&&accountIds.has(old?.cardAccountId))kept.cardAccountId=old.cardAccountId;
+        if(row.billingMonth===undefined&&old&&(old.billingMonth||old.cardAccountId))kept.billingMonth=old.billingMonth||old.dueDate.slice(0,7);
+        return {...row,...kept};
+      });
     }
     let clean;
     try {clean = validatePortfolio(body.data);if(!dashboardOnly)clean=recordCurrentSnapshot(clean);} catch(error) {return responseJSON({error:error.message},400);}
