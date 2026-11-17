@@ -18,8 +18,8 @@ async function start(data=domain.samplePortfolio()){
  const {document,window,Event}=parseHTML(readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));
  window.scrollTo=()=>{};
  for(const dialog of document.querySelectorAll('dialog')){dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
- const state={data,revision:1,writes:0};
- const context=vm.createContext({...loansPage,...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#overview'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,setTimeout,clearTimeout,fetch:async(path,init)=>{
+ const state={data,revision:1,writes:0,downloads:[]};
+ const context=vm.createContext({...loansPage,...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#overview'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,Blob,URL:{createObjectURL:blob=>{state.downloads.push(blob);return 'blob:test-download';},revokeObjectURL:()=>{}},setTimeout,clearTimeout,fetch:async(path,init)=>{
   assert.equal(path,'/api/portfolio');
   if(init?.method==='PUT'){state.writes++;state.data=domain.validatePortfolio(JSON.parse(init.body).data);state.revision++;}
   return {ok:true,json:async()=>({data:state.data,revision:state.revision})};
@@ -90,4 +90,27 @@ test('monthly detail includes salaries and expenses, and empty categories remain
  assert.match(empty.document.querySelector('#home-dashboard').textContent,/아직 등록된/);
  assert.ok(empty.document.querySelector('#home-dashboard [data-action="add"][data-kind="deposits"]'));
  empty.select('debt');assert.match(empty.document.querySelector('#home-dashboard').textContent,/미결제 카드대금이 없습니다/);
+});
+
+
+test('Stripe command search opens with a keyboard shortcut and selects a real account editor',async()=>{
+ const {document,Event,context,state,click}=await start();
+ const key=(element,value,props={})=>{const event=new Event('keydown',{bubbles:true,cancelable:true});Object.defineProperty(event,'key',{value});for(const [name,value]of Object.entries(props))Object.defineProperty(event,name,{value});element.dispatchEvent(event);};
+ key(document,'k',{ctrlKey:true});assert.equal(document.querySelector('#search-dialog').hasAttribute('open'),true);
+ const input=document.querySelector('#dashboard-search');input.value=state.data.deposits[0].name;input.dispatchEvent(new Event('input',{bubbles:true}));
+ const result=document.querySelector('[data-search-id]');assert.equal(result.dataset.searchId,state.data.deposits[0].id);
+ click('[data-search-id]');assert.equal(document.querySelector('#search-dialog').hasAttribute('open'),false);
+ assert.equal(context.location.hash,'deposits');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);
+ assert.equal(document.querySelector('#field-name').value,state.data.deposits[0].name);
+ assert.equal(state.writes,0);
+});
+
+test('inline table CSV download respects the filtered rows and hidden amounts',async()=>{
+ const {document,Event,state,select,click}=await start();select('deposits');
+ document.querySelector('#privacy-toggle').onclick();
+ const input=document.querySelector('#record-search');input.value=state.data.deposits[0].name;input.dispatchEvent(new Event('input',{bubbles:true}));
+ click('[data-table-export]');assert.equal(state.downloads.length,1);
+ const content=await state.downloads[0].text();
+ assert.ok(content.includes(state.data.deposits[0].name));assert.ok(content.includes('••••••'));
+ assert.ok(!content.includes(String(state.data.deposits[0].balance)));assert.equal(state.writes,0);
 });

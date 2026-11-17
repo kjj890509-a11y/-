@@ -36,3 +36,7 @@ Mobbin MCP 검색에서 실제 확인한 화면:
 - [Rocket Money Spending](https://mobbin.com/screens/4ffdc60c-95f8-4920-8339-5724906f1d1b?utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp): 지출, 예산, 순자산의 목적별 메뉴와 기간 선택. 분석과 잔액·계획을 구분하는 메뉴의 예시로 참고했다.
 
 위 화면은 구조의 근거다. 한국어 용어, 완료 기록/일정/예측의 정의, 퇴직연금의 별도 집계와 정확한 배치는 이 제품의 계산 모델과 사용자의 요청에 맞춰 정했다. 실제 브라우저 캡처가 불가능하여 변경 전후 이미지는 제작하지 않았다. DOM과 계산 테스트를 화면 캡처 검증으로 주장하지 않는다.
+
+## Stripe 시각 디자인 적용 (2026-11-17 KST)
+
+사용자가 지정한 Stripe 디자인을 현재 시각 기준으로 적용했다. 이전 기록의 색상 유지 조건은 이 명시적 요청으로 갱신된다. 참조 캡처별 적용, 보존 항목, 검색·CSV 추가와 검증 제한은 [Stripe 디자인 변경 기록](stripe-redesign.md)에 있다.

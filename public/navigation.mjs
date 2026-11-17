@@ -19,3 +19,6 @@ export function sectionTabs(view){
  if(group.views.length<2)return '';
  return `<nav class="section-tabs" aria-label="${group.label} 메뉴">${group.views.map(key=>`<a href="#${key}" ${key===view?'aria-current="page"':''}>${viewLabels[key]}</a>`).join('')}</nav>`;
 }
+
+import {searchDashboard,renderDashboardSearch,tableCSV,enhanceTableExports} from './dashboard-tools.mjs';
+export {searchDashboard,renderDashboardSearch,tableCSV,enhanceTableExports};

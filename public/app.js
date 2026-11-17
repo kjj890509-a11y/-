@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -85,7 +85,7 @@ async function persist(next,dashboardOnly=false){
 }
 function renderNav(){
   const current=groupForView(view);
-  $('main-nav').innerHTML=navigationGroups.map(group=>`<a href="#${group.defaultView}" class="nav-link ${group.id===current.id?'active':''}" ${group.id===current.id?'aria-current="page"':''}>${svg(group.icon)}<span>${group.label}</span></a>`).join('');
+  $('main-nav').innerHTML=navigationGroups.map(group=>`<a href="#${group.defaultView}" class="nav-link ${group.id===current.id?'active':''}" ${group.id===current.id?'aria-current="page"':''}>${svg(group.icon)}<span>${group.label}</span></a>${group.id===current.id?`<div class="sidebar-subnav" aria-label="${group.label} 하위 메뉴">${group.views.map(key=>`<button type="button" data-action="navigate-view" data-view="${key}" aria-pressed="${key===view}">${navLabels[key]}</button>`).join('')}</div>`:''}`).join('');
   $('breadcrumb').textContent=current.label;
   $('privacy-toggle').innerHTML=svg(hidden?'eyeoff':'eye');$('privacy-toggle').setAttribute('aria-label',hidden?'금액 표시하기':'금액 숨기기');$('privacy-toggle').title=hidden?'금액 표시하기':'금액 숨기기';
 }
@@ -149,7 +149,7 @@ function selectHomeDetail(selection){
   const selected=button.dataset.detail===selection;
   button.classList.toggle('is-selected',selected);button.setAttribute('aria-pressed',String(selected));button.querySelector('[data-home-indicator]').textContent=selected?'✓':'↓';
  });
- enhanceDisclosure($('main'),{view});mountTrendCharts($('main'));
+ enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountTrendCharts($('main'));
  const target=$('home-dashboard');target.querySelector('[data-home-detail-title]')?.focus({preventScroll:true});
  // Keep the summary cards visible on wide screens; bring details into view on smaller screens.
  const top=target.getBoundingClientRect().top;
@@ -350,7 +350,7 @@ function calendar(){
  return `${heading('입출금 달력','월급·기타 수입·지출과 대출·카드 결제일을 함께 확인하세요.',false)}${demoBanner()}<div class="calendar-layout"><section class="panel"><div class="panel-header"><h2>입출금 달력</h2>${monthToolbar()}</div><div class="calendar-grid">${['일','월','화','수','목','금','토'].map(d=>`<span class="calendar-day-label">${d}</span>`).join('')}${cells}</div><div class="calendar-key"><span><i></i>지출</span><span class="income-color">+ 수입</span></div></section><section class="panel"><div class="panel-header"><h2>${m}월 입출금 내역</h2><span class="calendar-event-count">${events.length}건</span></div><div class="schedule-summary"><span>총지출 예정</span><strong>${money(flow.expense)}</strong><p class="cash-hint">총수입 ${money(flow.income)} · 남는 금액 ${money(flow.balance)}</p></div><div class="calendar-list">${events.length?events.map(paymentRow).join(''):'<div class="empty-inline">이번 달 등록된 일정이 없어요.</div>'}</div><p class="panel-note">입력한 수입·지출 예정액 기준입니다. 대출 상환은 월 원금·이자의 반복 표시이며, 실제 입출금 여부와 잔액은 직접 확인해 주세요.</p></section></div>`;
 }
 
-function render(){unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():category(view));enhanceDisclosure($('main'),{view});mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
+function render(){unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -404,10 +404,40 @@ function startDemo(){workspaceState=createWorkspaceState();
  loading=false;view='overview';location.hash='overview';$('settings-dialog').close();status('예시 보기 중');render();
 }
 async function exitDemo(){workspaceState=createWorkspaceState();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
+function downloadTable(csv,title){
+ if(!csv){toast('내려받을 내역이 없습니다.');return;}
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+ link.href=url;link.download=`모아-${title.replace(/[\\/:*?"<>|]/g,'').slice(0,60)}-${todayKST()}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('현재 조회 내역을 CSV로 내려받았어요.');
+}
+function updateDashboardSearch(){
+ $('dashboard-search-results').innerHTML=renderDashboardSearch(searchDashboard(portfolio,$('dashboard-search').value,navLabels),$('dashboard-search').value);
+}
+function openDashboardSearch(){
+ if(loading)return;
+ if(document.querySelector('dialog[open]')?.id!=='search-dialog'&&document.querySelector('dialog[open]'))return;
+ $('dashboard-search').value='';updateDashboardSearch();if(!$('search-dialog').hasAttribute('open'))$('search-dialog').showModal();$('dashboard-search').focus();
+}
+$('global-search-launch').onclick=openDashboardSearch;
+$('dashboard-search').addEventListener('input',updateDashboardSearch);
+$('search-dialog').addEventListener('keydown',event=>{
+ const results=[...$('dashboard-search-results').querySelectorAll('[data-search-route]')];
+ if(!['ArrowDown','ArrowUp','Enter'].includes(event.key))return;
+ const index=results.indexOf(document.activeElement);
+ if(event.key==='Enter'&&document.activeElement===$('dashboard-search')){event.preventDefault();results[0]?.click();return;}
+ if(event.key==='Enter')return;
+ event.preventDefault();if(event.key==='ArrowUp'&&index<=0)$('dashboard-search').focus();else results[Math.min(results.length-1,Math.max(0,index+(event.key==='ArrowDown'?1:-1)))]?.focus();
+});
+$('search-dialog').addEventListener('click',event=>{
+ const result=event.target.closest('[data-search-route]');if(!result)return;
+ $('search-dialog').close();location.hash=result.dataset.searchRoute;
+ if(result.dataset.searchId)openEditor(result.dataset.searchKind,result.dataset.searchId);
+});
+document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openDashboardSearch();}});
 document.addEventListener('click',async e=>{
  const close=e.target.closest('[data-close]');if(close){$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='navigate-view'){location.hash=button.dataset.view;return;}
  if(action==='check-advisor'){advisorState.service='unknown';render();return;}
  if(action==='home-detail'){selectHomeDetail(button.dataset.detail);return;}
  if(action==='reveal-advisor')$('privacy-toggle').click();
