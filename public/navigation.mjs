@@ -32,3 +32,6 @@ export {calendarModel,renderCashCalendar,shiftCalendarDay};
 
 import {entryPresets,entryGroups,renderEntryHub} from './entry-hub.mjs';
 export {entryPresets,entryGroups,renderEntryHub};
+
+import {mountFinancialMotion,unmountFinancialMotion} from './motion.mjs';
+export {mountFinancialMotion,unmountFinancialMotion};
