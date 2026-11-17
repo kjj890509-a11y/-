@@ -91,6 +91,7 @@ export function validatePortfolio(input) {
         if (!validDate(row.dueDate)) throw new Error('올바른 카드 결제일을 입력해 주세요.');
         if (typeof row.paid !== 'boolean') throw new Error('결제 상태를 확인해 주세요.');
         result.dueDate = row.dueDate; result.paid = row.paid;
+        if(row.billingMonth!==undefined){if(!validMonth(row.billingMonth))throw new Error('카드 청구 월을 확인해 주세요.');result.billingMonth=row.billingMonth;}
       }
       if (kind === 'cashflow') {
         if (!Object.hasOwn(FLOW_LABELS,row.type)) throw new Error('월급·기타 수입·기타 지출 중 선택해 주세요.');
@@ -132,8 +133,9 @@ export function validatePortfolio(input) {
     const accountId=input.cards[index].cardAccountId;
     if(accountId===undefined||accountId==='')continue;
     if(typeof accountId!=='string'||!accountIds.has(accountId))throw new Error('청구 내역에 연결한 내 카드를 확인해 주세요.');
-    const key=accountId+':'+clean.cards[index].dueDate.slice(0,7);
-    if(bills.has(key))throw new Error('같은 카드의 같은 결제 월에는 청구 내역을 한 건만 등록할 수 있습니다.');bills.add(key);
+    clean.cards[index].billingMonth??=clean.cards[index].dueDate.slice(0,7);
+    const key=accountId+':'+clean.cards[index].billingMonth;
+    if(bills.has(key))throw new Error('같은 카드의 같은 청구 월에는 청구 내역을 한 건만 등록할 수 있습니다.');bills.add(key);
     clean.cards[index].cardAccountId=accountId;
   }
   count+=clean.cardAccounts.length;

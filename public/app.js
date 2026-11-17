@@ -505,7 +505,7 @@ async function submitRecord(e){
  const fromEntry=entryEditing,entryType=entryActiveType,recordKind=editorKind,keepEntering=fromEntry&&Boolean($('entry-continue')?.checked);
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
  for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
- if(recordKind==='cards'&&editingId){const link=portfolio.cards.find(row=>row.id===editingId)?.cardAccountId;if(link)record.cardAccountId=link;}
+ if(recordKind==='cards'&&editingId){const existing=portfolio.cards.find(row=>row.id===editingId);if(existing?.cardAccountId)record.cardAccountId=existing.cardAccountId;if(existing?.billingMonth)record.billingMonth=existing.billingMonth;}
  if(recordKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
  if(entryDetailEditing){
   try{const check=structuredClone(portfolio);check[recordKind][check[recordKind].findIndex(r=>r.id===record.id)]=record;const clean=validatePortfolio(check)[recordKind].find(r=>r.id===record.id);stageEntryRecord(entryManagerState,portfolio,recordKind,clean);entryDetailEditing=false;$('editor').close();render();toast('변경 목록에 담았어요. 변경 저장을 누르면 한 번에 반영됩니다.');}catch(error){$('form-error').textContent=error.message;}return;
