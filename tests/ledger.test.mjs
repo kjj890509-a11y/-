@@ -6,6 +6,7 @@ import {parseHTML} from 'linkedom';
 import {samplePortfolio,validatePortfolio,emptyPortfolio} from '../public/domain.mjs';
 import {defaultLedgerState,ledgerEntries,ledgerQuery,ledgerLayout,ledgerPage,validateLedgerPreferences,reorderLedgerRows} from '../public/ledger-model.mjs';
 import {mountLedger,unmountLedger,ledgerPreference} from '../public/ledger.mjs';
+import {freshRecordLayout} from '../public/record-layout-model.mjs';
 import {handlePreferences} from '../server/preferences.mjs';
 const today='2026-11-17',tick=()=>new Promise(setImmediate);
 function data(){return validatePortfolio(samplePortfolio(today));}
@@ -138,4 +139,12 @@ test('each saved view can be deleted directly, with inactive views isolated and 
  const t=await ui();for(const name of ['첫 보기','두 번째 보기']){t.click('[data-ledger-action="save-dialog"]');const form=t.root.querySelector('[data-ledger-save-form]');form.querySelector('[name="viewName"]').value=name;form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));await tick();}
  const [first,second]=t.state.savedViews;assert.equal(t.state.activeView,second.id);t.click(`[data-ledger-action="delete-view"][data-id="${first.id}"]`);await tick();assert.equal(t.state.savedViews.length,1);assert.equal(t.state.savedViews[0].id,second.id);assert.equal(t.state.activeView,second.id);assert.equal(t.bulk.length,0);assert.equal(t.saved.at(-1).savedViews.length,1);
  t.failSave();t.click(`[data-ledger-action="delete-view"][data-id="${second.id}"]`);await tick();assert.equal(t.state.savedViews.length,1);assert.equal(t.state.activeView,second.id);assert.match(t.root.querySelector('[role=alert]').textContent,/충돌/);unmountLedger(t.root);
+});
+test('custom record layouts persist by account, survive older preference clients, and never modify financial records',async()=>{
+ const {env:bindings,db}=env(),before=db.prepare('SELECT * FROM portfolios').get(),pref=preference();pref.tables['card-billing']={...freshRecordLayout(),columns:['amount','name','dueDate','paid','status'],rowOrder:['cardaccounts:b','cardaccounts:a']};pref.tables['entry-deposits']={...freshRecordLayout(),rowOrder:['deposits:demo-d2','deposits:demo-d1']};
+ assert.equal((await handlePreferences(request('PUT',{data:pref,revision:0}),bindings)).status,200);const legacy=structuredClone(pref);delete legacy.tables['card-billing'];delete legacy.tables['entry-deposits'];assert.equal((await handlePreferences(request('PUT',{data:legacy,revision:1}),bindings)).status,200);let saved=await(await handlePreferences(request(),bindings)).json();assert.deepEqual(saved.data.tables['card-billing'],pref.tables['card-billing']);assert.deepEqual(saved.data.tables['entry-deposits'],pref.tables['entry-deposits']);
+ const invalid=structuredClone(saved.data);invalid.tables['card-billing'].rowOrder=['loans:wrong'];assert.equal((await handlePreferences(request('PUT',{data:invalid,revision:2}),bindings)).status,400);saved.data.tables['card-billing']=freshRecordLayout();assert.equal((await handlePreferences(request('PUT',{data:saved.data,revision:2}),bindings)).status,200);saved=await(await handlePreferences(request(),bindings)).json();assert.deepEqual(saved.data.tables['card-billing'].rowOrder,[]);assert.deepEqual((await(await handlePreferences(request('GET',undefined,'second'),bindings)).json()).data.tables,{});assert.deepEqual(db.prepare('SELECT * FROM portfolios').get(),before);
+});
+test('ordinary table headers expose a separate drag handle and keyboard column movement',async()=>{
+ const t=await ui('deposits');const header=t.root.querySelector('th[data-column=name]');assert.ok(header.querySelector('.ledger-header-content'));assert.equal(header.querySelectorAll('.drag-nine-dots i').length,9);const event=new t.Event('keydown',{bubbles:true,cancelable:true});event.key='ArrowRight';header.querySelector('.ledger-header-handle').dispatchEvent(event);assert.equal(t.root.querySelector('th[data-column]').dataset.column,'institution');assert.equal(t.state.rowOrderDirty,true);unmountLedger(t.root);
 });

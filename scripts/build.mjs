@@ -14,12 +14,13 @@ const domain=(await readFile(path.join(root,'public/domain.mjs'),'utf8')).replac
 const api=(await readFile(path.join(root,'server/api.mjs'),'utf8')).replace(/^import .*;\n/m,'').replaceAll('export ','');
 const repayment=(await readFile(path.join(root,'public/repayment.mjs'),'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export ','');
 const advisor=(await readFile(path.join(root,'server/advisor.mjs'),'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export ','');
+const recordLayoutModel=(await readFile(path.join(root,'public/record-layout-model.mjs'),'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export ','');
 const ledgerModel=(await readFile(path.join(root,'public/ledger-model.mjs'),'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export ','');
 const preferences=(await readFile(path.join(root,'server/preferences.mjs'),'utf8')).replace(/^import .*;\n/gm,'').replaceAll('export ','');
 const worker=(await readFile(path.join(root,'server/worker.mjs'),'utf8')).replace(/^import .*;\n/gm,'');
 await mkdir(path.join(root,'dist/server'),{recursive:true});
 await mkdir(path.join(root,'dist/.openai'),{recursive:true});
-await writeFile(path.join(root,'dist/server/index.js'),domain+'\n'+ledgerModel+'\n'+preferences+'\n'+repayment+'\n'+api+'\n'+advisor+'\nconst assets='+JSON.stringify(assets)+';\n'+worker);
+await writeFile(path.join(root,'dist/server/index.js'),domain+'\n'+recordLayoutModel+'\n'+ledgerModel+'\n'+preferences+'\n'+repayment+'\n'+api+'\n'+advisor+'\nconst assets='+JSON.stringify(assets)+';\n'+worker);
 await cp(path.join(root,'.openai/hosting.json'),path.join(root,'dist/.openai/hosting.json'));
 await cp(path.join(root,'drizzle'),path.join(root,'dist/drizzle'),{recursive:true});
 console.log('Built Worker with '+Object.keys(assets).length+' local assets.');
