@@ -1,6 +1,7 @@
 export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cashflow', 'fixed'];
 export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직연금·퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
+export const isCardIncludedExpense = row => row.type==='expense'&&row.paymentSource==='card';
 export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], snapshots: [], loanPayments: [], dashboard: null });
 export function validateDashboard(input) {
   if (input === null || input === undefined) return null;
@@ -100,6 +101,8 @@ export function validatePortfolio(input) {
         result.type=row.type; result.repeat=row.repeat; result.date=row.date;
         if(row.includeInForecast!==undefined&&typeof row.includeInForecast!=='boolean')throw new Error('예상 계산 반영 여부를 확인해 주세요.');
         result.includeInForecast=row.includeInForecast??true;
+        if(row.paymentSource!==undefined&&!['account','card'].includes(row.paymentSource))throw new Error('지출 결제 방식을 선택해 주세요.');
+        result.paymentSource=row.type==='expense'?(row.paymentSource??'account'):'account';
       }
       if (kind === 'retirement') {
         if (!validDate(row.asOf)) throw new Error('퇴직연금·퇴직금 기준일을 입력해 주세요.');
@@ -198,7 +201,7 @@ export function eventsForMonth(data, month) {
     ...loanEventsForMonth(data,month),
     ...data.cards.filter(row => row.dueDate.startsWith(month)).map(row => ({id: row.id, name: row.name, date: row.dueDate, amount: row.amount, type: 'cards', paid: row.paid})),
     ...fixedForMonth(data,month).filter(row=>row.paymentSource==='account').map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'fixed',paid:false})),
-    ...cashflowForMonth(data,month).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
+    ...cashflowForMonth(data,month).filter(row=>!isCardIncludedExpense(row)).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
   ].sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
 export function cashflowForMonth(data,month,includeExcluded=false) {
@@ -212,7 +215,7 @@ export function retirementContributionsForMonth(data,month) {
 }
 export function monthlyFlow(data,month) {
   const records=cashflowForMonth(data,month);
-  const sum=type=>records.filter(row=>row.type===type).reduce((n,row)=>n+row.amount,0);
+  const sum=type=>records.filter(row=>row.type===type&&!isCardIncludedExpense(row)).reduce((n,row)=>n+row.amount,0);
   const salary=sum('salary'),otherIncome=sum('other_income'),otherExpense=sum('expense');
   const payments=eventsForMonth(data,month).filter(row=>['loans','cards'].includes(row.type)&&!row.paid).reduce((n,row)=>n+row.amount,0);
   const fixed=fixedForMonth(data,month),fixedCash=fixed.filter(row=>row.paymentSource==='account').reduce((n,row)=>n+row.amount,0),fixedCard=fixed.filter(row=>row.paymentSource==='card').reduce((n,row)=>n+row.amount,0);
@@ -324,7 +327,7 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate),events=[];
  for(let index=0;index<monthCount;index++) {
   const month=shiftMonth(firstMonth,index);
-  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
+  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate&&!isCardIncludedExpense(row))events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
   for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
   for(const row of loanMonths[index].details)if(row.date>startDate&&row.payment>0)events.push({date:row.date,name:row.name,kind:'loan',amount:row.payment,income:false,principal:row.principal,interest:row.interest});
   for(const row of retirementContributionsForMonth(data,month))if(row.date>startDate)events.push({...row,kind:'retirement',income:false});
