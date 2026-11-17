@@ -114,3 +114,13 @@ test('inline table CSV download respects the filtered rows and hidden amounts',a
  assert.ok(content.includes(state.data.deposits[0].name));assert.ok(content.includes('••••••'));
  assert.ok(!content.includes(String(state.data.deposits[0].balance)));assert.equal(state.writes,0);
 });
+
+test('calendar selects dates, filters and adjacent-month keyboard days without saving; add form uses the selected date',async()=>{
+ const {document,context,state,click,Event}=await start();
+ vm.runInContext("view='schedule';month='2028-02';render()",context);
+ click('[data-action="calendar-day"][data-date="2028-02-29"]');assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-02-29');
+ click('[data-action=calendar-filter][data-filter=expense]');assert.equal(document.querySelector('[data-action=calendar-filter][aria-pressed=true]').dataset.filter,'expense');
+ const key=new Event('keydown',{bubbles:true});key.key='ArrowRight';document.querySelector('[data-date="2028-02-29"][data-action=calendar-day]').dispatchEvent(key);
+ assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-03-01');
+ click('[data-action=calendar-add][data-type=expense]');assert.equal(document.querySelector('#field-date').value,'2028-03-01');assert.equal(state.writes,0);
+});

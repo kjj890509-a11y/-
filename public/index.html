@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#635bff"><meta name="description" content="나의 자산, 월별 예산과 미래의 월말을 한눈에. 개인 자산 대시보드 모아.">
-  <title>모아 — 나의 자산관리</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/dashboard.css"><link rel="stylesheet" href="/readability.css"><link rel="stylesheet" href="/workspace.css"><link rel="stylesheet" href="/design.css">
+  <meta name="theme-color" content="#303a37"><meta name="description" content="나의 자산, 월별 예산과 미래의 월말을 한눈에. 개인 자산 대시보드 모아.">
+  <title>모아 — 나의 자산관리</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/dashboard.css"><link rel="stylesheet" href="/readability.css"><link rel="stylesheet" href="/workspace.css"><link rel="stylesheet" href="/design.css"><link rel="stylesheet" href="/palette.css"><link rel="stylesheet" href="/calendar.css"><script src="/palette-init.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문 바로가기</a>
@@ -15,6 +15,7 @@
   </aside>
   <div class="app-shell">
     <header class="topbar"><button type="button" class="global-search-launch" id="global-search-launch" aria-haspopup="dialog" aria-controls="search-dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>메뉴·내역 검색</span><kbd>⌘ K</kbd></button><div class="breadcrumb"><strong id="breadcrumb">홈</strong></div><div class="topbar-right"><a href="#advisor" class="advisor-shortcut">AI 상담</a><span id="save-state" role="status"><i></i> 연결 중</span><button id="privacy-toggle" class="icon-button" aria-label="금액 숨기기" title="금액 숨기기"></button><button id="mobile-settings" class="icon-button" aria-label="백업 및 데이터 관리" title="백업 및 데이터 관리">⋯</button><div class="avatar" aria-label="개인 계정">MY</div></div></header>
+    <div id="palette-switcher" class="palette-switcher" aria-label="화면 색상 선택"></div>
     <main id="main" tabindex="-1"><div class="initial-loading"><span class="spinner"></span><p>자산 노트를 불러오고 있어요</p></div></main>
     <footer>모아 <span>·</span> 나의 자산을 한곳에.<span class="footer-right">모든 금액은 원화(KRW) 기준입니다.</span></footer>
   </div>
@@ -23,5 +24,5 @@
   <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="dialog-heading"><div><span class="eyebrow"></span><h2 id="settings-title">백업 및 데이터 관리</h2></div><button class="icon-button" data-close="settings-dialog" aria-label="닫기">✕</button></div><div class="settings-item"><div><h3>내 자산 백업</h3><p>전체 내역을 JSON 파일로 내려받습니다.<br>금융정보가 포함되므로 안전한 곳에 보관해 주세요.</p></div><button class="button secondary" id="export-data">내보내기 ↓</button></div><div class="settings-item"><div><h3>백업 복원</h3><p>모아에서 내보낸 백업 파일을 불러옵니다.<br>현재 내역은 백업 내역으로 교체됩니다.</p></div><button class="button secondary" id="import-data">불러오기 ↑</button><input id="import-file" type="file" accept="application/json,.json" hidden></div><div class="settings-item"><div><h3>예시로 둘러보기</h3><p>실제 내역을 바꾸지 않고 기능을 살펴보세요.</p></div><button class="button secondary" id="open-demo">예시 보기 ↗</button></div><p class="storage-note">내역은 로그인 계정별로 서버에 저장됩니다. 금융기관 자동 연동 없이 직접 입력하는 자산 노트입니다.</p></dialog>
   <dialog id="search-dialog" class="command-dialog" aria-labelledby="search-title"><div class="command-input-row"><label class="sr-only" id="search-title" for="dashboard-search">메뉴·내역 검색</label><input id="dashboard-search" type="search" autocomplete="off" placeholder="메뉴, 자산 이름, 금융기관 검색"><button type="button" class="icon-button" data-close="search-dialog" aria-label="검색 닫기">✕</button></div><div id="dashboard-search-results"></div><div class="command-footer"><span>↑ ↓ 이동 · Enter 선택</span><span>Esc 닫기</span></div></dialog>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/app.js"></script><script type="module" src="/palette.mjs"></script>
 </body></html>

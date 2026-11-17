@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -44,6 +44,7 @@ let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
+let calendarSelected='',calendarFilter='all';
 let chartHorizon=6,loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
 let advisorState;
@@ -390,17 +391,7 @@ function category(kind,{embedded=false}={}){
  return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div>${recordLedgerHost(kind)}<p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
 }
 function calendar(){
- const [year,m]=month.split('-').map(Number),today=todayKST();
- const events=eventsForMonth(portfolio,month),flow=monthlyFlow(portfolio,month);
- const start=new Date(Date.UTC(year,m-1,1)).getUTCDay(),days=new Date(Date.UTC(year,m,0)).getUTCDate();
- const count=Math.ceil((start+days)/7)*7;
- const cells=Array.from({length:count},(_,i)=>{
-  const day=i-start+1;if(day<1||day>days)return '<div class="calendar-cell muted"></div>';
-  const date=`${month}-${String(day).padStart(2,'0')}`,daily=events.filter(e=>e.date===date);
-  const income=daily.filter(e=>e.income).reduce((n,e)=>n+e.amount,0),expense=daily.filter(e=>!e.income&&!e.paid).reduce((n,e)=>n+e.amount,0);
-  return `<div class="calendar-cell ${date===today?'today':''}"><span class="day-number">${day}</span>${income?`<span class="calendar-amount calendar-income">+${compact(income)}원</span>`:''}${expense?`<span class="calendar-amount">−${compact(expense)}원</span>`:''}${daily.length?`${!income&&!expense?'<span class="calendar-amount">결제 완료</span>':''}<span class="calendar-count">${daily.length}건</span>`:''}</div>`;
- }).join('');
- return `${heading('입출금 달력','월급·기타 수입·지출과 대출·카드 결제일을 함께 확인하세요.',false)}${demoBanner()}<div class="calendar-layout"><section class="panel"><div class="panel-header"><h2>입출금 달력</h2>${monthToolbar()}</div><div class="calendar-grid">${['일','월','화','수','목','금','토'].map(d=>`<span class="calendar-day-label">${d}</span>`).join('')}${cells}</div><div class="calendar-key"><span><i></i>지출</span><span class="income-color">+ 수입</span></div></section><section class="panel"><div class="panel-header"><h2>${m}월 입출금 내역</h2><span class="calendar-event-count">${events.length}건</span></div><div class="schedule-summary"><span>총지출 예정</span><strong>${money(flow.expense)}</strong><p class="cash-hint">총수입 ${money(flow.income)} · 남는 금액 ${money(flow.balance)}</p></div><div class="calendar-list">${events.length?events.map(paymentRow).join(''):'<div class="empty-inline">이번 달 등록된 일정이 없어요.</div>'}</div><p class="panel-note">입력한 수입·지출 예정액 기준입니다. 대출 상환은 월 원금·이자의 반복 표시이며, 실제 입출금 여부와 잔액은 직접 확인해 주세요.</p></section></div>`;
+ return `${heading('입출금 달력','등록한 수입과 지출 계획을 날짜별로 확인하세요.',false)}${demoBanner()}${renderCashCalendar(portfolio,{month,selectedDate:calendarSelected,filter:calendarFilter,money,compact,toolbar:monthToolbar()})}`;
 }
 
 function render(){$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
@@ -490,6 +481,10 @@ document.addEventListener('click',async e=>{
  const close=e.target.closest('[data-close]');if(close){$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='calendar-day'){calendarSelected=button.dataset.date;render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();return;}
+ if(action==='calendar-filter'){calendarFilter=button.dataset.filter;render();document.querySelector(`[data-action="calendar-filter"][data-filter="${calendarFilter}"]`)?.focus();return;}
+ if(action==='calendar-all'){calendarSelected='all';render();document.querySelector('[data-action="calendar-all"]')?.focus();return;}
+ if(action==='calendar-add'){openEditor('cashflow');$('record-form').querySelector('button[type="submit"]').hidden=false;$('field-type').value=button.dataset.type;$('field-date').value=button.dataset.date;$('field-repeat').value='once';return;}
  if(action==='retry-views'){recordWorkspace.loaded=false;loadRecordPreferences();return;}
  if(action==='navigate-view'){location.hash=button.dataset.view;return;}
  if(action==='check-advisor'){advisorState.service='unknown';render();return;}
@@ -521,6 +516,11 @@ document.addEventListener('click',async e=>{
  if(action==='toggle-paid'){const next=structuredClone(portfolio),r=next.cards.find(r=>r.id===id);if(r){r.paid=!r.paid;try{await persist(next);toast(r.paid?'결제 완료로 표시했어요. 예금 잔액도 확인해 주세요.':'결제 예정으로 변경했어요.');}catch(error){toast(error.message);}}}
  if(action==='demo')startDemo();if(action==='exit-demo')exitDemo();if(action==='retry')loadData();
  if(['prev-month','next-month','this-month'].includes(action)){if(action==='this-month')month=todayKST().slice(0,7);else{const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+(action==='next-month'?1:-1),1));month=d.toISOString().slice(0,7);}render();}
+});
+document.addEventListener('keydown',e=>{
+ const cell=e.target.closest?.('[data-action="calendar-day"]');if(!cell)return;
+ const offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(offset===undefined)return;
+ e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
 });
 document.addEventListener('change',e=>{if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{

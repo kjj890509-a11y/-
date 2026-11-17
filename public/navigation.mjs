@@ -26,3 +26,6 @@ export {searchDashboard,renderDashboardSearch,tableCSV,enhanceTableExports};
 import {createLedgerWorkspace,ledgerState,ledgerPreference,renderLedger,mountLedger,unmountLedger} from './ledger.mjs';
 import {ledgerEntries,ledgerColumns,ledgerLabels,ledgerStatus,statusLabels,ledgerQuery,ledgerLayout,validateLedgerPreferences} from './ledger-model.mjs';
 export {createLedgerWorkspace,ledgerState,ledgerPreference,renderLedger,mountLedger,unmountLedger,ledgerEntries,ledgerColumns,ledgerLabels,ledgerStatus,statusLabels,ledgerQuery,ledgerLayout,validateLedgerPreferences};
+
+import {calendarModel,renderCashCalendar,shiftCalendarDay} from './calendar.mjs';
+export {calendarModel,renderCashCalendar,shiftCalendarDay};
