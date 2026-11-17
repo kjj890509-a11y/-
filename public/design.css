@@ -522,3 +522,15 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
 .ledger-header-handle { display:inline; margin-right:5px; padding:0; border:0; background:transparent; color:var(--muted); cursor:grab; touch-action:none; }
 .workspace-widget .widget-edit-actions { opacity:.65; transition:opacity .15s; }
 .workspace-widget:hover .widget-edit-actions,.workspace-widget:focus-within .widget-edit-actions { opacity:1; }
+
+/* Nine-dot handles distinguish moving a row from selecting or editing it. */
+.drag-nine-dots { display:grid; grid-template-columns:repeat(3,3px); grid-template-rows:repeat(3,3px); gap:2px; width:13px; height:13px; flex-shrink:0; }
+.drag-nine-dots i { width:3px; height:3px; border-radius:50%; background:currentColor; }
+.ledger-row-handle { display:inline-flex; align-items:center; justify-content:center; width:32px; height:36px; border:0; border-radius:4px; background:transparent; color:var(--muted); cursor:grab; touch-action:none; }
+.ledger-row-handle:hover,.ledger-row-handle:focus-visible { background:var(--soft-surface); color:var(--green-dark); }
+.ledger-row-handle:active { cursor:grabbing; }
+.ledger-table th.ledger-drag-cell,.ledger-table td.ledger-drag-cell { width:40px; min-width:40px; padding:4px; text-align:center; }
+.ledger-row-ghost { opacity:.35; }.ledger-row-chosen td { background:var(--soft-surface); }
+.ledger-header-handle { display:inline-flex; vertical-align:middle; }.ledger-column-handle { display:inline-flex; align-items:center; justify-content:center; }
+.workspace-widget-header>.widget-handle { order:-1; min-width:36px; min-height:36px; background:transparent; color:var(--muted); }
+.workspace-widget-header>div { flex:1; }

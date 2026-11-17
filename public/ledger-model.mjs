@@ -12,7 +12,7 @@ export const ledgerColumns={
  all:[['name','항목명'],['kind','카테고리'],['institution','금융기관'],['amount','금액'],['date','관련 일자'],['status','상태']],
  planned:[['date','예정일'],['name','항목명·메모'],['type','구분'],['amount','금액'],['status','예상 반영']]
 };
-export const defaultLedgerState=()=>({query:'',category:'all',status:'all',institution:'',type:'',repeat:'',start:'',end:'',min:'',max:'',sort:'newest',page:1,pageSize:20,selected:[],columns:[],hidden:[],widths:{},density:'comfortable',savedViews:[],viewName:'',error:''});
+export const defaultLedgerState=()=>({query:'',category:'all',status:'all',institution:'',type:'',repeat:'',start:'',end:'',min:'',max:'',sort:'newest',page:1,pageSize:20,selected:[],rowOrder:[],columns:[],hidden:[],widths:{},density:'comfortable',savedViews:[],viewName:'',error:''});
 export function ledgerEntries(data,scope,month=todayKST().slice(0,7)){
  const kinds=scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope];
  return kinds.flatMap(kind=>(data[kind]||[]).map((row,index)=>({row,kind,index,key:kind+':'+row.id,amount:kind==='stocks'?row.valuation:kind==='deposits'||kind==='loans'?row.balance:row.amount||0,date:kind==='cards'?row.dueDate:kind==='cashflow'?(row.occursOn||row.date):kind==='retirement'?row.asOf:kind==='deposits'?row.maturity:kind==='fixed'?paymentDate(month,row.day):kind==='loans'?row.nextPaymentDate||paymentDate(month,row.day):''}))).filter(entry=>scope!=='planned'||entry.row.repeat==='once'&&entry.row.type!=='salary');
@@ -35,14 +35,22 @@ export function ledgerQuery(entries,state,today=todayKST()){
   return (state.category==='all'||kind===state.category)&&(state.status==='all'||ledgerStatus(entry,today)===state.status)&&(!state.institution||(row.institution||'미등록')===state.institution)&&(!state.type||row.type===state.type||row.paymentSource===state.type||row.method===state.type)&&(!state.repeat||row.repeat===state.repeat)&&(!q||[row.name,row.institution,row.note].join(' ').normalize('NFKC').toLocaleLowerCase('ko-KR').includes(q))&&(!state.start||date&&date>=state.start)&&(!state.end||date&&date<=state.end)&&(state.min===''||amount>=Number(state.min))&&(state.max===''||amount<=Number(state.max));
  });
  const value=(entry,key)=>key==='date'?entry.date:key==='amount'?entry.amount:key==='profit'?entry.row.valuation-entry.row.cost:key==='payment'?entry.row.principal+entry.row.interest:entry.row[key]??'';
- const order=state.sort||'newest';
+ const order=state.sort||'newest',rank=new Map((state.rowOrder||[]).map((key,index)=>[key,index]));
  rows.sort((a,b)=>{
+  if(order==='manual')return (rank.get(a.key)??Number.MAX_SAFE_INTEGER)-(rank.get(b.key)??Number.MAX_SAFE_INTEGER);
   if(order==='newest'||order==='oldest')return order==='newest'?b.index-a.index:a.index-b.index;
   const [key,direction]=order.split(':');const va=value(a,key),vb=value(b,key);
   if(va===''||va===undefined)return vb===''?0:1;if(vb===''||vb===undefined)return -1;
   return (typeof va==='number'?va-vb:String(va).localeCompare(String(vb),'ko-KR'))*(direction==='desc'?-1:1);
  });
  return rows;
+}
+export function reorderLedgerRows(entries,state,visibleKeys,today=todayKST()){
+ const visible=ledgerPage(ledgerQuery(entries,state,today),state).rows.map(entry=>entry.key);
+ if(!Array.isArray(visibleKeys)||visibleKeys.length!==visible.length||new Set(visibleKeys).size!==visible.length||visibleKeys.some(key=>!visible.includes(key)))throw new Error('현재 페이지의 내역만 순서를 바꿀 수 있습니다.');
+ const all=ledgerQuery(entries,{...state,query:'',category:'all',status:'all',institution:'',type:'',repeat:'',start:'',end:'',min:'',max:''},today);
+ const selected=new Set(visible),queue=[...visibleKeys];
+ return all.map(entry=>selected.has(entry.key)?queue.shift():entry.key);
 }
 export function ledgerPage(entries,state){const pages=Math.max(1,Math.ceil(entries.length/state.pageSize)),page=Math.min(pages,Math.max(1,state.page));return {page,pages,rows:entries.slice((page-1)*state.pageSize,page*state.pageSize)};}
 export function ledgerLayout(scope,state){const defined=ledgerColumns[scope].map(([key])=>key);return [...state.columns.filter(key=>defined.includes(key)),...defined.filter(key=>!state.columns.includes(key))].filter(key=>!state.hidden.includes(key));}
@@ -53,6 +61,8 @@ export function validateLedgerPreferences(input){
   const item=input.tables[scope];if(item===undefined)continue;
   const columns=ledgerColumns[scope].map(([key])=>key);
   const list=value=>{if(!Array.isArray(value)||value.length>columns.length||new Set(value).size!==value.length||value.some(key=>!columns.includes(key)))throw new Error('열 설정을 확인해 주세요.');return value;};
+  const rowOrder=item.rowOrder??[];const allowedKinds=scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope];
+  if(!Array.isArray(rowOrder)||rowOrder.length>2000||new Set(rowOrder).size!==rowOrder.length||rowOrder.some(key=>typeof key!=='string'||!allowedKinds.some(kind=>key.startsWith(kind+':'))||!/^([a-z]+):[a-zA-Z0-9_-]{1,80}$/.test(key)))throw new Error('행 순서를 확인해 주세요.');
   const hidden=list(item.hidden||[]);if(hidden.length>=columns.length)throw new Error('최소 한 개의 열을 표시해 주세요.');
   const widths={};for(const key of columns)if(item.widths?.[key]!==undefined){const w=item.widths[key];if(!Number.isInteger(w)||w<90||w>600)throw new Error('열 너비를 확인해 주세요.');widths[key]=w;}
   if(![20,50,100].includes(item.pageSize)||!['compact','comfortable'].includes(item.density)||!Array.isArray(item.savedViews)||item.savedViews.length>12)throw new Error('보기 설정을 확인해 주세요.');
@@ -60,11 +70,11 @@ export function validateLedgerPreferences(input){
   const savedViews=item.savedViews.map(view=>{
    if(!view||typeof view.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(view.id)||ids.has(view.id)||typeof view.name!=='string'||!view.name.trim()||view.name.length>60)throw new Error('저장된 보기 이름을 확인해 주세요.');ids.add(view.id);
    const filters={};for(const [key,max]of [['query',200],['category',20],['status',30],['institution',500],['type',100],['repeat',20],['start',10],['end',10],['min',16],['max',16],['sort',50]]){const v=view.filters?.[key];if(typeof v!=='string'||v.length>max)throw new Error('저장된 필터를 확인해 주세요.');filters[key]=v;}
-   if(!['all',...KINDS].includes(filters.category)||!['all',...Object.keys(statusLabels)].includes(filters.status)||!['newest','oldest','amount:asc','amount:desc','date:asc','date:desc',...ledgerColumns[scope].flatMap(([key])=>[key+':asc',key+':desc'])].includes(filters.sort)||!['','once','monthly'].includes(filters.repeat)||[filters.min,filters.max].some(v=>v!==''&&(!/^\d+$/.test(v)||!Number.isSafeInteger(Number(v))))||[filters.start,filters.end].some(v=>v!==''&&!/^\d{4}-\d{2}-\d{2}$/.test(v))||filters.start&&filters.end&&filters.start>filters.end||filters.min!==''&&filters.max!==''&&Number(filters.min)>Number(filters.max))throw new Error('필터 범위를 확인해 주세요.');
+   if(!['all',...KINDS].includes(filters.category)||!['all',...Object.keys(statusLabels)].includes(filters.status)||!['manual','newest','oldest','amount:asc','amount:desc','date:asc','date:desc',...ledgerColumns[scope].flatMap(([key])=>[key+':asc',key+':desc'])].includes(filters.sort)||!['','once','monthly'].includes(filters.repeat)||[filters.min,filters.max].some(v=>v!==''&&(!/^\d+$/.test(v)||!Number.isSafeInteger(Number(v))))||[filters.start,filters.end].some(v=>v!==''&&!/^\d{4}-\d{2}-\d{2}$/.test(v))||filters.start&&filters.end&&filters.start>filters.end||filters.min!==''&&filters.max!==''&&Number(filters.min)>Number(filters.max))throw new Error('필터 범위를 확인해 주세요.');
    const layout=validateLedgerPreferences({version:1,tables:{[scope]:{...(view.layout||item),savedViews:[]}}}).tables[scope];
-   return {id:view.id,name:view.name.trim(),filters,layout:Object.fromEntries(['columns','hidden','widths','density','pageSize'].map(key=>[key,layout[key]]))};
+   return {id:view.id,name:view.name.trim(),filters,layout:Object.fromEntries(['columns','hidden','widths','density','pageSize','rowOrder'].map(key=>[key,layout[key]]))};
   });
-  tables[scope]={columns:list(item.columns||[]),hidden,widths,pageSize:item.pageSize,density:item.density,savedViews};
+  tables[scope]={rowOrder,columns:list(item.columns||[]),hidden,widths,pageSize:item.pageSize,density:item.density,savedViews};
  }
  return {version:1,tables};
 }

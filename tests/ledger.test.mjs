@@ -4,7 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
 import {parseHTML} from 'linkedom';
 import {samplePortfolio,validatePortfolio,emptyPortfolio} from '../public/domain.mjs';
-import {defaultLedgerState,ledgerEntries,ledgerQuery,ledgerLayout,ledgerPage,validateLedgerPreferences} from '../public/ledger-model.mjs';
+import {defaultLedgerState,ledgerEntries,ledgerQuery,ledgerLayout,ledgerPage,validateLedgerPreferences,reorderLedgerRows} from '../public/ledger-model.mjs';
 import {mountLedger,unmountLedger,ledgerPreference} from '../public/ledger.mjs';
 import {handlePreferences} from '../server/preferences.mjs';
 const today='2026-11-17',tick=()=>new Promise(setImmediate);
@@ -49,13 +49,13 @@ test('view API isolates accounts and revisions without altering financial data o
 });
 
 async function ui(scope='cards',portfolio=data()){
- const {document,Event}=parseHTML('<main><div id="ledger"></div></main>'),root=document.querySelector('#ledger'),state=defaultLedgerState(),entries=ledgerEntries(portfolio,scope,'2026-11');let sortable,saveError=false;
+ const {document,Event}=parseHTML('<main><div id="ledger"></div></main>'),root=document.querySelector('#ledger'),state=defaultLedgerState(),entries=ledgerEntries(portfolio,scope,'2026-11');let sortable,saveError=false;const sortables=new Map();
  const exported=[],edited=[],details=[],bulk=[],saved=[],feedback=[];
- const options={scope,today,money:String,cell:(entry,key)=>String(key==='name'?entry.row.name:key==='amount'?entry.amount:entry.row[key]||''),onEdit:e=>edited.push(e.key),onDetail:e=>details.push(e.key),onBulk:async(action,rows)=>bulk.push({action,keys:rows.map(e=>e.key)}),onExport:(rows,keys)=>exported.push({rows,keys}),onSave:async pref=>{if(saveError)throw new Error('충돌');saved.push(pref);},onFeedback:m=>feedback.push(m),loadSortable:async()=>({default:{create:(node,config)=>{sortable={node,config};return {destroy(){}};}}})};
+ const options={scope,today,money:String,cell:(entry,key)=>String(key==='name'?entry.row.name:key==='amount'?entry.amount:entry.row[key]||''),onEdit:e=>edited.push(e.key),onDetail:e=>details.push(e.key),onBulk:async(action,rows)=>bulk.push({action,keys:rows.map(e=>e.key)}),onExport:(rows,keys)=>exported.push({rows,keys}),onSave:async pref=>{if(saveError)throw new Error('충돌');saved.push(pref);},onFeedback:m=>feedback.push(m),loadSortable:async()=>({default:{create:(node,config)=>{sortable={node,config};sortables.set(config.handle,sortable);return {destroy(){}};}}})};
  mountLedger(root,entries,state,options);
  const click=selector=>{const el=root.querySelector(selector);assert.ok(el,selector);el.dispatchEvent(new Event('click',{bubbles:true,cancelable:true}));};
  const change=(selector,value)=>{const el=root.querySelector(selector);assert.ok(el,selector);if(el.type==='checkbox')el.checked=value;else el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
- return {root,document,Event,state,entries,click,change,exported,edited,details,bulk,saved,feedback,sortable:()=>sortable,failSave:()=>{saveError=true;}};
+ return {root,document,Event,state,entries,click,change,exported,edited,details,bulk,saved,feedback,sortable:handle=>handle?sortables.get(handle):sortable,failSave:()=>{saveError=true;}};
 }
 
 test('row selection, status filters, bulk actions, detail and export operate on the intended records',async()=>{
@@ -92,9 +92,45 @@ test('column drag, visibility, saved layouts and failure reporting are real stat
 });
 
 test('table headers can be dragged directly and keyboard resize keeps width within the allowed range',async()=>{
- const t=await ui();await tick();const drag=t.sortable();assert.equal(drag.config.handle,'.ledger-header-handle');
+ const t=await ui();await tick();const drag=t.sortable('.ledger-header-handle');assert.equal(drag.config.handle,'.ledger-header-handle');
  const name=drag.node.querySelector('[data-column="name"]');drag.node.append(name);drag.config.onEnd();await tick();assert.deepEqual(t.state.columns,['amount','date','status','name']);
  const handle=t.root.querySelector('[data-resize="amount"]'),event=new t.Event('keydown',{bubbles:true,cancelable:true});Object.defineProperty(event,'key',{value:'ArrowRight'});handle.dispatchEvent(event);
  assert.equal(t.state.widths.amount,170);assert.equal(t.root.querySelector('[data-resize="amount"]').getAttribute('aria-valuenow'),'170');
  t.state.widths.amount=600;const next=new t.Event('keydown',{bubbles:true,cancelable:true});Object.defineProperty(next,'key',{value:'ArrowRight'});t.root.querySelector('[data-resize="amount"]').dispatchEvent(next);assert.equal(t.state.widths.amount,600);unmountLedger(t.root);
+});
+
+
+test('row reordering preserves hidden and off-page entries and rejects foreign or duplicate keys',()=>{
+ const portfolio=data();portfolio.deposits=Array.from({length:45},(_,i)=>({...portfolio.deposits[0],id:'d'+i,name:'통장 '+i,institution:i%2?'은행 A':'은행 B'}));
+ const entries=ledgerEntries(portfolio,'deposits'),before=structuredClone(portfolio),state={...defaultLedgerState(),sort:'oldest',institution:'은행 A',page:2,pageSize:20};
+ const visible=ledgerPage(ledgerQuery(entries,state,today),state).rows.map(entry=>entry.key);assert.equal(visible.length,2);
+ const order=reorderLedgerRows(entries,state,[...visible].reverse(),today),hidden=entries.map(entry=>entry.key).filter(key=>!visible.includes(key));
+ assert.deepEqual(order.filter(key=>hidden.includes(key)),hidden);
+ assert.deepEqual(order.filter(key=>visible.includes(key)),[...visible].reverse());
+ assert.throws(()=>reorderLedgerRows(entries,state,[visible[0],visible[0]],today));
+ assert.throws(()=>reorderLedgerRows(entries,state,['deposits:foreign',visible[1]],today));
+ state.rowOrder=order;state.sort='manual';assert.deepEqual(ledgerQuery(entries,state,today).slice(-2).map(entry=>entry.key),[...visible].reverse());
+ assert.deepEqual(portfolio,before);
+});
+
+test('nine-dot row handles drag and keyboard reorder records, save the order and retain finance values',async()=>{
+ const portfolio=data(),before=structuredClone(portfolio),t=await ui('cards',portfolio);await tick();
+ const handles=t.root.querySelectorAll('.ledger-row-handle');assert.equal(handles.length,2);assert.equal(handles[0].querySelectorAll('.drag-nine-dots i').length,9);
+ const drag=t.sortable('.ledger-row-handle'),original=[...drag.node.querySelectorAll('[data-entry-key]')].map(node=>node.dataset.entryKey);
+ drag.node.prepend(drag.node.lastElementChild);drag.config.onEnd();await tick();
+ assert.equal(t.state.sort,'manual');assert.deepEqual(t.state.rowOrder,[...original].reverse());assert.equal(t.state.rowOrderDirty,true);
+ const handle=t.root.querySelector('.ledger-row-handle'),key=new t.Event('keydown',{bubbles:true,cancelable:true});Object.defineProperty(key,'key',{value:'ArrowDown'});handle.dispatchEvent(key);await tick();assert.deepEqual(t.state.rowOrder,original);
+ t.click('[data-ledger-action="persist"]');await tick();assert.deepEqual(t.saved[0].rowOrder,original);assert.equal(t.state.rowOrderDirty,false);
+ t.click('[data-ledger-action="export"]');assert.deepEqual(t.exported[0].rows.map(entry=>entry.key),original);
+ assert.deepEqual(portfolio,before);unmountLedger(t.root);
+});
+
+test('row order round-trips through account preferences and remains compatible with older view settings',async()=>{
+ const {env:bindings}=env(),pref=preference();pref.tables.deposits.rowOrder=['deposits:demo-d2','deposits:demo-d1'];
+ const response=await handlePreferences(request('PUT',{data:pref,revision:0}),bindings);assert.equal(response.status,200);
+ const loaded=await(await handlePreferences(request(),bindings)).json();assert.deepEqual(loaded.data.tables.deposits.rowOrder,pref.tables.deposits.rowOrder);
+ const {ledgerState,createLedgerWorkspace}=await import('../public/ledger.mjs');const workspace=createLedgerWorkspace();workspace.preferences=loaded.data;const restored=ledgerState(workspace,'deposits');assert.equal(restored.sort,'manual');assert.deepEqual(ledgerQuery(ledgerEntries(data(),'deposits'),restored).map(entry=>entry.key),pref.tables.deposits.rowOrder);
+ assert.deepEqual((await(await handlePreferences(request('GET',undefined,'second'),bindings)).json()).data.tables,{});
+ const legacy=preference();delete legacy.tables.deposits.rowOrder;assert.deepEqual(validateLedgerPreferences(legacy).tables.deposits.rowOrder,[]);
+ for(const invalid of [['cards:foreign'],['deposits:demo-d1','deposits:demo-d1'],['deposits:<img>'],Array.from({length:2001},(_,i)=>'deposits:d'+i)])assert.throws(()=>validateLedgerPreferences({version:1,tables:{deposits:{...pref.tables.deposits,rowOrder:invalid}}}));
 });
