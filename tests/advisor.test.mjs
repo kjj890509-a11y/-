@@ -93,7 +93,7 @@ test('provider authentication and quota errors do not echo key material',async()
  for(const status of [401,429,403]){
   const {env}=environment();
   const response=await handleAdvisor(request(),env,{fetchImpl:async()=>new Response(JSON.stringify({error:{message:fakeKey}}),{status})});
-  const message=await response.text();assert.ok(!message.includes(fakeKey));assert.match(message,status===401?/운영자/:status===403?/모델/:/한도/);
+  const message=await response.text();assert.ok(!message.includes(fakeKey));assert.match(message,status===401?/운영자/:status===403?/모델/:/요청/);
  }
 });
 test('an incomplete AI response cannot be treated as a completed recommendation',async()=>{
@@ -236,5 +236,14 @@ test('customer consultation stays unavailable when the operator connection is no
  assert.ok(document.querySelector('[data-advisor-consult]').disabled);
  assert.ok(document.querySelector('[data-action="check-advisor"]'));
  assert.equal(document.querySelector('input[type="password"]'),null);
- assert.match(document.querySelector('[data-advisor-service]').textContent,/준비하고/);
+ assert.match(document.querySelector('[data-advisor-service]').textContent,/설정되지 않았습니다/);
+});
+
+
+test('provider quota, rate, model and request-setting failures have distinct safe diagnostic codes',async()=>{
+ for(const [status,providerCode,expected]of [[401,'invalid_api_key','provider_auth_failed'],[403,'permission_denied','provider_access_denied'],[404,'model_not_found','provider_model_unavailable'],[429,'insufficient_quota','provider_quota_exhausted'],[429,'rate_limit_exceeded','provider_rate_limited'],[400,'invalid_request_error','provider_request_rejected']]){
+  const {env}=environment();
+  const response=await handleAdvisor(request(),env,{fetchImpl:async()=>new Response(JSON.stringify({error:{code:providerCode,message:fakeKey}}),{status})});
+  const body=await response.json();assert.equal(body.code,expected);assert.ok(!JSON.stringify(body).includes(fakeKey));assert.equal(response.status,expected==='provider_rate_limited'?429:503);
+ }
 });

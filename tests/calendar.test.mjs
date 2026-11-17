@@ -27,3 +27,12 @@ test('calendar exposes a selectable day, safe edit actions, empty-day registrati
  const masked=renderCashCalendar(data(),{month:'2028-02',selectedDate:'all',money:()=>'••••••',compact:()=>'••••'});assert.doesNotMatch(masked,/3,000,000|3000000|120,000|120000|80,000/);
  const empty=renderCashCalendar(emptyPortfolio(),{month:'2028-02',today:'2028-02-10',money,compact:money});assert.match(empty,/등록된 일정이 없어요/);
 });
+
+
+test('calendar category filters combine with status while the monthly financial summary stays unchanged',()=>{
+ const p=data(),before=structuredClone(p);
+ const paid=calendarModel(p,{month:'2028-02',selectedDate:'all',filter:'paid',category:'cards'});assert.deepEqual(paid.visible.map(row=>row.id),['paid']);
+ const none=calendarModel(p,{month:'2028-02',selectedDate:'all',filter:'income',category:'cards'});assert.equal(none.visible.length,0);assert.equal(none.flow.income,3000000);
+ const html=renderCashCalendar(p,{month:'2028-02',mode:'list',category:'cards',money,compact:money});const {document}=parseHTML(html);
+ assert.equal(document.querySelector('.cf-grid'),null);assert.equal(document.querySelectorAll('.cf-date-group').length,1);assert.equal(document.querySelectorAll('.cf-event').length,2);assert.ok(document.querySelector('[data-action=calendar-add]'));assert.deepEqual(p,before);
+});

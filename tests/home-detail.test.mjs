@@ -119,8 +119,19 @@ test('calendar selects dates, filters and adjacent-month keyboard days without s
  const {document,context,state,click,Event}=await start();
  vm.runInContext("view='schedule';month='2028-02';render()",context);
  click('[data-action="calendar-day"][data-date="2028-02-29"]');assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-02-29');
- click('[data-action=calendar-filter][data-filter=expense]');assert.equal(document.querySelector('[data-action=calendar-filter][aria-pressed=true]').dataset.filter,'expense');
+ const status=document.querySelector('#calendar-status');for(const option of status.querySelectorAll('option'))option.toggleAttribute('selected',option.value==='expense');status.dispatchEvent(new Event('change',{bubbles:true}));assert.equal(document.querySelector('#calendar-status').value,'expense');
  const key=new Event('keydown',{bubbles:true});key.key='ArrowRight';document.querySelector('[data-date="2028-02-29"][data-action=calendar-day]').dispatchEvent(key);
  assert.equal(document.querySelector('[data-action=calendar-day][aria-pressed=true]').dataset.date,'2028-03-01');
  click('[data-action=calendar-add][data-type=expense]');assert.equal(document.querySelector('#field-date').value,'2028-03-01');assert.equal(state.writes,0);
+});
+
+
+test('calendar category and list controls combine with status, month selection and reset without writing finance',async()=>{
+ const {document,context,state,click,Event}=await start();vm.runInContext("view='schedule';render()",context);
+ click('[data-action=calendar-category][data-category=cards]');click('[data-action=calendar-mode][data-mode=list]');
+ assert.equal(document.querySelector('.cf-grid'),null);assert.ok(document.querySelector('.cf-month-list'));
+ assert.ok([...document.querySelectorAll('.cf-event')].every(row=>row.dataset.kind==='cards'));
+ click('[data-action=calendar-reset]');assert.equal(document.querySelector('[data-action=calendar-category][aria-pressed=true]').dataset.category,'all');
+ const monthField=document.querySelector('#calendar-month');monthField.value='2028-02';monthField.dispatchEvent(new Event('change',{bubbles:true}));assert.equal(document.querySelector('#calendar-month').value,'2028-02');
+ click('[data-action=calendar-mode][data-mode=month]');assert.equal(document.querySelectorAll('.cf-day:not(.is-outside)').length,29);assert.equal(state.writes,0);
 });
