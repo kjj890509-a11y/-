@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS view_preferences (
+  user_id TEXT PRIMARY KEY NOT NULL,
+  data TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1
+);

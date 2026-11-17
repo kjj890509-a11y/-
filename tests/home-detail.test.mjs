@@ -56,9 +56,9 @@ test('inline account search and editors use the selected category; masking survi
  const {document,Event,select,click}=await start();
  select('deposits');const search=document.querySelector('#record-search');
  search.value='no-match-987';search.dispatchEvent(new Event('input',{bubbles:true}));
- assert.match(document.querySelector('#records-body').textContent,/검색 결과가 없습니다/);
- select('net');select('deposits');assert.ok(document.querySelector('#records-body [data-action="edit"]'));
- click('#records-body [data-action="edit"]');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);assert.ok(document.querySelector('#field-maturity'));
+ assert.match(document.querySelector('#records-body').textContent,/조건에 맞는 내역이 없습니다/);
+ select('net');select('deposits');click('[data-ledger-action="reset"]');assert.ok(document.querySelector('#records-body [data-ledger-action="edit"]'));
+ click('#records-body [data-ledger-action="edit"]');assert.equal(document.querySelector('#editor').hasAttribute('open'),true);assert.ok(document.querySelector('#field-maturity'));
  click('[data-close="editor"]');click('.home-detail-heading [data-action="add"]');assert.ok(document.querySelector('#field-maturity'));
  click('[data-close="editor"]');document.querySelector('#privacy-toggle').onclick();
  assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'deposits');
@@ -71,7 +71,7 @@ test('inline debt filters, forecast and card updates retain the selected home de
  const {document,Event,context,state,select,click}=await start();
  select('debt');assert.ok(document.querySelector('#loan-forecast-select'));
  const search=document.querySelector('#record-search');search.value='no loan match';search.dispatchEvent(new Event('input',{bubbles:true}));
- assert.match(document.querySelector('#loan-list').textContent,/검색 결과/);
+ assert.match(document.querySelector('[data-ledger-scope="loans"] #records-body').textContent,/조건에 맞는 내역이 없습니다/);
  select('net');select('debt');click('[data-action="loan-forecast"]');
  assert.equal(context.location.hash,'#overview');assert.ok(document.querySelector('.home-stat[aria-pressed="true"][data-detail="debt"]'));
  const before=domain.totals(state.data).cards;click('#home-dashboard [data-action="toggle-paid"]');await tick();
@@ -87,7 +87,7 @@ test('monthly detail includes salaries and expenses, and empty categories remain
  assert.notEqual(document.querySelector('.home-detail-table h2').textContent,first);
  assert.equal(document.querySelector('.home-stat[aria-pressed="true"]').dataset.detail,'cashflow');
  const empty=await start(domain.emptyPortfolio());empty.select('deposits');
- assert.match(empty.document.querySelector('#home-dashboard').textContent,/아직 등록된/);
+ assert.match(empty.document.querySelector('#home-dashboard').textContent,/조건에 맞는 내역이 없습니다/);
  assert.ok(empty.document.querySelector('#home-dashboard [data-action="add"][data-kind="deposits"]'));
  empty.select('debt');assert.match(empty.document.querySelector('#home-dashboard').textContent,/미결제 카드대금이 없습니다/);
 });

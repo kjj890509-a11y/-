@@ -194,3 +194,13 @@ test('the live app saves the dashboard envelope and restores it without writing 
  assert.equal(stored.dashboard.widgets.at(-1).metric,'interest');assert.equal(stored.dashboard.widgets.at(-1).bank,'신한은행');
  assert.equal(stored.dashboard.period.preset,'custom');assert.deepEqual(stored.snapshots,before.snapshots);
 });
+
+test('dashboard can be dragged directly, resized and duplicated without entering edit mode first',async()=>{
+ const h=harness(),original=h.ids();await tick();assert.equal(h.state.editing,false);assert.ok(h.root.querySelector('.widget-handle'));
+ const grid=h.root.querySelector('[data-workspace-grid]');grid.append(grid.firstElementChild);h.sortOptions.onEnd();await tick();
+ assert.equal(h.state.editing,true);assert.deepEqual(h.ids(),[...original.slice(1),original[0]]);assert.equal(h.saves,0);
+ h.click('[data-board-action=width]');assert.equal(h.state.draft.widgets[0].width,'wide');
+ h.click('[data-board-action=duplicate]');assert.equal(h.ids().length,original.length+1);assert.equal(new Set(h.ids()).size,h.ids().length);
+ h.click('[data-board-action=cancel]');assert.deepEqual(h.ids(),original);assert.equal(h.data.dashboard,null);
+ h.click('[data-board-action=width]');assert.equal(h.state.editing,true);h.click('[data-board-action=save]');await tick();assert.equal(h.saves,1);assert.equal(h.data.dashboard.widgets[0].width,'wide');
+});

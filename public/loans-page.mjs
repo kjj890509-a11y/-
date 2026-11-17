@@ -20,7 +20,7 @@ export function renderLoanCards(loans, {formatMoney}) {
   }).join('');
 }
 
-export function renderLoanManagement(portfolio, {formatMoney, query = '', heading = '', demoBanner = '', forecastPanel = ''}) {
+export function renderLoanManagement(portfolio, {formatMoney, query = '', heading = '', demoBanner = '', forecastPanel = '', recordsTable = ''}) {
   const money = value => esc(formatMoney(value)), t = totals(portfolio), active = portfolio.loans.filter(loan => loan.balance > 0);
   const weighted = t.loans ? portfolio.loans.reduce((sum, loan) => sum + loan.balance * loan.rate, 0) / t.loans : 0;
   const asOf = todayKST(), annual = loanSchedule(portfolio, asOf.slice(0,7), 12, asOf).reduce((sum, row) => sum + row.interest, 0);
@@ -31,7 +31,7 @@ export function renderLoanManagement(portfolio, {formatMoney, query = '', headin
     <div class="loan-overview-payment"><div class="with-info"><span>매월 상환액</span><button type="button" class="info-button" data-info-template aria-haspopup="dialog" aria-label="대출 요약 계산 기준 상세 보기">i<template><dl><dt>상환 원금 합계</dt><dd>${money(t.monthlyPrincipal)}</dd><dt>이번 납부 이자 합계</dt><dd>${money(t.monthlyInterest)}</dd><dt>앞으로 12개월 예상 이자</dt><dd>${money(annual)}</dd><dt>잔액 가중평균 연 이율</dt><dd>${weighted.toFixed(2)}%</dd></dl><p>매월 상환액은 등록한 원금과 이번 납부 이자의 합계입니다. 월별 예상에서는 남은 잔액과 연 이율로 이자를 다시 계산합니다. 실제 상환일이 지나도 등록 잔액은 자동으로 바뀌지 않습니다.</p></template></button></div><strong>${money(t.monthlyPrincipal + t.monthlyInterest)}</strong></div>
     <div class="loan-overview-interest"><span>대출 월 이자 합계</span><strong>${money(t.monthlyInterest)}</strong><p>앞으로 12개월 ${money(annual)}</p></div>
   </section>
-  <section class="loan-accounts" aria-labelledby="loan-accounts-title"><div class="loan-accounts-toolbar"><h2 id="loan-accounts-title">내 대출 <span id="loans-count" aria-live="polite">${filtered.length}건</span></h2><input class="search-input" id="record-search" type="search" placeholder="대출명 · 은행 검색" aria-label="대출 검색" value="${esc(query)}"></div>
+  ${recordsTable}<section class="loan-accounts" aria-labelledby="loan-accounts-title"><div class="loan-accounts-toolbar"><h2 id="loan-accounts-title">내 대출 <span id="loans-count" aria-live="polite">${filtered.length}건</span></h2><input class="search-input" id="loan-card-search" type="search" placeholder="대출명 · 은행 검색" aria-label="대출 검색" value="${esc(query)}"></div>
     ${portfolio.loans.length ? `<div class="loan-account-list" id="loan-list">${renderLoanCards(filtered, {formatMoney}) || '<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>'}</div>` : '<div class="panel empty-state"><h3>아직 등록한 대출이 없어요</h3><p>잔액, 연이율과 남은 상환 횟수를 입력하면 원금·이자를 자동 계산합니다.</p><button type="button" class="button primary" data-action="add" data-kind="loans">대출 추가하기</button></div>'}
   </section>${forecastPanel}`;
 }
