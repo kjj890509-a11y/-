@@ -36,3 +36,14 @@ test('calendar category filters combine with status while the monthly financial 
  const html=renderCashCalendar(p,{month:'2028-02',mode:'list',category:'cards',money,compact:money});const {document}=parseHTML(html);
  assert.equal(document.querySelector('.cf-grid'),null);assert.equal(document.querySelectorAll('.cf-date-group').length,1);assert.equal(document.querySelectorAll('.cf-event').length,2);assert.ok(document.querySelector('[data-action=calendar-add]'));assert.deepEqual(p,before);
 });
+
+
+test('compact month cells aggregate every matching transaction while details retain all rows and paid cards stay separate',()=>{
+ const p=data();p.cashflow.push({id:'extra',type:'other_income',name:'추가 수입',date:'2028-02-29',repeat:'once',amount:100000,includeInForecast:true});
+ const html=renderCashCalendar(p,{month:'2028-02',today:'2028-02-10',selectedDate:'2028-02-29',money,compact:value=>value.toLocaleString('ko-KR')});
+ const {document}=parseHTML(html),day=document.querySelector('[data-action=calendar-day][data-date="2028-02-29"]');
+ assert.equal(day.querySelector('[data-day-income]').textContent,'+3,100,000원');assert.equal(day.querySelector('[data-day-expense]').textContent,'−200,000원');assert.equal(day.querySelectorAll('.cf-day-total').length,2);assert.equal(day.querySelector('.cf-entry'),null);
+ assert.equal(document.querySelectorAll('.cf-event').length,5);assert.equal(day.querySelector('.cf-count').textContent,'5건');
+ const {document:paid}=parseHTML(renderCashCalendar(p,{month:'2028-02',selectedDate:'2028-02-29',filter:'paid',money,compact:String}));
+ const paidDay=paid.querySelector('[data-action=calendar-day][data-date="2028-02-29"]');assert.equal(paidDay.querySelector('[data-day-expense]'),null);assert.match(paidDay.querySelector('.cf-day-paid').textContent,/완료/);
+});
