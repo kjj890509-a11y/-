@@ -8,7 +8,7 @@ const money=value=>new Intl.NumberFormat('ko-KR').format(value)+'원';
 const format={money,compact:money,svg:()=>'',chart:'',today:'2026-11-16'};
 
 test('every existing destination remains reachable in one of six navigation groups',()=>{
- const expected=['records','overview','statistics','advisor','budget','forecast','payday','planned','history','stocks','loans','retirement','deposits','cards','fixed','cashflow','schedule','assets','workspace'];
+ const expected=['entry','records','overview','statistics','advisor','budget','forecast','payday','planned','history','stocks','loans','retirement','deposits','cards','fixed','cashflow','schedule','assets','workspace'];
  assert.equal(navigationGroups.length,6);
  const routes=navigationGroups.flatMap(group=>group.views);
  assert.equal(new Set(routes).size,expected.length);

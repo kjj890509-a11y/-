@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -44,6 +44,7 @@ let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
+let entryEditing=false,entryActiveType='salary',entryDrafts={},entrySession=[];
 let calendarSelected='',calendarFilter='all',calendarCategory='all',calendarMode='month';
 let chartHorizon=6,loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
@@ -394,7 +395,7 @@ function calendar(){
  return `${heading('입출금 달력','등록한 수입과 지출 계획을 날짜별로 확인하세요.',false)}${demoBanner()}${renderCashCalendar(portfolio,{month,selectedDate:calendarSelected,filter:calendarFilter,category:calendarCategory,mode:calendarMode,money,compact})}`;
 }
 
-function render(){$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
+function render(){$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner()}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -406,6 +407,7 @@ const fields={
 };
 function openEditor(kind,id){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
+ entryEditing=false;
  if(!KINDS.includes(kind)){showAddMenu();return;}
  editorKind=kind;editingId=id||null;
  const row=id?portfolio[kind].find(r=>r.id===id):{};
@@ -434,20 +436,59 @@ function showAddMenu(){
  $('form-fields').innerHTML=`<div class="add-menu full-width">${(view==='assets'?['deposits','stocks','retirement']:KINDS).map(k=>`<button type="button" class="button secondary" data-action="choose-kind" data-kind="${k}">${svg(k)}${navLabels[k]}<span>↗</span></button>`).join('')}</div>`;
  $('record-form').onsubmit=e=>e.preventDefault();$('record-form').querySelector('button[type="submit"]').hidden=true;openDialog('editor');
 }
+function rememberEntryDraft(){
+ if(!entryEditing)return;
+ entryDrafts[entryActiveType]=Object.fromEntries(fields[editorKind].map(([key])=>[key,$('field-'+key)?.value??'']));
+}
+function setEntryField(key,value){
+ const field=$('field-'+key);if(!field)return;
+ if(field.tagName==='SELECT')for(const option of field.querySelectorAll('option'))option.toggleAttribute('selected',option.value===String(value));
+ field.value=String(value);
+}
+function startEntryEditor(type,{capture=true,message=''}={}){
+ if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
+ const preset=entryPresets.find(p=>p.id===type);if(!preset)return;
+ if(capture&&entryEditing&&$('editor').open)rememberEntryDraft();
+ entryEditing=false;if($('editor').open)$('editor').close();
+ entryActiveType=type;month=todayKST().slice(0,7);openEditor(preset.kind);entryEditing=true;
+ $('editor-title').textContent=preset.label+' 등록';
+ if(preset.kind==='cashflow')$('field-type').closest('.field').hidden=true;
+ const defaults={...preset.defaults};if(preset.future)defaults.date=shiftCalendarDay(todayKST(),1);
+ for(const [key,value]of Object.entries({...defaults,...entryDrafts[type]}))setEntryField(key,value);
+ const controls=document.createElement('div');controls.className='entry-editor-controls full-width';
+ controls.innerHTML=`<label for="entry-type">입력할 내역<select id="entry-type">${entryGroups.map(group=>`<optgroup label="${group.label}">${entryPresets.filter(p=>p.group===group.id).map(p=>`<option value="${p.id}" ${p.id===type?'selected':''}>${p.label}</option>`).join('')}</optgroup>`).join('')}</select></label><label class="entry-continue-label"><input type="checkbox" id="entry-continue" checked>저장 후 계속 입력</label>`;
+ $('form-fields').prepend(controls);
+ if(message){const note=document.createElement('p');note.className='entry-save-message full-width';note.setAttribute('role','status');note.textContent=message;controls.after(note);}
+ const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.textContent='저장하고 다음 입력';
+ if(preset.kind==='loans')syncLoanPlan();else syncRetirementContribution();
+ $('field-name')?.focus();
+}
 async function submitRecord(e){
  e.preventDefault();if(saving)return;
+ const fromEntry=entryEditing,entryType=entryActiveType,recordKind=editorKind,keepEntering=fromEntry&&Boolean($('entry-continue')?.checked);
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
- for(const [key,,type]of fields[editorKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
- if(editorKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
- const next=structuredClone(portfolio);const i=next[editorKind].findIndex(r=>r.id===editingId);if(i>=0)next[editorKind][i]=record;else next[editorKind].push(record);
- const submit=e.target.querySelector('button[type="submit"]');submit.disabled=true;$('form-error').textContent='';
- try{await persist(next);$('editor').close();toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');}catch(error){$('form-error').textContent=error.message;}finally{submit.disabled=false;}
+ for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
+ if(recordKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
+ const next=structuredClone(portfolio);const i=next[recordKind].findIndex(r=>r.id===editingId);if(i>=0)next[recordKind][i]=record;else next[recordKind].push(record);
+ const submit=e.target.querySelector('button[type="submit"]'),disabled=fromEntry?[...e.target.querySelectorAll('input,select,textarea,button')].map(el=>[el,el.disabled]):[[submit,submit.disabled]];
+ if(fromEntry)rememberEntryDraft();for(const [el]of disabled)el.disabled=true;$('form-error').textContent='';
+ try{
+  await persist(next);
+  const stillOpen=$('editor').open;entryEditing=false;$('editor').close();
+  if(fromEntry){
+   delete entryDrafts[entryType];entrySession=[{kind:recordKind,id:record.id,label:entryPresets.find(p=>p.id===entryType).label},...entrySession].slice(0,30);
+   if(view==='entry')render();
+   if(keepEntering&&stillOpen)startEntryEditor(entryType,{capture:false,message:(demo?'예시 내역 · ':'')+record.name+' 저장 완료. 다음 내역을 입력하세요.'});
+  }
+  toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');
+ }catch(error){$('form-error').textContent=error.message;}finally{for(const [el,wasDisabled]of disabled)if(el.isConnected)el.disabled=wasDisabled;}
 }
-function startDemo(){workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();
+
+function startDemo(){entrySession=[];entryDrafts={};entryEditing=false;workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();
  if(!demo){realData=portfolio;realRevision=revision;demo=true;portfolio=validatePortfolio(samplePortfolio());}
  loading=false;view='overview';location.hash='overview';$('settings-dialog').close();status('예시 보기 중');render();
 }
-async function exitDemo(){workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
+async function exitDemo(){entrySession=[];entryDrafts={};entryEditing=false;workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
 function downloadTable(csv,title){
  if(!csv){toast('내려받을 내역이 없습니다.');return;}
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -478,9 +519,10 @@ $('search-dialog').addEventListener('click',event=>{
 });
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openDashboardSearch();}});
 document.addEventListener('click',async e=>{
- const close=e.target.closest('[data-close]');if(close){$(close.dataset.close).close();return;}
+ const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='entry-start'){startEntryEditor(button.dataset.entryType);return;}
  if(action==='calendar-day'){calendarSelected=button.dataset.date;calendarMode='month';render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();return;}
  if(action==='calendar-mode'){calendarMode=button.dataset.mode==='list'?'list':'month';render();document.querySelector(`[data-action="calendar-mode"][data-mode="${calendarMode}"]`)?.focus();return;}
  if(action==='calendar-category'){calendarCategory=button.dataset.category;render();document.querySelector(`[data-action="calendar-category"][data-category="${calendarCategory}"]`)?.focus();return;}
@@ -525,7 +567,7 @@ document.addEventListener('keydown',e=>{
  const offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(offset===undefined)return;
  e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
 });
-document.addEventListener('change',e=>{if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
+document.addEventListener('change',e=>{if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
  if(e.target.id==='field-monthlyContribution')syncRetirementContribution();
  if(['field-balance','field-rate','field-remainingMonths','field-graceMonths','field-principal','field-day'].includes(e.target.id))syncLoanPlan();
@@ -549,5 +591,6 @@ $('import-file').onchange=async e=>{
   $('settings-dialog').close();if(await confirmAction('백업 내역으로 교체할까요?',`현재 내역을 지우고 백업 파일의 ${count}건으로 교체합니다. 기존 내역이 필요하면 취소 후 먼저 내보내 주세요.`,'교체하기')){await persist(data);toast(`${count}건의 내역을 복원했어요.`);}
  }catch(error){toast(error instanceof SyntaxError?'올바른 JSON 백업 파일을 선택해 주세요.':error.message);}
 };
-function setView(){const hash=location.hash.slice(1);view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
+$('editor').addEventListener('cancel',()=>{if(entryEditing){rememberEntryDraft();entryEditing=false;}});
+function setView(){const hash=location.hash.slice(1);if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
 window.addEventListener('hashchange',setView);setView();renderNav();loadData();
