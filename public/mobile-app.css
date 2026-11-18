@@ -1,5 +1,5 @@
 /* Mobile composition follows the inspected KakaoBank home, Accounts and account-detail screens. */
-body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;--m-amount:16px;--m-balance-size:28px;--m-home-amount:20px;--m-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;--m-ink:#2f2f2f;--m-muted:#626a71;--m-canvas:#ffffff;--m-yellow:#efefef;--m-mint:#ffffff;--m-orange:#ffffff;--m-blue:#ffffff;--m-stone:#ffffff;--m-line:#e6e9ed;--m-surface:#fff;--m-soft:#f7f8fa;--m-action:#2863d9;--m-action-hover:#2056c1;--m-selection:#e9f2ff;--m-selection-ink:#244fa7;--m-selection-border:#b8d1fc;--m-gutter:16px;--m-radius:20px;--m-inner:16px;--m-shadow:0 2px 8px #1d263b03;--m-frame-width:480px;--green:#2f2f2f;--chart-secondary:#7d858d;color:var(--m-ink);background:var(--m-canvas);font-family:var(--m-font);font-size:var(--m-body);line-height:1.5;-webkit-tap-highlight-color:transparent}
+body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;--m-amount:16px;--m-balance-size:28px;--m-home-amount:20px;--m-font:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;--m-ink:#2f2f2f;--m-muted:#626a71;--m-canvas:#ffffff;--m-yellow:#efefef;--m-mint:#ffffff;--m-orange:#ffffff;--m-blue:#ffffff;--m-stone:#ffffff;--m-line:#e6e9ed;--m-surface:#fff;--m-soft:#f7f8fa;--m-action:var(--brand-accent);--m-action-hover:var(--brand-accent-hover);--m-selection:var(--brand-accent-soft);--m-selection-ink:var(--brand-ink);--m-selection-border:var(--brand-accent-border);--m-gutter:16px;--m-radius:20px;--m-inner:16px;--m-shadow:0 2px 8px #1d263b03;--m-frame-width:480px;--green:#2f2f2f;--chart-secondary:#7d858d;color:var(--m-ink);background:var(--m-canvas);font-family:var(--m-font);font-size:var(--m-body);line-height:1.5;-webkit-tap-highlight-color:transparent}
 .mobile-app .sidebar,.mobile-app .topbar,.mobile-app .app-shell>footer{display:none!important}
 .mobile-app .app-shell{margin:0!important;min-width:0!important;width:100%}
 .mobile-app #main{padding:0!important;margin:0 auto!important;max-width:var(--m-frame-width)!important;min-height:100dvh;outline:0;background:var(--m-canvas)}
@@ -132,7 +132,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-days{row-gap:2px;padding-top:8px}
 .mobile-app .m-days>button{position:relative;min-height:44px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:var(--m-label)}
 .mobile-app .m-days>button>span{height:28px;width:28px;display:flex;align-items:center;justify-content:center;border-radius:50%}
-.mobile-app .m-days>button.is-selected>span{background:var(--m-action);color:#fff;font-weight:700}
+.mobile-app .m-days>button.is-selected>span{background:var(--m-action);color:var(--brand-ink);font-weight:700}
 .mobile-app .m-days>button[aria-current=date]:not(.is-selected)>span{box-shadow:inset 0 0 0 1px #c9cdd2}
 .mobile-app .m-days i{height:4px;display:flex;gap:3px}
 .mobile-app .m-days i.has-income:before,.mobile-app .m-days i.has-expense:after{content:"";width:4px;height:4px;border-radius:50%;background:#368a79}
@@ -187,7 +187,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-projection .m-facts{padding:0 0 14px}
 .mobile-app .m-empty{padding:32px 22px;color:#85898e;font-size:var(--m-label);text-align:center}
 .mobile-app .m-empty>p{margin-bottom:12px}
-.mobile-app .m-primary{display:inline-flex;align-items:center;justify-content:center;background:var(--m-action)!important;color:#fff!important;border-radius:8px;min-height:48px;padding:12px 22px;font-size:var(--m-body)!important}
+.mobile-app .m-primary{display:inline-flex;align-items:center;justify-content:center;background:var(--m-action)!important;color:var(--brand-ink)!important;border-radius:8px;min-height:48px;padding:12px 22px;font-size:var(--m-body)!important}
 .mobile-app .m-sync-line{font-size:11px;color:#626a71;text-align:center;padding:22px 18px 5px}
 .mobile-app .demo-bar{margin:0 18px 10px;font-size:var(--m-caption);display:flex;flex-wrap:wrap;gap:8px}
 /* Shared editors retain their existing validation and save path. */
@@ -205,7 +205,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app dialog .field-hint,.mobile-app dialog .form-notice{font-size:var(--m-caption);color:#777}
 .mobile-app dialog .dialog-actions{display:flex;position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom,0px));padding:16px 0 calc(8px + env(safe-area-inset-bottom,0px));background:#fff;margin:20px 0 0;z-index:5}
 .mobile-app dialog .dialog-actions>.button{min-height:50px;font-size:15px;border-radius:12px;flex:1;justify-content:center}
-.mobile-app dialog .button.primary{background:var(--m-action);color:#fff;border-color:var(--m-action);box-shadow:none}
+.mobile-app dialog .button.primary{background:var(--m-action);color:var(--brand-ink);border-color:var(--m-action);box-shadow:none}
 .mobile-app dialog .button.secondary{background:#f1f1f1;color:#444;border:0}
 .mobile-app dialog .dialog-actions .primary{flex:2}
 .mobile-app dialog .add-menu{display:grid;grid-template-columns:1fr;gap:8px}
@@ -219,7 +219,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-advisor .metric-box strong{font-size:19px;overflow-wrap:anywhere}
 .mobile-app .m-advisor .advisor-form{grid-template-columns:1fr}
 .mobile-app .m-advisor input,.mobile-app .m-advisor textarea,.mobile-app .m-advisor select{font-size:16px}
-.mobile-app .m-advisor .button.primary{background:var(--m-action);border-color:var(--m-action);color:#fff}
+.mobile-app .m-advisor .button.primary{background:var(--m-action);border-color:var(--m-action);color:var(--brand-ink)}
 .mobile-app .m-advisor .table-scroll{max-width:100%;overflow-x:auto}
 .mobile-app #toast{bottom:calc(83px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 32px);font-size:var(--m-label);z-index:200}
 @media(min-width:761px){body.mobile-app{--m-frame-width:393px;background:#eceef0}.mobile-app #main{box-shadow:0 0 0 1px #e5e5e5}.mobile-app .m-tabbar{border-left:1px solid #e5e5e5;border-right:1px solid #e5e5e5}}
@@ -279,7 +279,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 }
 .mobile-app #asset-advisor-form>button{
  flex:none;min-height:44px;padding:0 12px;border-radius:10px;background:var(--m-action);
- color:#fff;font-size:var(--m-label);font-weight:600;white-space:nowrap
+ color:var(--brand-ink);font-size:var(--m-label);font-weight:600;white-space:nowrap
 }
 .mobile-app .m-consult-data{
  margin-top:8px;padding:0;border:0;background:transparent;
@@ -439,7 +439,7 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
  position:fixed;right:max(16px,calc((100% - var(--m-frame-width))/2 + 16px));
  bottom:calc(98px + env(safe-area-inset-bottom,0px));z-index:61;
  display:grid;place-items:center;width:54px;height:54px;border-radius:18px;
- background:var(--m-action);color:#fff;box-shadow:0 5px 18px #2863d939
+ background:var(--m-action);color:var(--brand-ink);box-shadow:0 5px 18px #55442126
 }
 .mobile-app .m-asset-fab svg{width:26px;height:26px}
 .mobile-app .m-app:has(.m-asset-fab){padding-bottom:calc(168px + env(safe-area-inset-bottom,0px))}

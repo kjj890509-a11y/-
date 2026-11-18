@@ -3,7 +3,7 @@
   --spending-muted: var(--text-secondary);
   --spending-surface: var(--surface);
   --spending-line: var(--line);
-  --spending-accent: var(--primary, #635bff);
+  --spending-accent: var(--brand-accent);
 }
 .spending-toolbar {
   display: flex;

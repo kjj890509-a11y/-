@@ -23,9 +23,19 @@ test('every page has an initial guide, independent completion and an always avai
 });
 test('guidance adds the correct category, searches and edits an explicitly selected existing record, and never writes data',()=>{
  const data=samplePortfolio(),before=structuredClone(data),t=fixture(data);
+ assert.ok(t.document.querySelector('.coach-card header #coach-title'));
+ assert.ok(t.document.querySelector('.coach-card footer .coach-primary[data-coach="act"]'));
+ assert.equal(t.document.querySelectorAll('.coach-card .coach-primary').length,1);
  t.click('[data-coach="act"]');assert.deepEqual(t.calls,[['add','loans']]);assert.equal(t.document.querySelector('.coach-portal'),null);
  t.click('[data-coach-open]');t.click('[data-coach="next"]');t.click('[data-coach="act"]');const input=t.document.querySelector('[data-coach-search]');input.value=data.loans[1].name;input.dispatchEvent(new t.Event('input',{bubbles:true}));
  assert.equal(t.document.querySelectorAll('[data-coach-choice]').length,1);t.click('[data-coach-choice]');assert.deepEqual(t.calls[1],['edit','loans',data.loans[1].id]);assert.equal(t.document.querySelector('.coach-picker'),null);assert.deepEqual(data,before);t.cleanup();
+});
+test('spending guidance promotes next and finish when there is no editor action',()=>{
+ const t=fixture(emptyPortfolio(),{view:'spending'});
+ assert.equal(t.document.querySelector('.coach-card .coach-primary').dataset.coach,'next');
+ t.click('.coach-card .coach-primary');assert.match(t.document.querySelector('#coach-title').textContent,/월 단위/);
+ t.click('.coach-card .coach-primary');assert.equal(t.document.querySelector('.coach-card'),null);
+ assert.deepEqual(t.calls,[]);t.cleanup();
 });
 test('empty and masked portfolios stay truthful; record names are escaped and picker search survives a rerender',()=>{
  const e=fixture(emptyPortfolio());e.click('[data-coach="next"]');e.click('[data-coach="act"]');assert.match(e.document.querySelector('.coach-picker-empty').textContent,/아직 등록된 내역/);assert.equal(e.calls.length,0);e.cleanup();
