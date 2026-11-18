@@ -9,6 +9,10 @@ import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
+  home:'<path d="m3 10 9-7 9 7M5 9v11h14V9M10 20v-7h4v7"/>',
+  portfolio:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M9 5v5"/>',
+  journal:'<path d="M5 3h14v18l-3-2-4 2-4-2-3 2V3Z"/><path d="M8 8h8m-8 4h6"/>',
+  book:'<path d="M5 4h13a1 1 0 0 1 1 1v15H6a2 2 0 0 1-2-2V6a2 2 0 0 1 1-2ZM8 4v16m3-11h5"/>',
   overview:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   stocks:'<path d="m3 16 6-6 4 4 8-10M15 4h6v6"/><path d="M3 21h18"/>',
   loans:'<path d="m3 9 9-6 9 6M4 10h16M5 20h14M7 10v7m5-7v7m5-7v7M3 21h18"/>',
@@ -50,7 +54,7 @@ let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDr
 let entryManagerState=createEntryManagerState();
 let cardBillingState=createCardBillingState();
 let calendarSelected='',calendarFilter='all',calendarCategory='all',calendarMode='month';
-let chartHorizon=6,loanForecastId='',loanForecastPeriod='12';
+let chartHorizon=12,loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
 let advisorState;
 let workspaceState=createWorkspaceState();
@@ -60,7 +64,7 @@ function money(value, unit = '원') { return hidden ? '••••••' : `${
 function compact(value) { if(hidden)return '••••'; if(Math.abs(value)>=1e8)return `${(value/1e8).toFixed(2)}억`; if(Math.abs(value)>=1e4)return `${wonFormat.format(Math.round(value/1e4))}만`;return wonFormat.format(value); }
 function percent(value){return hidden?'••%':`${value>0?'+':''}${value.toFixed(2)}%`;}
 const rowsCount = () => KINDS.reduce((n,k)=>n+portfolio[k].length,0);
-const status = (label,error=false) => {document.querySelector('[data-mobile-sync]')?.replaceChildren(document.createTextNode(label));$('save-state').innerHTML=`<i style="background:${error?'#c48365':'#7da367'}"></i>${escapeHTML(label)}`;};
+const status = (label,error=false) => {document.querySelector('[data-mobile-sync]')?.replaceChildren(document.createTextNode(label));$('save-state').innerHTML=`<i style="background:${error?'#c48365':'var(--save-dot,#7da367)'}"></i>${escapeHTML(label)}`;};
 let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4200);}
 function openDialog(id){closeMonthPicker(document);const dialog=$(id);if(id==='editor')dialog.classList.toggle('history-editor',Boolean(dialog.querySelector('#plan-asOf')));enhanceEditorHelp(dialog);dialog.showModal();}
@@ -90,9 +94,34 @@ async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
     portfolio=validatePortfolio(data.data);revision=data.revision;status('서버 저장됨');if(renderAfter)render();
   }catch(error){status('저장 실패',true);throw error;}finally{saving=false;}
 }
+const desktopMenuIcons = {
+  overview:'home', entry:'edit', workspace:'overview', assets:'portfolio', records:'journal', spending:'book'
+};
+function desktopNav() {
+  return navigationGroups.map(group => {
+    const items = [group.defaultView, ...group.views.filter(key => key !== group.defaultView)];
+    const links = items.map(key => {
+      const current = key === view;
+      const label = key === 'overview' ? '홈' : navLabels[key];
+      const classes = key === group.defaultView ? 'desk-menu-item nav-link' : 'desk-menu-item';
+      return `<a href="#${key}" class="${classes}${current ? ' active' : ''}" ${current ? 'aria-current="page"' : ''}>${svg(desktopMenuIcons[key] || key)}<span>${label}</span></a>`;
+    }).join('');
+    return `<div class="desk-menu-group">${group.id === 'home' ? '' : `<div class="desk-menu-caption">${group.label}</div>`}${links}</div>`;
+  }).join('');
+}
 function renderNav(){
   const current=groupForView(view);
-  $('main-nav').innerHTML=navigationGroups.map(group=>`<a href="#${group.defaultView}" class="nav-link ${group.id===current.id?'active':''}" ${group.id===current.id?'aria-current="page"':''}>${svg(group.icon)}<span>${group.label}</span></a>${group.id===current.id?`<div class="sidebar-subnav" aria-label="${group.label} 하위 메뉴">${group.views.map(key=>`<button type="button" data-action="navigate-view" data-view="${key}" aria-pressed="${key===view}">${navLabels[key]}</button>`).join('')}</div>`:''}`).join('');
+  if (isMobileViewport(window,location) || window.matchMedia?.('(max-width: 760px)').matches) {
+    $('main-nav').innerHTML = navigationGroups.map(group => {
+      const active = group.id === current.id;
+      const groupLink = `<a href="#${group.defaultView}" class="nav-link ${active?'active':''}" ${active?'aria-current="page"':''}>${svg(group.icon)}<span>${group.label}</span></a>`;
+      if (!active) return groupLink;
+      const items = group.views.map(key => `<button type="button" data-action="navigate-view" data-view="${key}" aria-pressed="${key===view}">${navLabels[key]}</button>`).join('');
+      return groupLink + `<div class="sidebar-subnav" aria-label="${group.label} 하위 메뉴">${items}</div>`;
+    }).join('');
+  } else {
+    $('main-nav').innerHTML = desktopNav();
+  }
   $('breadcrumb').textContent=current.label;
   $('privacy-toggle').innerHTML=svg(hidden?'eyeoff':'eye');$('privacy-toggle').setAttribute('aria-label',hidden?'금액 표시하기':'금액 숨기기');$('privacy-toggle').title=hidden?'금액 표시하기':'금액 숨기기';
 }

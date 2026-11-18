@@ -32,9 +32,17 @@ async function start(data=domain.samplePortfolio()){
 
 test('desktop home charts change period and hide values while upcoming events stay available',async()=>{
  const {document,state,click}=await start();
+ assert.equal(document.querySelector('.coach-portal'),null);
+ click('[data-coach-open]');
+ assert.ok(document.querySelector('.coach-portal'));
  const bars=()=>document.querySelectorAll('.overview-forecast [data-chart-inspect]');
- assert.equal(bars().length,6);
+ assert.equal(bars().length,12);
+ assert.deepEqual([...document.querySelectorAll('.home-stats .home-stat')].map(el=>el.dataset.detail),['net','deposits','debt']);
+ assert.ok(document.querySelector('.overview-agenda [data-detail="cashflow"]'));
+ assert.ok(document.querySelector('.overview-actionbar [href="#advisor"]'));
  assert.ok(document.querySelector('.overview-agenda a[href="#schedule"]'));
+ click('.overview-forecast [data-range="6"]');
+ assert.equal(bars().length,6);
  click('.overview-forecast [data-range="12"]');
  assert.equal(bars().length,12);
  assert.equal(document.querySelector('.overview-forecast [data-range="12"]').getAttribute('aria-pressed'),'true');
