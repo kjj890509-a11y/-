@@ -1,5 +1,8 @@
 /* Moa interface system. All type sizes live here; legacy CSS is layout-only for type. */
 :root {
+  --brand-accent: #f4cb55; --brand-accent-hover: #e9bc37;
+  --brand-accent-soft: #fff7de; --brand-accent-border: #ead69c;
+  --brand-ink: #382a0c; --brand-focus: #886314;
   --font-xs: 12px; --font-sm: 14px; --font-md: 14px; --font-lg: 16px;
   --font-xl: 20px; --font-2xl: 24px; --font-3xl: 28px;
   --ink: #30313d; --text-secondary: #414552; --muted: #596171;
@@ -21,7 +24,7 @@ h2,h3,.panel-header h2,.table-heading h2,.loan-accounts-toolbar h2,.loan-card-he
 small { font-size:var(--font-xs); }
 button,a,input,select,summary { -webkit-tap-highlight-color:transparent; }
 button,a { touch-action:manipulation; }
-button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible { outline:3px solid var(--green); outline-offset:3px; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible { outline:3px solid var(--brand-focus); outline-offset:3px; }
 button { cursor:pointer; } button:disabled { cursor:wait; opacity:.55; }
 [hidden] { display:none!important; }
 .skip-link { position:fixed; top:-80px; left:20px; z-index:100; padding:12px 20px; background:var(--green); color:white; border-radius:8px; }
@@ -62,8 +65,8 @@ main:focus { outline:none; }
 .section-tabs a:hover { background:var(--surface); color:var(--ink); }
 .section-tabs a[aria-current] { color:var(--green); background:var(--surface); box-shadow:0 1px 3px #1c29350b; font-weight:650; }
 .button,.button.small,.heading-actions .button,.budget-widget>.button,.payday-table .button.small,.settings-item .button,.add-menu button,.history-view .button { font-size:var(--font-sm); min-height:42px; padding:10px 16px; border-radius:8px; gap:8px; font-weight:550; line-height:1.5; }
-.button.primary { background:var(--green); color:#fff; border:1px solid var(--green); box-shadow:none; }
-.button.primary:hover { background:var(--green-dark); }
+.button.primary { background:var(--brand-accent); color:var(--brand-ink); border:1px solid var(--brand-accent); box-shadow:none; }
+.button.primary:hover { background:var(--brand-accent-hover); border-color:var(--brand-accent-hover); }
 .button.secondary { color:var(--text-secondary); background:var(--surface); border:1px solid #d5dbe1; }
 .button.secondary:hover { background:var(--canvas); }
 .panel,.table-panel,.metric-box,.summary-card,.stat-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--card-shadow); }
@@ -314,19 +317,19 @@ footer,footer .footer-right { font-size:var(--font-xs); color:var(--muted); }foo
 /* Stripe dashboard reference, observed through Mobbin MCP. */
 .sidebar { padding:20px 16px 18px; border-right:1px solid var(--line); }
 .brand { padding:0 8px; gap:10px; font-size:var(--font-lg); }
-.brand-symbol { width:28px; height:28px; border-radius:6px; background:var(--green); color:white; font-size:var(--font-xl); display:grid; place-content:center; position:relative; }
+.brand-symbol { width:28px; height:28px; border-radius:6px; background:var(--brand-accent); color:var(--brand-ink); font-size:var(--font-xl); display:grid; place-content:center; position:relative; }
 .brand-symbol>span { position:absolute; top:0; right:2px; font-size:var(--font-xs); }
 .brand-sub { font-size:var(--font-xs); margin-top:0; }
 .workspace-label { margin:28px 8px 8px; font-size:var(--font-xs); }
 .sidebar nav { gap:3px; }
 .nav-link { min-height:40px; padding:9px 9px; gap:10px; border-radius:5px; font-size:var(--font-sm); }
-.nav-link.active { background:transparent; color:var(--green-dark); }
+.nav-link.active { background:transparent; color:var(--brand-ink); }
 .nav-link:hover { background:var(--canvas); }
 .nav-link svg { width:17px; height:17px; }
 .sidebar-subnav { display:grid; margin:0 0 12px 26px; gap:1px; }
 .sidebar-subnav button { color:var(--muted); text-align:left; border:0; background:transparent; padding:7px 9px; min-height:36px; border-radius:4px; font-size:var(--font-sm); }
-.sidebar-subnav button[aria-pressed="true"] { color:var(--green-dark); background:var(--soft-surface); font-weight:600; }
-.sidebar-subnav button:hover { color:var(--green-dark); background:var(--canvas); }
+.sidebar-subnav button[aria-pressed="true"] { color:var(--brand-ink); background:var(--brand-accent-soft); font-weight:600; }
+.sidebar-subnav button:hover:not([aria-pressed="true"]) { color:var(--ink); background:var(--canvas); }
 .sidebar-bottom { border-top:1px solid var(--line); padding-top:12px; }
 .private-badge { padding:10px 8px; }
 .topbar { height:64px; padding:0 32px; border-bottom:0; gap:24px; }
@@ -342,8 +345,8 @@ main { max-width:1600px; padding:20px 32px 40px; }
 .subtitle { font-size:var(--font-sm); margin-top:5px; }
 .section-tabs { margin:0 0 24px; padding:0; gap:24px; border-bottom:1px solid var(--line); }
 .section-tabs a { min-height:42px; padding:8px 0 12px; border-radius:0; border-bottom:2px solid transparent; }
-.section-tabs a[aria-current] { background:transparent; box-shadow:none; color:var(--green-dark); border-bottom-color:var(--green); }
-.section-tabs a:hover { background:transparent; color:var(--green-dark); }
+.section-tabs a[aria-current] { background:transparent; box-shadow:none; color:var(--brand-ink); border-bottom-color:var(--brand-accent); }
+.section-tabs a:hover:not([aria-current]) { background:transparent; color:var(--ink); }
 .button,.button.small,.heading-actions .button,.budget-widget>.button,.payday-table .button.small,.settings-item .button,.add-menu button,.history-view .button { min-height:36px; padding:7px 12px; border-radius:5px; }
 .button.secondary { box-shadow:0 1px 2px #30313d08; }
 .icon-button { width:36px; height:36px; }
@@ -431,7 +434,7 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
  .sidebar nav { flex-direction:row; overflow:visible; gap:0; }
  .sidebar .sidebar-subnav { display:none; }
  .nav-link { min-height:64px; height:100%; font-size:var(--font-xs); padding:8px 2px; gap:5px; flex:1; }
- .nav-link.active { background:var(--soft-surface); }
+ .nav-link.active { background:var(--brand-accent-soft); }
  .topbar { height:60px; padding:0 16px; gap:10px; }
  .global-search-launch { max-width:220px; min-width:0; height:36px; flex:1; padding:0 9px; }
  .global-search-launch kbd { display:none; }

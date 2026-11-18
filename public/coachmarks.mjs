@@ -146,8 +146,18 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
  };
  const draw=(scroll=true)=>{
   removePortal();const step=steps[state.step];if(!step)return close();
-  portal=doc.createElement('div');portal.className='coach-portal';portal.innerHTML=`<div class="coach-spotlight" aria-hidden="true" hidden></div><section class="coach-card" id="coach-card" role="dialog" aria-modal="false" aria-labelledby="coach-title" aria-describedby="coach-body"><header><span>${esc(page.label)} · ${state.step+1}/${steps.length}</span><button type="button" data-coach="close" aria-label="안내 닫기">×</button></header><h2 id="coach-title">${esc(step.title)}</h2><p id="coach-body">${esc(step.body)}</p>${step.action?`<button type="button" class="coach-primary" data-coach="act">${esc(step.label)}</button>`:''}<footer>${state.step?'<button type="button" data-coach="previous">이전</button>':'<button type="button" data-coach="close">나중에</button>'}<button type="button" data-coach="next">${state.step===steps.length-1?'안내 마치기':'다음'}</button></footer></section>`;
-  doc.body.append(portal);portal.addEventListener('click',controls);launch.setAttribute('aria-expanded','true');if(scroll)targetFor(step).scrollIntoView?.({block:'center',behavior:'auto'});position();portal.querySelector('[data-coach="act"],[data-coach="next"]')?.focus?.({preventScroll:true});
+  const back=state.step?'<button type="button" data-coach="previous">이전</button>':'<button type="button" data-coach="close">나중에</button>';
+  const act=step.action?`<button type="button" class="coach-primary" data-coach="act">${esc(step.label)}</button>`:'';
+  const next=state.step===steps.length-1?'마치기':'다음';
+  portal=doc.createElement('div');portal.className='coach-portal';
+  portal.innerHTML=`<div class="coach-spotlight" aria-hidden="true" hidden></div>
+   <section class="coach-card" id="coach-card" role="dialog" aria-modal="false" aria-labelledby="coach-title" aria-describedby="coach-body">
+    <header><div><span class="coach-step">${esc(page.label)} · ${state.step+1}/${steps.length}</span><h2 id="coach-title">${esc(step.title)}</h2></div>
+     <button type="button" data-coach="close" aria-label="안내 닫기">×</button></header>
+    <p id="coach-body">${esc(step.body)}</p>
+    <footer>${back}<div class="coach-actions"><button type="button" ${act?'':'class="coach-primary"'} data-coach="next">${next}</button>${act}</div></footer>
+   </section>`;
+  doc.body.append(portal);portal.addEventListener('click',controls);launch.setAttribute('aria-expanded','true');if(scroll)targetFor(step).scrollIntoView?.({block:'center',behavior:'auto'});position();portal.querySelector('.coach-primary')?.focus?.({preventScroll:true});
  };
  const open=()=>{if(doc.querySelector('dialog[open]'))return;focusBefore=doc.activeElement?.matches?.('button,a,input,select,textarea,[tabindex]')?doc.activeElement:launch;state.activeKey=key;state.step=0;markSeen();draw();};
  const closePicker=()=>{
