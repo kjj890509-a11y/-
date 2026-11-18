@@ -88,3 +88,17 @@ test('white home groups assets, expands the remaining rows and edits the existin
  t.click('.m-account-secondary [data-action=edit]');t.fill({balance:'876,543'});await t.submit();assert.equal(t.state.data.deposits[0].id,before.deposits[0].id);assert.equal(t.state.data.deposits[0].balance,876543);assert.equal(t.state.writes,1);assert.match(t.document.querySelector('.m-account-secondary').textContent,/876,543/);
  t.click('[data-action=mobile-home-more]');assert.equal(t.document.querySelectorAll('.m-home-asset-row').length,5);assert.equal(t.state.writes,1);
 });
+test('category add buttons render an actual icon and open the matching editor without exposing SVG source',async()=>{
+ const t=await app();
+ for(const [view,kind,field] of [['deposits','deposits','balance'],['stocks','stocks','valuation'],['loans','loans','rate'],['retirement','retirement','amount'],['cashflow','cashflow','date'],['fixed','fixed','day'],['planned','cashflow','date']]){
+  await t.visit(view);
+  const selector='[data-action=add][data-kind="'+kind+'"]',button=t.document.querySelector(selector);
+  assert.ok(button,view);assert.ok(button.querySelector('svg'),view+' actual icon');
+  assert.doesNotMatch(button.textContent,/<\/?(?:svg|path)\b|stroke=|viewBox=/,view+' readable label');
+  assert.match(button.textContent,/추가/,view+' accessible name');
+  t.click(selector);assert.ok(t.document.querySelector('#editor').open,view+' editor');
+  assert.ok(t.document.querySelector('#field-'+field),view+' matching field');
+  t.click('[data-close=editor]');
+ }
+ assert.equal(t.state.writes,0);
+});
