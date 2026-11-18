@@ -47,3 +47,4 @@ export {applyPageLayout} from './page-layout.mjs';
 
 export {isMobileViewport,createMobileState,renderMobilePage,mountMobileControls} from './mobile-app.mjs';
 export {createPortfolioSync,mountPortfolioSync} from './portfolio-sync.mjs';
+export {mountAssetConsultation} from './asset-consultation.mjs';

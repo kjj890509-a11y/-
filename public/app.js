@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -296,7 +296,7 @@ async function checkAdvisorService(){
   const response=await fetch('/api/advisor');const result=await response.json();
   advisorState.service=response.ok&&typeof result.configured==='boolean'?(result.configured?'ready':'unconfigured'):'error';
  }catch{advisorState.service='error';}
- if(view==='advisor')render();
+ if(view==='advisor'||view==='overview'&&isMobileViewport(window,location))render();
 }
 async function requestAdvisor(next){
  if(advisorState?.busy)return;
@@ -439,11 +439,30 @@ function mountEntryWorkspace(){
  }));
 }
 function renderMobile(){
- const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorContent:view==='advisor'?advisorPage():''});
+ advisorState??=initialAdvisorState();
+ const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
  document.title=(view==='menu'?'전체':navLabels[view]||'모아')+' · 모아';
  recordCleanups.push(mountMobileControls(root,mobileState,{onRender:render,onPrivacy:()=>$('privacy-toggle').onclick(),onSettings:()=>openDialog('settings-dialog'),onRefresh:async()=>{if(!canRefreshPortfolio()){toast('입력·저장을 마친 뒤 다시 불러와 주세요.');return;}const updated=await refreshPortfolio();toast(updated===null?'연결을 확인한 뒤 다시 불러와 주세요.':updated?'최신 내역을 반영했어요.':'내역을 확인했어요.');},onCardBill:openMobileCardBill}));
- if(view==='advisor'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountTrendCharts(root);mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}
+ if(view==='advisor'){
+  if(mobileState.advisorMode==='repayment'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});}
+  else recordCleanups.push(mountAssetConsultation(root,advisorState,{onConsult:requestAssetAdvisor}));
+ }
+ mountTrendCharts(root);
+ if(view==='overview'||view==='advisor')checkAdvisorService();
  const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#f7f7f7';
+}
+async function requestAssetAdvisor(question){
+ if(advisorState?.busy||advisorState?.service!=='ready'||demo)return;
+ advisorState.assetQuestion=question;advisorState.assetError='';advisorState.busy=true;render();
+ const history=(advisorState.assetMessages||[]).slice(-2).flatMap(m=>[{role:'user',text:m.question.slice(0,2000)},{role:'assistant',text:m.answer.slice(0,2000)}]);
+ try{
+  const res=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'assets',question,history,revision})}),result=await res.json();
+  if(!res.ok)throw new Error(result.error||'AI 상담을 완료하지 못했습니다.');
+  if(result.revision!==revision)throw new Error('상담 중 자산이 변경됐습니다. 현재 조건으로 다시 질문해 주세요.');
+  if(typeof result.advice?.answer!=='string'||typeof result.advice?.summary!=='string'||!Array.isArray(result.advice?.checks))throw new Error('AI 답변을 확인하지 못했습니다.');
+  advisorState.assetMessages=[...(advisorState.assetMessages||[]),{question,...result.advice,revision,asOf:result.asOf}].slice(-6);advisorState.assetQuestion='';
+ }catch(error){advisorState.assetError=error.message;}
+ finally{advisorState.busy=false;if(view==='advisor')render();}
 }
 function openMobileCardBill(id){
  if(saving)return;
