@@ -88,18 +88,6 @@
   color: var(--primary-text, #355eb8);
   font-weight: 650;
 }
-.mobile-app .spending-content {
-  --spending-text: var(--m-ink);
-  --spending-muted: var(--m-muted);
-  --spending-surface: var(--m-surface);
-  --spending-line: var(--m-line);
-  --spending-accent: var(--m-action);
-  padding: 0 var(--m-gutter);
-}
-.mobile-app .spending-columns { grid-template-columns: minmax(0, 1fr); }
-.mobile-app .spending-columns > .panel { border-radius: var(--m-radius); padding: 16px; }
-.mobile-app .spending-toolbar { justify-content: center; }
-.mobile-app .m-spending-link { margin: 0 var(--m-gutter) 10px; }
 @media (max-width: 960px) {
   .spending-columns { grid-template-columns: minmax(0, 1fr); }
 }
