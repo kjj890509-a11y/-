@@ -1,11 +1,11 @@
 import {createWorkspaceState,renderWorkspace,mountWorkspace,unmountWorkspace,defaultDashboard,dashboardConfig,widgetTemplates} from '/workspace.mjs';
-import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, loanSchedule, paydayForecasts, scheduledCashflows, loanNextPayment, loanPlanSummary, shiftMonth} from '/domain.mjs';
+import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth} from '/domain.mjs';
 import {renderTrendChart, mountTrendCharts} from '/chart.mjs';
 import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -44,6 +44,7 @@ let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
+let mobileState=createMobileState(),mobileRecordId='';
 let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDrafts={},entrySession=[];
 let entryManagerState=createEntryManagerState();
 let cardBillingState=createCardBillingState();
@@ -58,10 +59,10 @@ function money(value, unit = '원') { return hidden ? '••••••' : `${
 function compact(value) { if(hidden)return '••••'; if(Math.abs(value)>=1e8)return `${(value/1e8).toFixed(2)}억`; if(Math.abs(value)>=1e4)return `${wonFormat.format(Math.round(value/1e4))}만`;return wonFormat.format(value); }
 function percent(value){return hidden?'••%':`${value>0?'+':''}${value.toFixed(2)}%`;}
 const rowsCount = () => KINDS.reduce((n,k)=>n+portfolio[k].length,0);
-const status = (label,error=false) => {$('save-state').innerHTML=`<i style="background:${error?'#c48365':'#7da367'}"></i>${escapeHTML(label)}`;};
+const status = (label,error=false) => {document.querySelector('[data-mobile-sync]')?.replaceChildren(document.createTextNode(label));$('save-state').innerHTML=`<i style="background:${error?'#c48365':'#7da367'}"></i>${escapeHTML(label)}`;};
 let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4200);}
-function openDialog(id){const dialog=$(id);if(id==='editor')dialog.classList.toggle('history-editor',Boolean(dialog.querySelector('#plan-asOf')));enhanceEditorHelp(dialog);dialog.showModal();}
+function openDialog(id){closeMonthPicker(document);const dialog=$(id);if(id==='editor')dialog.classList.toggle('history-editor',Boolean(dialog.querySelector('#plan-asOf')));enhanceEditorHelp(dialog);dialog.showModal();}
 function confirmAction(title,body,label='삭제하기'){
   $('confirm-title').textContent=title;$('confirm-body').textContent=body;$('confirm-ok').textContent=label;openDialog('confirm-dialog');
   return new Promise(resolve=>{
@@ -77,15 +78,15 @@ async function loadData(){
     portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
   }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button></div>`;renderNav();}
 }
-async function persist(next,dashboardOnly=false){
+async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
   if(saving)throw new Error('저장 중입니다. 잠시만 기다려 주세요.');
   next=validatePortfolio(next);
-  if(demo) {portfolio=next;render();status('예시 보기 중');return;}
+  if(demo) {portfolio=next;if(renderAfter)render();status('예시 보기 중');return;}
   saving=true;status('저장하는 중');
   try{
     const res=await fetch('/api/portfolio',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(dashboardOnly?{dashboard:next.dashboard,revision}:{data:next,revision})});
     const data=await res.json();if(!res.ok)throw new Error(data.error||'저장하지 못했습니다.');
-    portfolio=validatePortfolio(data.data);revision=data.revision;status('서버 저장됨');render();
+    portfolio=validatePortfolio(data.data);revision=data.revision;status('서버 저장됨');if(renderAfter)render();
   }catch(error){status('저장 실패',true);throw error;}finally{saving=false;}
 }
 function renderNav(){
@@ -109,7 +110,7 @@ function paymentRow(item){
 function monthToolbar(){const [y,m]=month.split('-').map(Number);return `<div class="calendar-toolbar"><button data-action="prev-month" aria-label="이전 달">‹</button><strong>${y}년 ${m}월</strong><button data-action="next-month" aria-label="다음 달">›</button><button data-action="this-month" class="month-reset">이번 달</button></div>`;}
 function flowSummary(selectedMonth,link=true){
  const f=monthlyFlow(portfolio,selectedMonth);
- return `<section class="panel flow-summary"><div class="panel-header"><div><h2>${Number(selectedMonth.slice(5))}월 수입과 지출</h2><p>월급과 기타 수입에서 예정 지출을 빼면 얼마가 남을까요?</p></div>${link?'<a class="panel-link" href="#cashflow">내역 관리 ↗</a>':''}</div><div class="flow-metrics"><div><span>수입 합계</span><strong class="income-color">${money(f.income)}</strong><small>월급 ${money(f.salary)} + 기타 ${money(f.otherIncome)}</small></div><div><span>등록 지출 계획</span><strong>${money(f.expense)}</strong><small>대출·카드 ${money(f.payments)} + 고정 ${money(f.fixedCash)} + 기타 ${money(f.otherExpense)}</small></div><div><span>수입·지출 차액</span><strong class="${f.balance<0?'negative':'income-color'}">${money(f.balance)}</strong><small>수입 합계 − 등록 지출 계획</small></div></div><p class="panel-note">기타 지출은 카드대금·대출상환액과 중복되지 않게 등록해 주세요. 예금 잔액은 자동 변경되지 않습니다.</p></section>`;
+ return `<section class="panel flow-summary"><div class="panel-header"><div><h2>${Number(selectedMonth.slice(5))}월 수입과 지출</h2><p>등록된 수입과 지출 계획</p></div>${link?'<a class="panel-link" href="#cashflow">내역 관리 ↗</a>':''}</div><div class="flow-metrics"><div><span>수입 합계</span><strong class="income-color">${money(f.income)}</strong><small>월급 ${money(f.salary)} + 기타 ${money(f.otherIncome)}</small></div><div><span>등록 지출 계획</span><strong>${money(f.expense)}</strong><small>대출·카드 ${money(f.payments)} + 고정 ${money(f.fixedCash)} + 기타 ${money(f.otherExpense)}</small></div><div><span>수입·지출 차액</span><strong class="${f.balance<0?'negative':'income-color'}">${money(f.balance)}</strong><small>수입 합계 − 등록 지출 계획</small></div></div><p class="panel-note">카드 청구액에 포함한 지출은 카드대금과 중복 합산하지 않습니다. 예금 잔액은 자동 변경되지 않습니다.</p></section>`;
 }
 function planningHeader(title,subtitle,action,label){
  return `<div class="page-heading"><div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div><div class="heading-actions">${action?`<button class="button primary" data-action="${action}">${svg('plus')}${label}</button>`:''}</div></div>`;
@@ -135,7 +136,7 @@ function homeDetail(){
  }
  if(homeSelection==='debt'){
   const cards=portfolio.cards.filter(row=>!row.paid).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
-  return homeDetailHeading('부채 상세','대출의 남은 원금과 미결제 카드대금을 함께 확인하세요.','loans')+`<div class="planning-metrics">${metric('남은 부채 합계',money(t.debt))}${metric('대출 잔액',money(t.loans))}${metric('미결제 카드대금',money(t.cards))}</div>`+recordLedgerHost('loans')+renderLoanManagement(portfolio,{formatMoney:money,query,forecastPanel:loanForecastPanel()})+`<section class="table-panel home-detail-table"><div class="table-heading"><h2>미결제 카드 <span>${cards.length}건</span></h2><button class="button secondary" data-action="add" data-kind="cards">카드 청구 추가</button></div>${cards.length?`<div class="table-scroll"><table><caption class="sr-only">미결제 카드 상세</caption><thead><tr>${tableHeaders.cards.map(label=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${cards.map(row=>rowHTML('cards',row)).join('')}</tbody></table></div>`:'<div class="empty-inline">미결제 카드대금이 없습니다.</div>'}</section>`;
+  return homeDetailHeading('부채 상세','대출의 남은 원금과 미결제 카드대금을 함께 확인하세요.','loans')+`<div class="planning-metrics">${metric('남은 부채 합계',money(t.debt))}${metric('대출 잔액',money(t.loans))}${metric('미결제 카드대금',money(t.cards))}</div>`+recordLedgerHost('loans')+renderLoanManagement(portfolio,{formatMoney:money,layout:recordLayoutFor('loan-cards'),query,forecastPanel:loanForecastPanel()})+`<section class="table-panel home-detail-table"><div class="table-heading"><h2>미결제 카드 <span>${cards.length}건</span></h2><button class="button secondary" data-action="add" data-kind="cards">카드 청구 추가</button></div>${cards.length?`<div class="table-scroll"><table><caption class="sr-only">미결제 카드 상세</caption><thead><tr>${tableHeaders.cards.map(label=>`<th>${label}</th>`).join('')}</tr></thead><tbody>${cards.map(row=>rowHTML('cards',row)).join('')}</tbody></table></div>`:'<div class="empty-inline">미결제 카드대금이 없습니다.</div>'}</section>`;
  }
  if(homeSelection==='cashflow'){
   const events=eventsForMonth(portfolio,month).sort((a,b)=>a.date.localeCompare(b.date));
@@ -155,7 +156,7 @@ function selectHomeDetail(selection){
   const selected=button.dataset.detail===selection;
   button.classList.toggle('is-selected',selected);button.setAttribute('aria-pressed',String(selected));button.querySelector('[data-home-indicator]').textContent=selected?'✓':'↓';
  });
- enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountTrendCharts($('main'));mountFinancialMotion($('main'),{revision,hideAmounts:hidden});
+ enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountLoanLayout();mountTrendCharts($('main'));mountFinancialMotion($('main'),{revision,hideAmounts:hidden});
  const target=$('home-dashboard');target.querySelector('[data-home-detail-title]')?.focus({preventScroll:true});
  // Keep the summary cards visible on wide screens; bring details into view on smaller screens.
  const top=target.getBoundingClientRect().top;
@@ -163,11 +164,11 @@ function selectHomeDetail(selection){
  if(selection==='all')document.querySelector('.home-stat')?.focus({preventScroll:true});
 }
 function recordLedgerHost(scope){return `<section class="table-panel record-ledger-panel"><div class="table-heading"><h2>${ledgerLabels[scope]} 목록</h2>${recordWorkspace.error?`<span class="form-error" role="alert">${escapeHTML(recordWorkspace.error)}</span><button class="button secondary small" data-action="retry-views">다시 연결</button>`:''}${KINDS.includes(scope)?`<button class="button primary small" data-action="add" data-kind="${scope}">내역 추가</button>`:''}</div><div data-ledger-scope="${scope}"></div></section>`;}
-function recordsPage(){return heading('전체 내역','모든 카테고리의 내역을 필터·정렬하고 원하는 보기로 저장하세요.')+demoBanner()+recordLedgerHost('all');}
+function recordsPage(){return heading('전체 내역','카테고리별 조회와 저장한 보기')+demoBanner()+recordLedgerHost('all');}
 async function loadRecordPreferences(){
  if(recordWorkspace.loaded||demo)return;recordWorkspace.loaded=true;const targetWorkspace=recordWorkspace;
- try{const response=await fetch('/api/preferences'),result=await response.json();if(recordWorkspace!==targetWorkspace||demo)return;if(!response.ok)throw new Error(result.error||'보기 설정에 연결하지 못했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.ready=true;recordWorkspace.error='';recordWorkspace.revision=result.revision;for(const [scope,pref]of Object.entries(recordWorkspace.preferences.tables)){Object.assign(ledgerState(recordWorkspace,scope),pref);if(pref.rowOrder?.length)recordWorkspace.states[scope].sort='manual';}if(document.querySelector('[data-ledger-scope]'))render();}
- catch{if(recordWorkspace!==targetWorkspace)return;recordWorkspace.error='보기 설정 연결 실패';if(document.querySelector('[data-ledger-scope]'))render();}
+ try{const response=await fetch('/api/preferences'),result=await response.json();if(recordWorkspace!==targetWorkspace||demo)return;if(!response.ok)throw new Error(result.error||'보기 설정에 연결하지 못했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.ready=true;recordWorkspace.error='';recordWorkspace.revision=result.revision;for(const [scope,pref]of Object.entries(recordWorkspace.preferences.tables)){if(!ledgerState(recordWorkspace,scope).rowOrderDirty)Object.assign(ledgerState(recordWorkspace,scope),pref);if(pref.rowOrder?.length)recordWorkspace.states[scope].sort='manual';}if(document.querySelector('[data-ledger-scope],[data-record-layout]'))render();}
+ catch{if(recordWorkspace!==targetWorkspace)return;recordWorkspace.error='보기 설정 연결 실패';if(document.querySelector('[data-ledger-scope],[data-record-layout]'))render();}
 }
 async function saveRecordPreferences(scope,pref){
  if(!demo&&!recordWorkspace.ready)throw new Error('먼저 보기 설정을 불러온 뒤 저장해 주세요.');
@@ -186,9 +187,10 @@ function ledgerCell(scope,entry,key){
  if(scope==='all'){
   if(key==='kind')return escapeHTML(ledgerLabels[entry.kind]);if(key==='amount')return money(entry.amount);if(key==='date')return entry.date||'—';if(key==='status')return escapeHTML(statusLabels[ledgerStatus(entry)]);return escapeHTML(entry.row[key]||'—');
  }
+ if(scope==='cashflow'&&key==='paymentSource')return entry.row.type==='expense'?`<span class="status-pill">${isCardIncludedExpense(entry.row)?'카드 청구액에 포함 · 중복 제외':'계좌 결제 · 별도 지출'}</span>`:'—';
  if(scope==='planned'){
   if(key==='name')return `<strong>${escapeHTML(entry.row.name)}</strong><small>${escapeHTML(entry.row.note||'')}</small>`;
-  if(key==='date')return entry.date;if(key==='amount')return money(entry.amount);if(key==='type')return entry.row.type==='expense'?'예정 지출':'추가 수입';return `<button class="status-pill" data-action="toggle-planned" data-id="${escapeHTML(entry.row.id)}">${entry.row.includeInForecast===false?'예상 제외':'예상 반영'} ↻</button>`;
+  if(key==='date')return entry.date;if(key==='amount')return money(entry.amount);if(key==='type')return entry.row.type==='expense'?'예정 지출':'추가 수입';return `${isCardIncludedExpense(entry.row)?'<span class="status-pill">카드 청구액에 포함 · 중복 제외</span> ':''}<button class="status-pill" data-action="toggle-planned" data-id="${escapeHTML(entry.row.id)}">${entry.row.includeInForecast===false?'예상 제외':'예상 반영'} ↻</button>`;
  }
  return ledgerCells(entry)[ledgerColumns[scope].findIndex(([k])=>k===key)]||'—';
 }
@@ -198,8 +200,9 @@ function mountRecordLedgers(){
   const entries=ledgerEntries(data,scope,month);state.selected=state.selected.filter(key=>entries.some(entry=>entry.key===key));
   recordCleanups.push(mountLedger(root,entries,state,{scope,today:todayKST(),money,cell:(entry,key)=>ledgerCell(scope,entry,key),extraActions:entry=>entry.kind==='cards'&&!entry.row.cardAccountId?`<button type="button" class="button secondary small" data-action="card-account-from-bill" data-id="${escapeHTML(entry.row.id)}">내 카드로 등록</button>`:'',onEdit:entry=>openEditor(entry.kind,entry.row.id),onDetail:entry=>openRecordDetail(scope,entry),onSave:pref=>saveRecordPreferences(scope,pref),onFeedback:toast,onExport:(rows,keys)=>exportLedger(scope,rows,keys),onBulk:async(action,selected)=>{
    if(action==='delete'&&!await confirmAction(`${selected.length}개 내역을 삭제할까요?`,'선택한 내역을 삭제합니다. 필터 밖의 선택 항목도 포함될 수 있습니다.'))return;
-   const next=structuredClone(portfolio);for(const entry of selected){const index=next[entry.kind].findIndex(row=>row.id===entry.row.id);if(index<0)continue;const row=next[entry.kind][index];if(action==='delete')next[entry.kind].splice(index,1);if(entry.kind==='cards'&&['paid','unpaid'].includes(action))row.paid=action==='paid';if(entry.kind==='cashflow'&&['include','exclude'].includes(action))row.includeInForecast=action==='include';}
-   try{await persist(next);state.selected=[];render();toast('선택한 내역에 적용했어요.');}catch(error){toast(error.message);}
+   if(['card-included','account-paid'].includes(action)&&selected.some(entry=>entry.kind!=='fixed'&&(entry.kind!=='cashflow'||entry.row.type!=='expense'))){toast('기타 지출·고정지출만 선택해 주세요.');return;}
+   const next=structuredClone(portfolio);for(const entry of selected){const index=next[entry.kind].findIndex(row=>row.id===entry.row.id);if(index<0)continue;const row=next[entry.kind][index];if(action==='delete')next[entry.kind].splice(index,1);if(['card-included','account-paid'].includes(action))row.paymentSource=action==='card-included'?'card':'account';if(entry.kind==='cards'&&['paid','unpaid'].includes(action))row.paid=action==='paid';if(entry.kind==='cashflow'&&['include','exclude'].includes(action))row.includeInForecast=action==='include';}
+   try{await persist(next,false,{renderAfter:false});state.selected=[];render();toast(action==='card-included'?'카드 청구액에 포함해 중복 지출을 제외했어요.':'선택한 내역에 적용했어요.');}catch(error){toast(error.message);}
   }}));
  }
 }
@@ -220,7 +223,7 @@ function budgetPage({embedded=false}={}){
  const p=budgetPlan(portfolio,month),loans=eventsForMonth(portfolio,month).filter(e=>e.type==='loans').reduce((n,e)=>n+e.amount,0),cards=portfolio.cards.filter(r=>r.dueDate.startsWith(month)).reduce((n,r)=>n+r.amount,0);
  const ratio=p.limit===null?0:p.limit===0?(p.expense>0?100:0):Math.min(100,p.expense/p.limit*100);
  const target=p.target||0,goal=target?Math.max(0,Math.min(100,p.balance/target*100)):0;
- return `${embedded?homeDetailHeading('수입·지출 상세','월 수입과 지출 계획, 예산을 함께 확인하세요.')+`<div class="home-detail-actions"><button class="button secondary" data-action="budget-form">예산 수정</button><button class="button primary" data-action="add" data-kind="cashflow">수입·지출 추가</button></div>`:planningHeader('월 예산','지출 한도와 저축 목표를 정하고 등록한 계획을 비교하세요.','budget-form',p.limit===null?'예산 설정':'예산 수정')+demoBanner()}<div class="flow-month-bar"><span>예산을 확인할 월</span>${monthToolbar()}</div><div class="planning-metrics">${metric('예정 수입',money(p.income),'월급 + 기타 수입')}${metric('예정 지출',money(p.expense),'대출 · 카드 · 고정 · 기타 지출')}${metric('남는 금액 예상',money(p.balance),'예정 수입 − 예정 지출',p.balance<0?'text-danger':'income-color')}${metric('지출 예산 잔여',p.limit===null?'미설정':money(p.remaining),p.limit===null?'월별 지출 한도를 설정하세요.':'지출 예산 − 예정 지출',p.remaining<0?'text-danger':'')}</div><div class="planning-columns"><section class="panel"><div class="panel-header"><div><h2>이번 달 지출 계획</h2><p>결제 완료 카드도 해당 월 지출에 포함합니다.</p></div><span class="subtle-tag">BUDGET</span></div><div class="budget-total"><strong>${money(p.expense)}</strong><span>${p.limit===null?'예산 미설정':'예산 '+money(p.limit)}</span></div><div class="budget-progress"><i class="${p.remaining<0?'over-budget':''}" style="width:${ratio}%"></i></div><div class="breakdown-list">${[['대출 원금·이자',loans,'loans'],['카드 결제',cards,'cards'],['고정지출 · 계좌 결제',p.fixedCash,'fixed'],['기타 지출',p.otherExpense,'cashflow']].map(([label,value,icon])=>`<div class="breakdown-row"><span class="stat-icon">${svg(icon)}</span><div><strong>${label}</strong><div class="mini-progress"><i style="width:${p.expense?value/p.expense*100:0}%"></i></div></div><b>${money(value)}</b></div>`).join('')}</div><p class="panel-note">기타 지출은 카드대금·대출상환액과 겹치지 않게 입력해 주세요. 이 화면은 실제 사용액이 아닌 등록 내역에 따른 월간 계획입니다.</p></section><section class="panel savings-panel"><div class="panel-header"><div><h2>이번 달 남길 금액</h2><p>월별 저축 목표를 설정해 보세요.</p></div>${svg('target')}</div><div class="goal-ring" style="background:conic-gradient(var(--green) ${goal}%,var(--track) ${goal}%)"><div><span>목표 대비 예상</span><strong>${target?Math.round(goal)+'%':'—'}</strong></div></div><div class="goal-details"><div><span>남는 금액</span><strong>${money(p.balance)}</strong></div><div><span>저축 목표</span><strong>${target?money(target):'미설정'}</strong></div></div><p class="panel-note">${target?(p.balance>=target?'등록 내역 기준으로 목표를 달성할 수 있어요.':`목표까지 ${money(target-p.balance)}이 더 필요해요.`):'예산 수정에서 저축 목표를 입력하세요.'}</p></section></div>`;
+ return `${embedded?homeDetailHeading('수입·지출 상세','월 수입과 지출 계획, 예산을 함께 확인하세요.')+`<div class="home-detail-actions"><button class="button secondary" data-action="budget-form">예산 수정</button><button class="button primary" data-action="add" data-kind="cashflow">수입·지출 추가</button></div>`:planningHeader('월 예산','지출 한도와 저축 목표를 정하고 등록한 계획을 비교하세요.','budget-form',p.limit===null?'예산 설정':'예산 수정')+demoBanner()}<div class="flow-month-bar"><span>예산을 확인할 월</span>${monthToolbar()}</div><div class="planning-metrics">${metric('예정 수입',money(p.income),'월급 + 기타 수입')}${metric('예정 지출',money(p.expense),'대출 · 카드 · 고정 · 기타 지출')}${metric('남는 금액 예상',money(p.balance),'예정 수입 − 예정 지출',p.balance<0?'text-danger':'income-color')}${metric('지출 예산 잔여',p.limit===null?'미설정':money(p.remaining),p.limit===null?'월별 지출 한도를 설정하세요.':'지출 예산 − 예정 지출',p.remaining<0?'text-danger':'')}</div><div class="planning-columns"><section class="panel"><div class="panel-header"><div><h2>이번 달 지출 계획</h2><p>결제 완료 카드도 해당 월 지출에 포함합니다.</p></div><span class="subtle-tag">BUDGET</span></div><div class="budget-total"><strong>${money(p.expense)}</strong><span>${p.limit===null?'예산 미설정':'예산 '+money(p.limit)}</span></div><div class="budget-progress"><i class="${p.remaining<0?'over-budget':''}" style="width:${ratio}%"></i></div><div class="breakdown-list">${[['대출 원금·이자',loans,'loans'],['카드 결제',cards,'cards'],['고정지출 · 계좌 결제',p.fixedCash,'fixed'],['기타 지출',p.otherExpense,'cashflow']].map(([label,value,icon])=>`<div class="breakdown-row"><span class="stat-icon">${svg(icon)}</span><div><strong>${label}</strong><div class="mini-progress"><i style="width:${p.expense?value/p.expense*100:0}%"></i></div></div><b>${money(value)}</b></div>`).join('')}</div><p class="panel-note">카드 청구에 포함된 지출은 중복 제외를 선택하세요. 예산은 등록한 일정 기준입니다.</p></section><section class="panel savings-panel"><div class="panel-header"><div><h2>이번 달 남길 금액</h2><p>월별 저축 목표를 설정해 보세요.</p></div>${svg('target')}</div><div class="goal-ring" style="background:conic-gradient(var(--green) ${goal}%,var(--track) ${goal}%)"><div><span>목표 대비 예상</span><strong>${target?Math.round(goal)+'%':'—'}</strong></div></div><div class="goal-details"><div><span>남는 금액</span><strong>${money(p.balance)}</strong></div><div><span>저축 목표</span><strong>${target?money(target):'미설정'}</strong></div></div><p class="panel-note">${target?(p.balance>=target?'등록 내역 기준으로 목표를 달성할 수 있어요.':`목표까지 ${money(target-p.balance)}이 더 필요해요.`):'예산 수정에서 저축 목표를 입력하세요.'}</p></section></div>`;
 }
 function historyPage(){
  const rows=(portfolio.snapshots||[]).slice().sort((a,b)=>b.month.localeCompare(a.month));
@@ -244,10 +247,10 @@ function paydayPage(){
 }
 
 function scheduledPage(){
- const today=todayKST(),all=scheduledCashflows(portfolio,today,'all'),upcoming=all.filter(row=>row.date>today&&row.includeInForecast!==false);
+ const today=todayKST(),all=scheduledCashflows(portfolio,today,'all'),upcoming=all.filter(row=>row.date>today&&row.includeInForecast!==false&&!isCardIncludedExpense(row));
  const income=upcoming.filter(row=>row.type==='other_income').reduce((n,row)=>n+row.amount,0),expense=upcoming.filter(row=>row.type==='expense').reduce((n,row)=>n+row.amount,0);
  const rows=scheduledCashflows(portfolio,today,scheduledRange).filter(row=>scheduledType==='all'||row.type===scheduledType);
- return `<div class="page-heading"><div><h1>예정 거래</h1><p class="subtitle">미래에 들어올 추가 수입과 나갈 돈을 날짜별로 기록하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="add-planned" data-type="expense">${svg('plus')} 예정 지출</button><button class="button primary" data-action="add-planned" data-type="other_income">${svg('plus')} 예정 수입</button></div></div>${demoBanner()}<div class="planning-metrics">${metric('앞으로의 추가 수입',money(income),'오늘 이후 · 예상 계산에 포함된 내역')}${metric('앞으로의 예정 지출',money(expense),'일회성 지출 · 고정지출과 별도')}${metric('예정 거래 차액',money(income-expense),'등록된 추가 수입 − 예정 지출',income<expense?'text-danger':'income-color')}${metric('다음 반영 예정일',upcoming[0]?.date.replaceAll('-','.')||'미등록','오늘 이후 첫 반영 일정')}</div><div class="forecast-banner">${svg('planned')}<div><strong>예정일에 맞춰 예상 자산에 반영합니다.</strong><p>‘예상에 반영’한 내역은 월 예산·월급날·월별 전망과 캘린더에 포함됩니다. 확실하지 않은 금액은 계산에서 제외해 두었다가 다시 포함할 수 있습니다.</p></div><span class="forecast-badge">일회성 일정</span></div>${recordLedgerHost('planned')}<p class="category-note">수입·지출의 일회성 ‘기타 수입·기타 지출’ 내역을 함께 관리합니다. 같은 금액을 다른 화면에 다시 등록하지 않아도 됩니다. 금액은 실제 입출금 전까지 현재 예금 잔액을 변경하지 않으며, 오늘 일정은 이미 현재 잔액에 반영된 것으로 취급합니다. 일자가 지난 내역은 오늘·지난 내역에서 확인하고, 실제 잔액은 직접 갱신해 주세요. 카드 청구액·고정지출과 같은 금액을 중복 입력하지 마세요.</p>`;
+ return `<div class="page-heading"><div><h1>예정 거래</h1><p class="subtitle">미래에 들어올 추가 수입과 나갈 돈을 날짜별로 기록하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="add-planned" data-type="expense">${svg('plus')} 예정 지출</button><button class="button primary" data-action="add-planned" data-type="other_income">${svg('plus')} 예정 수입</button></div></div>${demoBanner()}<div class="planning-metrics">${metric('앞으로의 추가 수입',money(income),'오늘 이후 · 예상 계산에 포함된 내역')}${metric('앞으로의 예정 지출',money(expense),'일회성 지출 · 고정지출과 별도')}${metric('예정 거래 차액',money(income-expense),'등록된 추가 수입 − 예정 지출',income<expense?'text-danger':'income-color')}${metric('다음 반영 예정일',upcoming[0]?.date.replaceAll('-','.')||'미등록','오늘 이후 첫 반영 일정')}</div><div class="forecast-banner">${svg('planned')}<div><strong>예정일에 맞춰 예상 자산에 반영합니다.</strong><p>‘예상에 반영’한 내역은 월 예산·월급날·월별 전망과 캘린더에 포함됩니다. 확실하지 않은 금액은 계산에서 제외해 두었다가 다시 포함할 수 있습니다.</p></div><span class="forecast-badge">일회성 일정</span></div>${recordLedgerHost('planned')}<p class="category-note">수입·지출의 일회성 ‘기타 수입·기타 지출’ 내역을 함께 관리합니다. 같은 금액을 다른 화면에 다시 등록하지 않아도 됩니다. 금액은 실제 입출금 전까지 현재 예금 잔액을 변경하지 않으며, 오늘 일정은 이미 현재 잔액에 반영된 것으로 취급합니다. 일자가 지난 내역은 오늘·지난 내역에서 확인하고, 실제 잔액은 직접 갱신해 주세요. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요. 실제 카드 청구액은 카드 청구에서 별도로 입력합니다.</p>`;
 }
 function openScheduledEditor(id,type='other_income'){
  const row=id?portfolio.cashflow.find(item=>item.id===id):null;
@@ -255,7 +258,7 @@ function openScheduledEditor(id,type='other_income'){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
  if($('editor').open)$('editor').close();month=todayKST().slice(0,7);openEditor('cashflow',id);
  const chosen=row?.type||type;$('field-type').innerHTML=`<option value="other_income" ${chosen==='other_income'?'selected':''}>추가 수입</option><option value="expense" ${chosen==='expense'?'selected':''}>예정 지출</option>`;
- $('field-repeat').value='once';$('field-repeat').closest('.field').hidden=true;
+ syncExpensePaymentSource();$('field-repeat').value='once';$('field-repeat').closest('.field').hidden=true;
  const date=$('field-date');$('editor-title').textContent=`예정 ${chosen==='expense'?'지출':'수입'} ${id?'수정':'추가'}`;
  $('editor').querySelector('label[for="field-date"]').textContent='지급·지출 예정일 *';
  $('field-name').placeholder=chosen==='expense'?'예: 여행비 / 경조사비 / 가전 구입':'예: 상여금 / 환급금 / 추가 지급';
@@ -293,7 +296,7 @@ async function checkAdvisorService(){
   const response=await fetch('/api/advisor');const result=await response.json();
   advisorState.service=response.ok&&typeof result.configured==='boolean'?(result.configured?'ready':'unconfigured'):'error';
  }catch{advisorState.service='error';}
- if(view==='advisor')render();
+ if(view==='advisor'||view==='overview'&&isMobileViewport(window,location))render();
 }
 async function requestAdvisor(next){
  if(advisorState?.busy)return;
@@ -346,8 +349,8 @@ function rowHTML(kind,r){
  if(kind==='loans')cells=name+num(money(r.balance))+num(`${r.rate}%`)+num(money(Math.min(r.balance,r.principal)))+num(`${money(interestForLoan(r))}<small>${r.interestMode==='estimate'?'잔액·이율 자동 추정':'이번 납부액 직접 입력'}</small>`)+num(money(Math.min(r.balance,r.principal)+interestForLoan(r)))+`<td>매월 ${r.day}일<small>${escapeHTML(r.method)}</small></td>`;
  if(kind==='retirement')cells=name+`<td>${escapeHTML(r.institution||'—')}</td>`+num(money(r.amount))+num(`${money(r.monthlyContribution||0)}<small>${r.monthlyContribution?'매월 '+Number(r.contributionDate.slice(8))+'일 · '+r.contributionDate.slice(0,7)+'부터':'미설정'}</small>`)+`<td>${r.asOf.replaceAll('-','.')}</td>`;
  if(kind==='deposits')cells=name+`<td>${escapeHTML(r.institution||'—')}</td>`+num(money(r.balance))+num(`${r.rate}%`)+`<td>${r.maturity?r.maturity.replaceAll('-','.'): '만기 없음'}</td>`;
- if(kind==='fixed')cells=name+num(money(r.amount))+`<td>매월 ${r.day}일</td><td>${r.startMonth}<small>${r.endMonth?r.endMonth+'까지':'종료월 없음'}</small></td><td><span class="status-pill">${r.paymentSource==='card'?'카드 청구액에 포함':'계좌 결제'}</span></td>`;
- if(kind==='cashflow')cells=name+`<td><span class="status-pill ${r.type!=='expense'?'paid':''}">${FLOW_LABELS[r.type]}</span></td>`+num(`${r.type==='expense'?'−':'+'} ${money(r.amount)}`,r.type!=='expense'?'income-color':'')+`<td>${(r.occursOn||r.date).replaceAll('-','.')}<small>${r.repeat==='monthly'?'시작 '+r.date.replaceAll('-','.'):'해당 날짜 1회'}</small></td><td>${r.repeat==='monthly'?'매월 반복':'1회'}${r.includeInForecast===false?'<small>예상 계산 제외</small>':''}</td>`;
+ if(kind==='fixed')cells=name+num(money(r.amount))+`<td>매월 ${r.day}일</td><td>${r.startMonth}<small>${r.endMonth?r.endMonth+'까지':'종료월 없음'}</small></td><td><span class="status-pill">${r.paymentSource==='card'?'카드 청구액에 포함 · 중복 제외':'계좌 결제'}</span></td>`;
+ if(kind==='cashflow')cells=name+`<td><span class="status-pill ${r.type!=='expense'?'paid':''}">${FLOW_LABELS[r.type]}</span></td>`+num(`${r.type==='expense'?'−':'+'} ${money(r.amount)}`,r.type!=='expense'?'income-color':'')+`<td>${(r.occursOn||r.date).replaceAll('-','.')}<small>${r.repeat==='monthly'?'시작 '+r.date.replaceAll('-','.'):'해당 날짜 1회'}</small></td><td>${r.repeat==='monthly'?'매월 반복':'1회'}${r.includeInForecast===false?'<small>예상 계산 제외</small>':''}${isCardIncludedExpense(r)?'<small>카드 청구액에 포함 · 중복 제외</small>':''}</td>`;
  if(kind==='cards'){const overdue=!r.paid&&r.dueDate<todayKST();cells=name+num(money(r.amount))+`<td>${r.dueDate.replaceAll('-','.')}</td><td><button class="status-pill ${r.paid?'paid':overdue?'overdue':''}" style="border:0" data-action="toggle-paid" data-id="${escapeHTML(r.id)}" aria-label="${escapeHTML(r.name)} ${r.paid?'미결제로 변경':'결제 완료로 변경'}">${r.paid?'✓ 결제 완료':overdue?'일자 경과 · 미결제':'결제 예정'} ↻</button></td>`;}
  return `<tr>${cells}<td><div class="row-actions">${kind==='loans'&&r.balance>0?`<button class="loan-forecast-link" data-action="loan-forecast" data-id="${escapeHTML(r.id)}">잔액 예상</button>`:''}<button data-action="edit" data-kind="${kind}" data-id="${escapeHTML(r.id)}" aria-label="${escapeHTML(r.name)} 수정">${svg('edit')}</button><button data-action="delete" data-kind="${kind}" data-id="${escapeHTML(r.id)}" aria-label="${escapeHTML(r.name)} 삭제">${svg('delete')}</button></div></td></tr>`;
 }
@@ -388,13 +391,13 @@ function loanForecastPanel(){
 
 function filteredRecords(kind){return (kind==='cashflow'?cashflowForMonth(portfolio,month,true):kind==='fixed'?fixedForMonth(portfolio,month):portfolio[kind]).filter(r=>(r.name+' '+(r.institution||'')+' '+(r.note||'')).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>kind==='cards'?a.dueDate.localeCompare(b.dueDate):0);}
 function cardsPage(){
- return `<div class="page-heading"><div><h1>카드 청구</h1><p class="subtitle">내 카드는 한 번 등록하고 매월 청구액만 입력하세요.</p></div><div class="heading-actions"><button type="button" class="button secondary" data-action="add" data-kind="cards">개별 청구 추가</button><button type="button" class="button primary" data-action="card-account-add">＋ 카드 등록</button></div></div>${demoBanner()}<div class="metric-strip">${categoryMetrics('cards')}</div>${renderCardBilling(portfolio,cardBillingState,{money,hidden})}<div class="card-history-heading"><h2>전체 청구 내역</h2><p>저장된 모든 월의 내역 · 보기 삭제는 청구 내역을 지우지 않습니다.</p></div>${recordLedgerHost('cards')}`;
+ return `<div class="page-heading"><div><h1>카드 청구</h1><p class="subtitle">카드별 월 청구액과 결제 상태</p></div><div class="heading-actions"><button type="button" class="button secondary" data-action="add" data-kind="cards">개별 청구 추가</button><button type="button" class="button primary" data-action="card-account-add">＋ 카드 등록</button></div></div>${demoBanner()}<div class="metric-strip">${categoryMetrics('cards')}</div>${renderCardBilling(portfolio,cardBillingState,{money,hidden,layout:recordLayoutFor('card-billing')})}<div class="card-history-heading"><h2>전체 청구 내역</h2><p>모든 월의 카드 청구</p></div>${recordLedgerHost('cards')}`;
 }
 function category(kind,{embedded=false}={}){
  if(kind==='cards'&&!embedded)return cardsPage();
- if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.').replace('<div class="heading-actions">','<div class="heading-actions"><a class="button secondary" href="#advisor">AI 상담</a>'),demoBanner:demoBanner(),recordsTable:recordLedgerHost('loans'),forecastPanel:loanForecastPanel()});
+ if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,layout:recordLayoutFor('loan-cards'),query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.').replace('<div class="heading-actions">','<div class="heading-actions"><a class="button secondary" href="#advisor">AI 상담</a>'),demoBanner:demoBanner(),recordsTable:recordLedgerHost('loans'),forecastPanel:loanForecastPanel()});
  const data=filteredRecords(kind);
- const notes={fixed:'매월 납부일이 없는 달은 말일로 표시합니다. 시작월·종료월은 해당 월을 포함합니다. 카드 청구액에 포함되는 항목은 고정지출 분석에만 포함하고 카드대금과 중복 합산하지 않습니다. 수입·지출에 같은 항목을 이미 등록했다면 중복 입력하지 마세요.',cashflow:'월급은 실수령액으로 입력해 주세요. 매월 반복은 시작일이 속한 달부터 같은 날짜에 반영하며, 해당 날짜가 없는 달에는 말일로 표시합니다. 기타 지출은 카드대금·대출상환액과 중복되지 않게 입력해 주세요. 수입·지출 기록은 예금 잔액이나 순자산을 자동으로 바꾸지 않습니다.',stocks:'증권사 계좌별 총액 또는 종목별 금액 중 한 가지 방식으로 등록해 주세요. 같은 자산을 중복 등록하면 합계도 중복됩니다. 해외 자산은 원화로 환산해 입력해 주세요.',loans:'월별 예상 이자는 매달 남은 잔액 × 연 이율 ÷ 12로 계산합니다. 이번 납부 이자는 은행 청구액을 직접 입력할 수 있습니다. 실제 이자는 일수·금리 변경에 따라 다를 수 있습니다. 월별 표는 현재 잔액 기준이며 실제 상환 이력이 아닙니다. 일정이 지나도 현재 대출잔액을 자동 차감하지 않습니다.',retirement:'퇴직금 예상액과 퇴직연금 계좌 평가액은 중복되지 않도록 입력해 주세요. 입력 금액은 세전·세후 여부에 따라 실제 수령액과 다를 수 있습니다. 회사 월 납입액은 첫 납입 예정일부터 매월 예상 퇴직연금에 더하며, 예금이나 현재 잔액을 자동 변경하지 않습니다.',deposits:'연 예상 이자는 현재 잔액과 연 이율을 사용한 세전 단순 추정치입니다. 실제 이자는 상품 조건과 입출금 내역에 따라 달라집니다.',cards:'카드 청구액은 정확한 날짜별로 등록해 주세요. 상태를 눌러 결제 완료로 바꿀 수 있습니다. 완료된 카드대금은 부채에서 제외되며, 예금 잔액은 직접 수정해 주세요.'};
+ const notes={fixed:'매월 납부일이 없는 달은 말일로 표시합니다. 시작월·종료월은 해당 월을 포함합니다. 카드 청구액에 포함되는 항목은 고정지출 분석에만 포함하고 카드대금과 중복 합산하지 않습니다. 수입·지출에 같은 항목을 이미 등록했다면 중복 입력하지 마세요.',cashflow:'월급은 실수령액으로 입력해 주세요. 매월 반복은 시작일이 속한 달부터 같은 날짜에 반영하며, 해당 날짜가 없는 달에는 말일로 표시합니다. 카드대금에 포함된 기타 지출은 결제 방식에서 카드 청구액에 포함 · 중복 제외를 선택하세요. 수입·지출 기록은 예금 잔액이나 순자산을 자동으로 바꾸지 않습니다.',stocks:'증권사 계좌별 총액 또는 종목별 금액 중 한 가지 방식으로 등록해 주세요. 같은 자산을 중복 등록하면 합계도 중복됩니다. 해외 자산은 원화로 환산해 입력해 주세요.',loans:'월별 예상 이자는 매달 남은 잔액 × 연 이율 ÷ 12로 계산합니다. 이번 납부 이자는 은행 청구액을 직접 입력할 수 있습니다. 실제 이자는 일수·금리 변경에 따라 다를 수 있습니다. 월별 표는 현재 잔액 기준이며 실제 상환 이력이 아닙니다. 일정이 지나도 현재 대출잔액을 자동 차감하지 않습니다.',retirement:'퇴직금 예상액과 퇴직연금 계좌 평가액은 중복되지 않도록 입력해 주세요. 입력 금액은 세전·세후 여부에 따라 실제 수령액과 다를 수 있습니다. 회사 월 납입액은 첫 납입 예정일부터 매월 예상 퇴직연금에 더하며, 예금이나 현재 잔액을 자동 변경하지 않습니다.',deposits:'연 예상 이자는 현재 잔액과 연 이율을 사용한 세전 단순 추정치입니다. 실제 이자는 상품 조건과 입출금 내역에 따라 달라집니다.',cards:'카드 청구액은 정확한 날짜별로 등록해 주세요. 상태를 눌러 결제 완료로 바꿀 수 있습니다. 완료된 카드대금은 부채에서 제외되며, 예금 잔액은 직접 수정해 주세요.'};
  return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div>${recordLedgerHost(kind)}<p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
 }
 function calendar(){
@@ -425,17 +428,53 @@ function openEntryManagerDetail(kind,id,row){
  const notice=$('form-fields').querySelector('.form-notice');
  if(notice)notice.textContent='이 화면의 변경은 수정 목록에 담깁니다. 통합 입력·수정의 변경 저장을 누르면 다른 내역과 함께 반영됩니다.';
 }
+function recordLayoutFor(scope){return ledgerState(recordWorkspace,scope);}
+function saveRecordLayout(scope,layout){return saveRecordPreferences(scope,ledgerPreference(layout));}
+function mountLoanLayout(){const root=document.querySelector('[data-record-layout="loan-cards"]');if(!root)return;const state=recordLayoutFor('loan-cards');recordCleanups.push(mountRecordLayout(root,state,{allKeys:()=>orderLayoutRows(portfolio.loans,state,row=>'loans:'+row.id).map(row=>'loans:'+row.id),onChange:render,onSave:()=>saveRecordLayout('loan-cards',state),onFeedback:toast}));}
 function mountEntryWorkspace(){
  if(view!=='entry')return;
  recordCleanups.push(mountEntryManager($('entry-manager'),()=>portfolio,entryManagerState,{
-  money,hidden,onSave:next=>persist(next),onRender:()=>{if(view==='entry')render();},onReload:loadData,onFeedback:toast,
+  money,hidden,layoutFor:recordLayoutFor,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:()=>{if(view==='entry')render();},onReload:loadData,onFeedback:toast,
   onDetail:openEntryManagerDetail
  }));
 }
-function render(){unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{onSave:next=>persist(next),onRender:()=>{if(view==='cards')render();},onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
+function renderMobile(){
+ advisorState??=initialAdvisorState();
+ const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
+ document.title=(view==='menu'?'전체':navLabels[view]||'모아')+' · 모아';
+ recordCleanups.push(mountMobileControls(root,mobileState,{onRender:render,onPrivacy:()=>$('privacy-toggle').onclick(),onSettings:()=>openDialog('settings-dialog'),onRefresh:async()=>{if(!canRefreshPortfolio()){toast('입력·저장을 마친 뒤 다시 불러와 주세요.');return;}const updated=await refreshPortfolio();toast(updated===null?'연결을 확인한 뒤 다시 불러와 주세요.':updated?'최신 내역을 반영했어요.':'내역을 확인했어요.');},onCardBill:openMobileCardBill}));
+ if(view==='advisor'){
+  if(mobileState.advisorMode==='repayment'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});}
+  else recordCleanups.push(mountAssetConsultation(root,advisorState,{onConsult:requestAssetAdvisor}));
+ }
+ mountTrendCharts(root);
+ if(view==='overview'||view==='advisor')checkAdvisorService();
+ const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#f7f7f7';
+}
+async function requestAssetAdvisor(question){
+ if(advisorState?.busy||advisorState?.service!=='ready'||demo)return;
+ advisorState.assetQuestion=question;advisorState.assetError='';advisorState.busy=true;render();
+ const history=(advisorState.assetMessages||[]).slice(-2).flatMap(m=>[{role:'user',text:m.question.slice(0,2000)},{role:'assistant',text:m.answer.slice(0,2000)}]);
+ try{
+  const res=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'assets',question,history,revision})}),result=await res.json();
+  if(!res.ok)throw new Error(result.error||'AI 상담을 완료하지 못했습니다.');
+  if(result.revision!==revision)throw new Error('상담 중 자산이 변경됐습니다. 현재 조건으로 다시 질문해 주세요.');
+  if(typeof result.advice?.answer!=='string'||typeof result.advice?.summary!=='string'||!Array.isArray(result.advice?.checks))throw new Error('AI 답변을 확인하지 못했습니다.');
+  advisorState.assetMessages=[...(advisorState.assetMessages||[]),{question,...result.advice,revision,asOf:result.asOf}].slice(-6);advisorState.assetQuestion='';
+ }catch(error){advisorState.assetError=error.message;}
+ finally{advisorState.busy=false;if(view==='advisor')render();}
+}
+function openMobileCardBill(id){
+ if(saving)return;
+ const account=portfolio.cardAccounts.find(r=>r.id===id);if(!account)return;
+ openEditor('cards',null,{name:account.name,amount:0,dueDate:paymentDate(month,account.day),paid:false,note:account.note||''});
+ const input=document.createElement('input');input.type='hidden';input.name='mobileCardAccountId';input.value=id;$('record-form').append(input);
+ const billing=document.createElement('input');billing.type='hidden';billing.name='mobileBillingMonth';billing.value=month;$('record-form').append(billing);
+}
+function render(){closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);if(mobile){renderMobile();return;}const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#635bff';$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
- cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
+ cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['paymentSource','결제 방식','paymentSource',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
  stocks:[['name','계좌 · 종목명','text',true,'예: 국내주식 계좌 / 삼성전자'],['institution','증권사','text',false,'예: 미래에셋증권'],['cost','총매입금액','money',true,'0'],['valuation','총평가액','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
  loans:[['name','대출명','text',true,'예: 주택담보대출'],['institution','금융기관','text',false,'예: 신한은행'],['balance','현재 대출 잔액','money',true,'0'],['rate','적용 연 이율','rate',true,'예: 4.2'],['calculationMode','상환 계산 기준','calculationMode',true,''],['method','상환 방식','select',true,''],['remainingMonths','남은 납부 횟수 · 거치 포함','months',true,'예: 36'],['graceMonths','그중 이자만 내는 거치 횟수','grace',true,'0'],['nextPaymentDate','다음 납부 예정일','date',true,''],['day','이후 매월 납부일','day',true,'예: 25'],['principal','매월 상환 원금','money',true,'0'],['interestMode','현재 이자 입력 방식','interestMode',true,''],['interest','이번 납부 이자','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
  retirement:[['name','퇴직금·연금 이름','text',true,'예: 퇴직연금 DC / 예상 퇴직금'],['institution','금융기관 · 회사','text',false,'예: 삼성생명'],['amount','현재 금액','money',true,'0'],['monthlyContribution','회사 월 납입액','money',true,'0'],['contributionDate','첫 납입 예정일','date',false,''],['asOf','금액 기준일','date',true,''],['note','메모','textarea',false,'세전/세후 여부 등을 기록하세요']],
@@ -445,6 +484,7 @@ const fields={
 function openEditor(kind,id,rowOverride){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
  entryEditing=false;entryDetailEditing=false;
+ $('record-form').querySelectorAll('[name="mobileCardAccountId"],[name="mobileBillingMonth"]').forEach(el=>el.remove());
  if(!KINDS.includes(kind)){showAddMenu();return;}
  editorKind=kind;editingId=id||null;
  const row=rowOverride||(id?portfolio[kind].find(r=>r.id===id):{});
@@ -459,11 +499,13 @@ function openEditor(kind,id,rowOverride){
   else if(type==='flowType'||type==='repeat'){const options=type==='flowType'?Object.entries(FLOW_LABELS):[['once','해당 날짜 1회'],['monthly','매월 반복']];input=`<select id="field-${key}" name="${key}" required>${options.map(([v,label])=>`<option value="${v}" ${value===v?'selected':''}>${label}</option>`).join('')}</select>`;}
   else if(type==='select')input=`<select id="field-${key}" name="${key}" required>${['원금균등','원리금균등','만기일시','기타'].map(v=>`<option value="${v}" ${value===v?'selected':''}>${v==='원금균등'?'원금균등분할 · 원금 일정, 이자 감소':v==='원리금균등'?'원리금균등 · 총 납부액 일정':v==='만기일시'?'만기일시 · 마지막에 원금 상환':v}</option>`).join('')}</select>`;
   else if(type==='paid')input=`<select id="field-${key}" name="${key}"><option value="false">결제 예정</option><option value="true" ${value===true?'selected':''}>결제 완료</option></select>`;
+  else if(type==='month')input=renderMonthPicker({id:'field-'+key,name:key,value,label,required,rangeStartId:key==='endMonth'?'field-startMonth':'',emptyLabel:key==='endMonth'?'종료월 없음':'월 선택',clearLabel:key==='endMonth'?'종료월 없음':'선택 지우기'});
   else if(type==='textarea')input=`<textarea id="field-${key}" name="${key}" maxlength="500" placeholder="${placeholder}" rows="2">${escapeHTML(value)}</textarea>`;
   else input=`<div class="input-wrap"><input id="field-${key}" name="${key}" type="${type==='money'?'text':['rate','day','months','grace'].includes(type)?'number':type}" ${required?'required':''} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='rate'?'min="0" max="100" step="0.001"':type==='day'?'min="1" max="31" step="1"':type==='months'?'min="1" max="600" step="1"':type==='grace'?'min="0" max="599" step="1"':type==='text'?'maxlength="100"':''} value="${escapeHTML(type==='money'?wonFormat.format(value):value)}" placeholder="${placeholder}">${type==='money'?'<span>원</span>':type==='rate'?'<span>%</span>':type==='day'?'<span>일</span>':''}</div>`;
-  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':''}</div>`;
- }).join('')+`<p class="form-notice full-width">${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 기타 지출은 카드·대출과 중복 등록하지 마세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
+  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}${type==='month'?'-button':''}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${['cashflow','fixed'].includes(kind)&&key==='paymentSource'?'<p class="field-hint">카드 청구액에 이미 들어 있는 지출은 중복 제외를 선택하세요. 내역은 유지하고 추가로 차감하지 않습니다. 실제 카드 청구액은 카드 청구에서 별도로 입력하세요.</p>':''}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':''}</div>`;
+ }).join('')+`<p class="form-notice full-width">${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
  if(kind==='loans'){const preview=document.createElement('section');preview.id='loan-plan-preview';preview.className='loan-plan-preview full-width';preview.setAttribute('aria-live','polite');$('form-fields').insertBefore(preview,$('form-fields').querySelector('.form-notice'));syncLoanPlan();}else syncRetirementContribution();
+ syncExpensePaymentSource();
  $('record-form').onsubmit=submitRecord;
  $('record-form').querySelector('button[type="submit"]').textContent='저장하기 ↗';
  openDialog('editor');
@@ -477,10 +519,13 @@ function rememberEntryDraft(){
  if(!entryEditing)return;
  entryDrafts[entryActiveType]=Object.fromEntries(fields[editorKind].map(([key])=>[key,$('field-'+key)?.value??'']));
 }
+function syncExpensePaymentSource(){
+ const field=$('field-paymentSource');if(editorKind!=='cashflow'||!field)return;const expense=$('field-type')?.value==='expense';field.closest('.field').hidden=!expense;field.disabled=!expense;if(!expense)setEntryField('paymentSource','account');
+}
 function setEntryField(key,value){
  const field=$('field-'+key);if(!field)return;
  if(field.tagName==='SELECT')for(const option of field.querySelectorAll('option'))option.toggleAttribute('selected',option.value===String(value));
- field.value=String(value);
+ field.value=String(value);if(field.hasAttribute('data-month-value'))syncMonthPicker(field);
 }
 function startEntryEditor(type,{capture=true,message=''}={}){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
@@ -497,7 +542,7 @@ function startEntryEditor(type,{capture=true,message=''}={}){
  $('form-fields').prepend(controls);
  if(message){const note=document.createElement('p');note.className='entry-save-message full-width';note.setAttribute('role','status');note.textContent=message;controls.after(note);}
  const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.textContent='저장하고 다음 입력';
- if(preset.kind==='loans')syncLoanPlan();else syncRetirementContribution();
+ if(preset.kind==='loans')syncLoanPlan();else syncRetirementContribution();syncExpensePaymentSource();
  $('field-name')?.focus();
 }
 async function submitRecord(e){
@@ -505,7 +550,9 @@ async function submitRecord(e){
  const fromEntry=entryEditing,entryType=entryActiveType,recordKind=editorKind,keepEntering=fromEntry&&Boolean($('entry-continue')?.checked);
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
  for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
- if(recordKind==='cards'&&editingId){const link=portfolio.cards.find(row=>row.id===editingId)?.cardAccountId;if(link)record.cardAccountId=link;}
+ if(recordKind==='cashflow'&&record.type!=='expense')record.paymentSource='account';
+ if(recordKind==='cards'&&!editingId&&values.get('mobileCardAccountId')){const account=portfolio.cardAccounts.find(r=>r.id===values.get('mobileCardAccountId'));if(!account){$('form-error').textContent='카드 정보를 다시 확인해 주세요.';return;}record.cardAccountId=account.id;record.billingMonth=String(values.get('mobileBillingMonth'));}
+ if(recordKind==='cards'&&editingId){const existing=portfolio.cards.find(row=>row.id===editingId);if(existing?.cardAccountId)record.cardAccountId=existing.cardAccountId;if(existing?.billingMonth)record.billingMonth=existing.billingMonth;}
  if(recordKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
  if(entryDetailEditing){
   try{const check=structuredClone(portfolio);check[recordKind][check[recordKind].findIndex(r=>r.id===record.id)]=record;const clean=validatePortfolio(check)[recordKind].find(r=>r.id===record.id);stageEntryRecord(entryManagerState,portfolio,recordKind,clean);entryDetailEditing=false;$('editor').close();render();toast('변경 목록에 담았어요. 변경 저장을 누르면 한 번에 반영됩니다.');}catch(error){$('form-error').textContent=error.message;}return;
@@ -613,12 +660,12 @@ document.addEventListener('keydown',e=>{
  const offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(offset===undefined)return;
  e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
 });
-document.addEventListener('change',e=>{if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
+document.addEventListener('change',e=>{if(e.target.id==='field-type')syncExpensePaymentSource();if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
  if(e.target.id==='field-monthlyContribution')syncRetirementContribution();
  if(['field-balance','field-rate','field-remainingMonths','field-graceMonths','field-principal','field-day'].includes(e.target.id))syncLoanPlan();
- if((e.target.id==='record-search'&&!e.target.hasAttribute('data-ledger-field'))||e.target.id==='loan-card-search'){query=e.target.value;const kind=view==='overview'?(homeSelection==='debt'?'loans':homeSelection):view;const rows=filteredRecords(kind);if(kind==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
- if(e.target.matches('#record-form input[inputmode="numeric"]')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}
+ if((e.target.id==='record-search'&&!e.target.hasAttribute('data-ledger-field'))||e.target.id==='loan-card-search'){query=e.target.value;const kind=view==='overview'?(homeSelection==='debt'?'loans':homeSelection):view;const rows=filteredRecords(kind);if(kind==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money,layout:recordLayoutFor('loan-cards')})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
+ if(e.target.matches('#record-form input[inputmode="numeric"]:not([data-month-year])')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}
 });
 $('privacy-toggle').onclick=()=>{hidden=!hidden;localStorage.setItem('moa-hide-amounts',String(hidden));if(!loading)render();else renderNav();};
 $('data-settings').onclick=()=>openDialog('settings-dialog');
@@ -639,5 +686,16 @@ $('import-file').onchange=async e=>{
 };
 $('editor').addEventListener('cancel',()=>{entryDetailEditing=false;if(entryEditing){rememberEntryDraft();entryEditing=false;}});
 window.addEventListener('beforeunload',event=>{if(entryManagerState.drafts.size||cardBillingState.drafts.size){event.preventDefault();event.returnValue='';}});
-function setView(){const hash=location.hash.slice(1);if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
-window.addEventListener('hashchange',setView);setView();renderNav();loadData();
+function setView(){const hash=location.hash.slice(1),[route,recordId]=hash.split('/');mobileRecordId=/^[a-zA-Z0-9_-]{1,80}$/.test(recordId||'')?recordId:'';if(route!==view){mobileState.search='';mobileState.category='all';mobileState.flowType='all';}if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[route]?route:isMobileViewport(window,location)&&route==='menu'?'menu':'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
+function canRefreshPortfolio(){return !loading&&!saving&&!demo&&!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!workspaceState.editing&&!advisorState?.busy&&!document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]');}
+const refreshPortfolio=createPortfolioSync({
+ getRevision:()=>revision,canRefresh:canRefreshPortfolio,
+ fetchPortfolio:async()=>{const res=await fetch('/api/portfolio',{cache:'no-store'}),data=await res.json();if(!res.ok)throw new Error(data.error||'최신 내역에 연결하지 못했습니다.');return data;},
+ apply:result=>{portfolio=validatePortfolio(result.data);revision=result.revision;render();status('최신 내역 반영됨');},
+ onError:()=>status('동기화 연결 확인',true)
+});
+mountPortfolioSync(window,document,refreshPortfolio);
+const mobileViewport=window.matchMedia?.('(max-width: 760px)');
+mobileViewport?.addEventListener?.('change',()=>{if(!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!loading)render();});
+document.body.classList.toggle('mobile-app',isMobileViewport(window,location));
+mountMonthPickers(document);window.addEventListener('hashchange',setView);setView();renderNav();loadData();

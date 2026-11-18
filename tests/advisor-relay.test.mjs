@@ -25,3 +25,8 @@ test('relay returns actionable provider status and safe codes without upstream e
  const relay=createRelayHandler({expectedTokenHash:hash,readApiKey:()=>key,fetchImpl:async()=>Response.json({error:{code:'insufficient_quota',message:key}},{status:429})});const response=await relay(request());assert.equal(response.status,429);const raw=await response.text();assert.match(raw,/insufficient_quota/);assert.ok(!raw.includes(key));
  const timeout=createRelayHandler({expectedTokenHash:hash,readApiKey:()=>key,fetchImpl:async()=>{throw new DOMException('slow','TimeoutError');}});assert.equal((await timeout(request())).status,504);
 });
+test('relay accepts asset consultation schema and continues to reject unrelated response modes',async()=>{
+ let calls=0;const relay=createRelayHandler({expectedTokenHash:hash,readApiKey:()=>key,fetchImpl:async(url,init)=>{calls++;assert.equal(JSON.parse(init.body).text.format.name,'asset_advice');return Response.json({status:'completed',output_text:'{}'});}});
+ const payload={...body,text:{format:{...body.text.format,name:'asset_advice'}}};assert.equal((await relay(request(payload))).status,200);assert.equal(calls,1);
+ assert.equal((await relay(request({...payload,text:{format:{...payload.text.format,name:'unrelated'}}}))).status,400);assert.equal(calls,1);
+});

@@ -1,5 +1,6 @@
-import {KINDS,todayKST,paymentDate} from './domain.mjs';
-export const ledgerKinds=[...KINDS,'all','planned'];
+import {recordLayoutSpecs} from './record-layout-model.mjs';
+import {KINDS,todayKST,paymentDate,isCardIncludedExpense} from './domain.mjs';
+export const ledgerKinds=[...KINDS,'all','planned',...Object.keys(recordLayoutSpecs)];
 export const ledgerLabels={stocks:'주식·투자',loans:'대출',retirement:'퇴직금·연금',deposits:'예금·현금',cards:'카드 청구',cashflow:'수입·지출',fixed:'정기 지출',all:'전체 내역',planned:'예정 거래'};
 export const ledgerColumns={
  stocks:[['name','계좌·종목명'],['cost','매입금액'],['valuation','평가액'],['profit','평가손익']],
@@ -7,10 +8,11 @@ export const ledgerColumns={
  retirement:[['name','퇴직금·연금'],['institution','기관·회사'],['amount','현재 금액'],['monthlyContribution','회사 월 납입액'],['date','기준일']],
  loans:[['name','대출명'],['balance','잔액'],['rate','연 이율'],['principal','월 원금'],['interest','이번 이자'],['payment','상환액'],['date','상환일']],
  cards:[['name','카드사·카드명'],['amount','청구액'],['date','결제일'],['status','결제 상태']],
- cashflow:[['name','항목명'],['type','구분'],['amount','금액'],['date','입출금일'],['repeat','반복']],
+ cashflow:[['name','항목명'],['type','구분'],['amount','금액'],['date','입출금일'],['repeat','반복'],['paymentSource','결제 방식']],
  fixed:[['name','고정지출명'],['amount','월 금액'],['date','납부일'],['period','적용 기간'],['paymentSource','결제 방식']],
  all:[['name','항목명'],['kind','카테고리'],['institution','금융기관'],['amount','금액'],['date','관련 일자'],['status','상태']],
- planned:[['date','예정일'],['name','항목명·메모'],['type','구분'],['amount','금액'],['status','예상 반영']]
+ planned:[['date','예정일'],['name','항목명·메모'],['type','구분'],['amount','금액'],['status','예상 반영']],
+ ...Object.fromEntries(Object.entries(recordLayoutSpecs).map(([scope,spec])=>[scope,spec.columns.map(key=>[key,key])]))
 };
 export const defaultLedgerState=()=>({query:'',category:'all',status:'all',institution:'',type:'',repeat:'',start:'',end:'',min:'',max:'',sort:'newest',page:1,pageSize:20,selected:[],rowOrder:[],columns:[],hidden:[],widths:{},density:'comfortable',savedViews:[],viewName:'',error:''});
 export function ledgerEntries(data,scope,month=todayKST().slice(0,7)){
@@ -21,13 +23,13 @@ export function ledgerStatus(entry,today=todayKST()){
  const {row,kind}=entry;
  if(kind==='cards')return row.paid?'paid':row.dueDate<today?'overdue':'unpaid';
  if(kind==='loans')return row.balance>0?'active':'settled';
- if(kind==='cashflow')return row.includeInForecast===false?'excluded':'included';
+ if(kind==='cashflow')return row.includeInForecast===false?'excluded':isCardIncludedExpense(row)?'card':'included';
  if(kind==='deposits')return !row.maturity?'liquid':row.maturity<today?'matured':'term';
  if(kind==='stocks')return row.valuation>row.cost?'gain':row.valuation<row.cost?'loss':'flat';
  if(kind==='retirement')return row.monthlyContribution>0?'contributing':'fixed';
  return row.paymentSource==='card'?'card':'account';
 }
-export const statusLabels={paid:'결제 완료',overdue:'결제일 경과',unpaid:'미결제',active:'상환 중',settled:'상환 완료',excluded:'예상 제외',included:'예상 반영',liquid:'만기 없음',matured:'만기 경과',term:'만기 예정',gain:'평가이익',loss:'평가손실',flat:'보합',contributing:'월 납입 있음',fixed:'월 납입 없음',card:'카드 결제',account:'계좌 결제'};
+export const statusLabels={paid:'결제 완료',overdue:'결제일 경과',unpaid:'미결제',active:'상환 중',settled:'상환 완료',excluded:'예상 제외',included:'예상 반영',liquid:'만기 없음',matured:'만기 경과',term:'만기 예정',gain:'평가이익',loss:'평가손실',flat:'보합',contributing:'월 납입 있음',fixed:'월 납입 없음',card:'카드 청구액에 포함 · 중복 제외',account:'계좌 결제'};
 export function ledgerQuery(entries,state,today=todayKST()){
  const q=state.query.normalize('NFKC').toLocaleLowerCase('ko-KR').trim();
  const rows=entries.filter(entry=>{
@@ -61,7 +63,7 @@ export function validateLedgerPreferences(input){
   const item=input.tables[scope];if(item===undefined)continue;
   const columns=ledgerColumns[scope].map(([key])=>key);
   const list=value=>{if(!Array.isArray(value)||value.length>columns.length||new Set(value).size!==value.length||value.some(key=>!columns.includes(key)))throw new Error('열 설정을 확인해 주세요.');return value;};
-  const rowOrder=item.rowOrder??[];const allowedKinds=scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope];
+  const rowOrder=item.rowOrder??[];const allowedKinds=recordLayoutSpecs[scope]?.kinds||(scope==='all'?KINDS:scope==='planned'?['cashflow']:[scope]);
   if(!Array.isArray(rowOrder)||rowOrder.length>2000||new Set(rowOrder).size!==rowOrder.length||rowOrder.some(key=>typeof key!=='string'||!allowedKinds.some(kind=>key.startsWith(kind+':'))||!/^([a-z]+):[a-zA-Z0-9_-]{1,80}$/.test(key)))throw new Error('행 순서를 확인해 주세요.');
   const hidden=list(item.hidden||[]);if(hidden.length>=columns.length)throw new Error('최소 한 개의 열을 표시해 주세요.');
   const widths={};for(const key of columns)if(item.widths?.[key]!==undefined){const w=item.widths[key];if(!Number.isInteger(w)||w<90||w>600)throw new Error('열 너비를 확인해 주세요.');widths[key]=w;}
