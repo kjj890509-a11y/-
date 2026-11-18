@@ -3,29 +3,26 @@ body:not(.mobile-app) {
   --desk-paper: var(--canvas);
   --card-shadow: none;
   background: var(--desk-paper);
-  --desk-cream: #fff7d7;
-  --desk-cocoa: #62452d;
-  --desk-honey: #d9b26c;
-  --save-dot: var(--desk-honey);
-  --ink: #342c26;
-  --text-secondary: #534a42;
-  --muted: #70685f;
-  --line: #eae6e0;
-  --track: #e9e5de;
-  --soft-surface: #f6f3ed;
+  --ink: #252525;
+  --text-secondary: #494949;
+  --muted: #646464;
+  --line: #e5e5e5;
+  --track: #e9e9e9;
+  --soft-surface: #f5f5f5;
   --brand-accent: #ffdc47;
   --brand-accent-hover: #f5cc32;
-  --brand-accent-soft: var(--desk-cream);
-  --brand-accent-border: #dec572;
-  --brand-ink: #42301c;
-  --brand-focus: #865b20;
-  --green: var(--desk-cocoa);
+  --brand-accent-soft: var(--soft-surface);
+  --brand-accent-border: #c4c4c4;
+  --brand-ink: var(--ink);
+  --brand-focus: #505050;
+  --green: var(--text-secondary);
   --green-dark: var(--ink);
-  --accent-border: #ddd0bc;
-  --chart-secondary: #9a7149;
-  --asset-cash: #79573a;
-  --asset-stock: #dab354;
-  --asset-retirement: #ba9f82;
+  --accent-border: var(--line);
+  --save-dot: var(--muted);
+  --chart-secondary: #767676;
+  --asset-cash: #474747;
+  --asset-stock: #858585;
+  --asset-retirement: #b7b7b7;
 }
 body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
   background: var(--desk-paper);
@@ -72,10 +69,11 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
     font-size: 13px; line-height: 1.45; color: var(--text-secondary);
     font-weight: 500; border-radius: 5px; text-decoration: none;
   }
-  .desk-menu-item svg { width: 15px; height: 15px; flex: 0 0 15px; color: #796d5f; }
+  .desk-menu-item svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--muted); }
   .desk-menu-item:hover { background: var(--soft-surface); }
-  body:not(.mobile-app) .desk-menu-item[aria-current="page"] { color: var(--brand-ink); background: var(--desk-cream); font-weight: 650; box-shadow: none; }
-  .desk-menu-item[aria-current="page"] svg { color: var(--desk-cocoa); }
+  body:not(.mobile-app) .desk-menu-item[aria-current="page"] { color: var(--brand-ink); background: var(--desk-paper); font-weight: 700; box-shadow: none; }
+  .desk-menu-item[aria-current="page"] span { text-decoration: underline; text-underline-offset: 4px; }
+  .desk-menu-item[aria-current="page"] svg { color: var(--ink); }
   body:not(.mobile-app) .sidebar-bottom { margin-top: 0; flex: none; padding: 12px 8px 0; border: 0; }
   body:not(.mobile-app) .sidebar-bottom .text-button,
   body:not(.mobile-app) .sidebar-bottom .signout { min-height: 25px; margin: 0; padding: 3px 0; font-size: 12px; }
@@ -94,8 +92,8 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
   }
   body:not(.mobile-app) .topbar-right { grid-area: 1 / 3; justify-self: end; }
   body:not(.mobile-app) .topbar .entry-shortcut { display: none; }
-  body:not(.mobile-app) .topbar .advisor-shortcut { min-height: 28px; padding: 3px 6px; color: var(--desk-cocoa); background: transparent; }
-  body:not(.mobile-app) .topbar .avatar { background: #efe8da; color: var(--desk-cocoa); }
+  body:not(.mobile-app) .topbar .advisor-shortcut { min-height: 28px; padding: 3px 6px; color: var(--ink); background: transparent; }
+  body:not(.mobile-app) .topbar .avatar { background: var(--desk-paper); color: var(--ink); }
   body:not(.mobile-app) #main {
     width: 100%; max-width: none; min-height: calc(100vh - 44px);
     margin: 0; padding: 26px clamp(20px, 2vw, 38px) 30px;
@@ -123,7 +121,7 @@ body:not(.mobile-app) #main .page-content :is(
   background: var(--desk-paper);
 }
 body:not(.mobile-app) #main .page-content .workspace-widget.widget-chosen {
-  background-color: var(--desk-cream);
+  background-color: var(--soft-surface);
 }
 body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spending-modes) {
   border: 0;
@@ -138,8 +136,11 @@ body:not(.mobile-app) #main .page-content .ledger-chip.active,
 body:not(.mobile-app) #main .page-content .cf-day.is-selected {
   border: 0;
   box-shadow: none;
-  background: var(--desk-cream);
+  background: var(--desk-paper);
   color: var(--brand-ink);
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 body:not(.mobile-app) :is(.button.secondary, .entry-recent-edit, .coach-launch, .cf-month-link) {
   border: 0;
@@ -155,9 +156,9 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 #main[data-view="overview"] .overview-heading { align-items: center; min-height: 42px; margin: 0 0 28px; }
 .overview-title { display: flex; align-items: center; gap: 11px; }
 .overview-home-icon, .overview-metric-label i, .overview-event-icon {
-  display: inline-grid; place-items: center; flex: none; color: var(--desk-cocoa);
+  display: inline-grid; place-items: center; flex: none; color: var(--ink);
 }
-.overview-home-icon { width: 36px; height: 36px; border-radius: 5px; background: var(--desk-cream); }
+.overview-home-icon { width: 36px; height: 36px; border-radius: 5px; background: var(--desk-paper); }
 .overview-home-icon svg { width: 19px; height: 19px; }
 #main .overview-title h1 { font-size: 20px; line-height: 1.35; }
 #main .overview-title .subtitle { margin: 2px 0 0; font-size: 12px; }
@@ -177,28 +178,28 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 .overview-empty { padding: 14px 0; }
 .overview-link {
   display: inline-flex; align-items: center; gap: 5px; padding: 0;
-  border: 0; background: transparent; color: var(--desk-cocoa); font-size: 12px; font-weight: 600;
+  border: 0; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600;
 }
 .overview-link:hover { text-decoration: underline; }
 #main .overview-main .home-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 24px; }
 #main .overview-workspace .home-stat {
   min-height: 96px; padding: 12px 8px; border: 0; border-radius: 5px; box-shadow: none; background: var(--surface);
 }
-#main .overview-workspace .home-stat:is(:hover, .is-selected) .overview-metric-label { color: var(--desk-cocoa); }
+#main .overview-workspace .home-stat:is(:hover, .is-selected) .overview-metric-label { color: var(--ink); }
 #main .overview-workspace .home-stat.is-selected { background: var(--desk-paper); box-shadow: none; }
-#main .overview-workspace .home-stat.is-selected .overview-metric-label i { background: var(--brand-accent); }
+#main .overview-workspace .home-stat.is-selected .overview-metric-label { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 #main .overview-workspace .overview-metric-label {
   display: flex; justify-content: flex-start; align-items: center; gap: 7px; width: 100%;
   font-size: 13px; color: var(--text-secondary); font-weight: 500;
 }
-.overview-metric-label i { width: 24px; height: 24px; border-radius: 4px; background: var(--desk-cream); }
+.overview-metric-label i { width: 24px; height: 24px; border-radius: 4px; background: var(--desk-paper); }
 .overview-metric-label svg { width: 14px; height: 14px; }
 #main .overview-workspace [data-home-indicator] { margin-left: auto; color: var(--muted); font-size: 12px; }
 #main .overview-workspace .home-stat > strong { margin: 13px 0 0; font-size: clamp(16px, 1.5vw, 22px); line-height: 1.3; color: var(--ink); }
 #main .overview-workspace .home-stat > small { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
-.overview-forecast { --amount-bar-color: var(--desk-honey); --chart-min-width: min(100%, 680px); }
-.overview-forecast .amount-bar-point:last-child { --amount-bar-color: #966a3e; }
-.overview-forecast .amount-bar-point:is(:hover,:focus-visible) { --amount-bar-color: var(--desk-cocoa); }
+.overview-forecast { --amount-bar-color: #828282; --chart-min-width: min(100%, 680px); }
+.overview-forecast .amount-bar-point:last-child { --amount-bar-color: #454545; }
+.overview-forecast .amount-bar-point:is(:hover,:focus-visible) { --amount-bar-color: var(--ink); }
 .overview-chart-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .overview-chart-actions .segmented button { min-height: 26px; padding: 2px 7px; font-size: 12px; }
 .overview-forecast .amount-bars { margin: 6px 0 0; }
@@ -213,7 +214,7 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   min-height: 68px; padding: 10px 8px; border: 0; border-radius: 5px;
 }
 .overview-quick-grid a:hover, .overview-event:hover { background: var(--soft-surface); }
-.overview-quick-grid i { display: grid; place-items: center; color: var(--desk-cocoa); }
+.overview-quick-grid i { display: grid; place-items: center; color: var(--ink); }
 .overview-quick-grid svg, .overview-actionbar svg { width: 15px; height: 15px; }
 .overview-quick-grid span { color: var(--text-secondary); font-size: 13px; }
 .overview-quick-grid strong { grid-column: 2; font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -229,13 +230,12 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   display: grid; grid-template-columns: 29px minmax(0,1fr) auto;
   align-items: start; gap: 8px; padding: 10px 0; font-size: 13px; line-height: 1.5;
 }
-.overview-event-icon { width: 29px; height: 29px; border-radius: 50%; background: var(--soft-surface); }
+.overview-event-icon { width: 29px; height: 29px; border-radius: 50%; background: var(--desk-paper); }
 .overview-event-icon svg { width: 15px; height: 15px; }
 .overview-event-label { min-width: 0; overflow-wrap: anywhere; }
 .overview-event strong { display: block; font-weight: 600; }
 .overview-event small { color: var(--muted); font-size: 12px; }
 .overview-event b { max-width: 10ch; color: var(--text-secondary); text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.overview-agenda { --income: #775126; }
 .overview-overdue { display: flex; align-items: center; gap: 7px; padding: 8px; color: var(--expense); background: var(--expense-soft); border-radius: 5px; font-size: 12px; }
 .overview-overdue strong { display: block; }
 .overview-overdue svg { flex: 0 0 16px; width: 16px; height: 16px; }
@@ -251,7 +251,7 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   font-size: 12px; font-weight: 550;
 }
 .overview-actionbar a:hover { background: var(--soft-surface); }
-.overview-actionbar .overview-ask { margin-left: auto; background: var(--desk-cream); color: var(--brand-ink); }
+.overview-actionbar .overview-ask { margin-left: auto; color: var(--brand-ink); font-weight: 650; }
 #main .overview-start { margin-bottom: 14px; padding: 10px 0; background: var(--surface); border: 0; }
 #main .overview-start .button { min-height: 31px; }
 @media (max-width: 1060px) {
