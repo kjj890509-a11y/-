@@ -111,6 +111,21 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-month>button{min-width:44px;min-height:44px;font-size:22px;border:1px solid var(--m-line);border-radius:12px;background:var(--m-surface)}
 .mobile-app .m-month>strong{font-size:16px;min-width:100px;text-align:center}
 .mobile-app .m-month .m-month-reset{font-size:var(--m-caption)!important;color:#505860;margin-left:4px;padding:8px 10px;background:var(--m-soft)}
+.mobile-app .m-month-interactive{gap:6px;flex-wrap:wrap;position:relative}
+.mobile-app .m-month-interactive .m-month-reset{margin-left:0;padding-inline:8px}
+.mobile-app .m-month>button:disabled,.mobile-app .m-spending-apply button:disabled{opacity:.5;cursor:default}
+.mobile-app .m-month-interactive .month-picker{
+ --green:var(--m-action);--green-dark:var(--m-selection-ink);--radius:12px;position:static
+}
+.mobile-app .m-month-interactive .month-picker-trigger{
+ gap:8px;min-width:0;min-height:44px;padding:8px 10px;border-color:var(--m-line);
+ color:var(--m-ink);font-size:var(--m-label);font-weight:600;white-space:nowrap
+}
+.mobile-app .m-month-interactive .month-picker-trigger svg{width:16px;height:16px;color:var(--m-muted)}
+.mobile-app .m-month-interactive .month-picker-trigger[aria-expanded=true]{border-color:var(--m-action)}
+.mobile-app .m-month-interactive .month-picker-inline{
+ position:absolute;top:100%;left:50%;z-index:10;width:min(304px,calc(100% - 32px));transform:translateX(-50%)
+}
 .mobile-app .m-calendar{padding:10px 10px 14px;background:var(--m-surface);margin:0 var(--m-gutter) 16px;border:1px solid var(--m-line);border-radius:var(--m-radius);box-shadow:var(--m-shadow)}
 .mobile-app .m-week,.mobile-app .m-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
 .mobile-app .m-week{font-size:11px;color:var(--m-muted);border-bottom:1px solid var(--m-line);padding:8px 0 12px}
@@ -159,6 +174,11 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-budget-hero{margin:0 var(--m-gutter) 16px;padding:24px var(--m-inner);background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-radius);text-align:center;box-shadow:var(--m-shadow)}
 .mobile-app .m-budget-hero>span{display:block;font-size:var(--m-label);color:var(--m-muted)}
 .mobile-app .m-budget-hero>strong{display:block;font-size:var(--m-balance-size);line-height:1.4;letter-spacing:-.8px;margin-top:8px;overflow-wrap:anywhere}
+.mobile-app .m-spending-record .m-primary{margin-top:16px}
+.mobile-app .m-spending-apply .m-inline-tabs{margin:0}
+.mobile-app .m-spending-apply>.m-note{padding:8px 0 2px}
+.mobile-app .m-spending-budget .m-facts dd{font-variant-numeric:tabular-nums}
+.mobile-app .m-spending-budget .m-spending-total-row :is(dt,dd){color:var(--m-ink);font-weight:700}
 .mobile-app .m-projection{border:0;border-bottom:1px solid #f1f1f1;border-radius:0;margin:0;padding:0 22px;background:#fff}
 .mobile-app .m-projection>summary{min-height:88px}
 .mobile-app .m-projection>summary>span:first-child{flex:1}

@@ -298,8 +298,8 @@ function openSpendingEditor(){
  const title=`${Number(selectedMonth.slice(0,4))}년 ${Number(selectedMonth.slice(5))}월 생활비`;
  $('editor-title').textContent=title;
  $('form-error').textContent='';
- $('form-fields').innerHTML=`<div class="field full-width"><label for="spending-amount">실제 생활비 합계</label><div class="input-wrap"><input id="spending-amount" name="amount" type="text" inputmode="numeric" required maxlength="21" value="${record?wonFormat.format(record.amount):''}" aria-describedby="spending-amount-help"><span>원</span></div><p id="spending-amount-help">실제로 낸 고정비·기타 생활비를 합쳐 입력하세요. 따로 등록한 카드·대출 납부액은 제외해 주세요.</p></div>
- <div class="field full-width"><label for="spending-applied">이 달 반영 여부</label><select id="spending-applied" name="applied"><option value="false" ${record?.applied?'':'selected'}>미반영 · 가계부에만 보관</option><option value="true" ${record?.applied?'selected':''}>반영 · 이 달 생활비 계획 대체</option></select><p>앞으로 낼 생활비를 기존 계획에 남기려면 미반영을 선택하세요.</p></div>`;
+ $('form-fields').innerHTML=`<div class="field full-width"><label for="spending-amount">실제 생활비 합계</label><div class="input-wrap"><input id="spending-amount" name="amount" type="text" inputmode="numeric" required maxlength="21" value="${record?wonFormat.format(record.amount):''}" aria-describedby="spending-amount-help"><span>원</span></div><p class="field-hint" id="spending-amount-help">고정비와 기타 생활비를 합쳐 입력하세요. 따로 등록한 카드·대출 납부액은 빼주세요.</p></div>
+ <div class="field full-width"><label for="spending-applied">이 달 반영 여부</label><select id="spending-applied" name="applied" aria-describedby="spending-applied-help"><option value="false" ${record?.applied?'':'selected'}>미반영 · 가계부에만 보관</option><option value="true" ${record?.applied?'selected':''}>반영 · 이 달 생활비 계획 대체</option></select><p class="field-hint" id="spending-applied-help">아직 낼 생활비를 계획에 남기려면 미반영을 선택하세요.</p></div>`;
  const form=$('record-form'),submit=form.querySelector('button[type="submit"]');
  submit.hidden=false;submit.disabled=false;submit.textContent='생활비 저장';
  form.onsubmit=async event=>{
