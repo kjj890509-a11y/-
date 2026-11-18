@@ -1,14 +1,14 @@
 // One hierarchy shared by desktop navigation, mobile navigation and section tabs.
 export const viewLabels = {
  overview:'자산 한눈에',entry:'통합 입력·수정',workspace:'맞춤 대시보드',assets:'전체 자산',deposits:'예금·현금',stocks:'주식·투자',retirement:'퇴직금·연금',
- records:'전체 내역',cashflow:'수입·지출 내역',fixed:'정기 지출',planned:'예정 거래',schedule:'입출금 달력',
+ records:'전체 내역',cashflow:'수입·지출 내역',spending:'가계부',fixed:'정기 지출',planned:'예정 거래',schedule:'입출금 달력',
  loans:'대출 현황',cards:'카드 청구',advisor:'AI 상담',
  budget:'월 예산',forecast:'월별 전망',payday:'급여일 전망',statistics:'기간별 분석',history:'자산 기록'
 };
 export const navigationGroups = [
  {id:'home',label:'홈',icon:'overview',defaultView:'overview',views:['overview','entry','workspace']},
  {id:'assets',label:'보유 자산',icon:'deposits',defaultView:'assets',views:['assets','deposits','stocks','retirement']},
- {id:'flow',label:'수입·지출',icon:'cashflow',defaultView:'cashflow',views:['records','cashflow','fixed','planned','schedule']},
+ {id:'flow',label:'수입·지출',icon:'cashflow',defaultView:'cashflow',views:['records','cashflow','spending','fixed','planned','schedule']},
  {id:'debt',label:'대출·카드',icon:'loans',defaultView:'loans',views:['loans','cards','advisor']},
  {id:'plan',label:'자금 계획',icon:'forecast',defaultView:'forecast',views:['forecast','payday','budget']},
  {id:'reports',label:'분석·기록',icon:'statistics',defaultView:'statistics',views:['statistics','history']}
@@ -40,6 +40,7 @@ import {createCardBillingState,renderCardBilling,mountCardBilling,renderCardAcco
 export {createCardBillingState,renderCardBilling,mountCardBilling,renderCardAccounts,saveCardAccount,setCardArchived};
 
 export {renderMonthPicker,mountMonthPickers,syncMonthPicker,closeMonthPicker} from './month-picker.mjs';
+export {renderMonthlySpending} from './actual-spending.mjs';
 
 export {mountRecordLayout,orderLayoutRows} from './record-layout.mjs';
 

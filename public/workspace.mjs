@@ -70,7 +70,7 @@ function widgetContent(data,widget,period,{formatMoney,formatCompact,today}){
  }
  if(widget.type==='budget'){
   const p=budgetPlan(data,today.slice(0,7));
-  return `<div class="widget-total"><span>지출 한도에서 남는 금액</span><strong>${p.limit===null?'한도 미설정':money(p.remaining)}</strong></div>${facts([['지출 한도',p.limit===null?'미설정':p.limit],['등록 지출 계획',p.expense],['등록 수입 계획',p.income],['저축 목표',p.target||0]],money)}<a class="panel-link" href="#budget">수입·지출 계획 설정 ↗</a>`;
+  return `<div class="widget-total"><span>지출 한도에서 남는 금액</span><strong>${p.limit===null?'한도 미설정':money(p.remaining)}</strong></div>${facts([['지출 한도',p.limit===null?'미설정':p.limit],[p.actualApplied?'집계 지출':'등록 지출 계획',p.expense],['등록 수입 계획',p.income],['저축 목표',p.target||0]],money)}<a class="panel-link" href="#budget">수입·지출 계획 설정 ↗</a>`;
  }
  if(widget.type==='payday'){
   const row=paydayForecasts(data,today,1)[0];

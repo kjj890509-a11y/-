@@ -94,6 +94,53 @@ test('monthly budgets count paid cards as spending and stay independent by month
  p.budgets.push({month:'2027-05',expenseLimit:1000000,savingsTarget:0});assert.equal(budgetPlan(p,'2027-05').limit,1000000);
  assert.equal(budgetPlan(p,'2027-06').limit,null);
 });
+test('monthly actuals replace living expenses only and never reduce the current balance twice',()=>{
+ const p=emptyPortfolio(),month='2026-11',start='2026-11-16';
+ p.deposits=[{id:'d',name:'생활비 통장',balance:2000000,rate:0}];
+ p.fixed=[{id:'rent',name:'월세',amount:700000,day:25,startMonth:month,paymentSource:'account'}];
+ p.cashflow=[
+  {id:'salary',name:'월급',type:'salary',amount:3000000,date:month+'-27',repeat:'monthly'},
+  {id:'other',name:'기타 생활비',type:'expense',amount:100000,date:month+'-24',repeat:'monthly'}
+ ];
+ p.loans=[{id:'l',name:'대출',balance:500000,principal:50000,rate:0,interest:0,day:25,method:'원금균등'}];
+ p.cards=[
+  {id:'paid',name:'결제 완료 카드',amount:100000,dueDate:month+'-14',paid:true,note:''},
+  {id:'pending',name:'미결제 카드',amount:200000,dueDate:month+'-22',paid:false,note:''}
+ ];
+ p.budgets=[{month,expenseLimit:1300000,savingsTarget:0}];
+ p.actualSpending=[{month,amount:900000,applied:false}];
+ const baseline=totals(p);
+ const before=forecastMonths(p,start,2);
+ assert.equal(budgetPlan(p,month).expense,1150000);
+ assert.equal(before[0].expense,1050000);
+ p.actualSpending[0].applied=true;
+ const applied=budgetPlan(p,month),after=forecastMonths(p,start,2);
+ assert.equal(applied.livingExpense,900000);
+ assert.equal(applied.expense,1250000);
+ assert.equal(applied.remaining,50000);
+ assert.equal(applied.fixedCash,700000);
+ assert.equal(after[0].expense,250000);
+ assert.equal(after[0].deposits,4750000);
+ assert.equal(paydayForecasts(p,start,1)[0].deposits,4750000);
+ assert.equal(after[1].expense,before[1].expense);
+ assert.equal(budgetPlan(p,'2026-12').livingExpense,800000);
+ assert.deepEqual(totals(p),baseline);
+ assert.deepEqual(forecastMonths(p,'2026-12-01',1),forecastMonths({...p,actualSpending:[]},'2026-12-01',1));
+ p.actualSpending[0].amount=0;
+ assert.equal(budgetPlan(p,month).expense,350000);
+ p.actualSpending[0].applied=false;
+ assert.deepEqual(forecastMonths(p,start,2),before);
+});
+test('monthly actuals validate amounts and keep one entry per month',()=>{
+ const data=emptyPortfolio(),month=todayKST().slice(0,7),record={month,amount:0,applied:false};
+ delete data.actualSpending;
+ assert.deepEqual(validatePortfolio(data).actualSpending,[]);
+ assert.deepEqual(validatePortfolio({...data,actualSpending:[record]}).actualSpending,[record]);
+ assert.throws(()=>validatePortfolio({...data,actualSpending:[record,record]}),/월별 기록/);
+ for(const patch of [{amount:-1},{amount:1.5},{applied:'false'},{month:shiftMonth(month,1)}]){
+  assert.throws(()=>validatePortfolio({...data,actualSpending:[{...record,...patch}]}));
+ }
+});
 test('forecast pays principal and card liabilities without subtracting the debt twice from net worth',()=>{
  const p=emptyPortfolio();p.deposits=[{id:'d',name:'통장',institution:'',balance:1000000,rate:0,maturity:'',note:''}];
  p.loans=[{id:'l',name:'대출',institution:'',balance:200000,principal:150000,interest:10000,rate:5,day:25,method:'원금균등',note:''}];
@@ -119,11 +166,14 @@ test('legacy backups gain empty plans and history; duplicate months and future a
  clean.budgets=[{month:'2026-11',expenseLimit:0,savingsTarget:0},{month:'2026-11',expenseLimit:1,savingsTarget:1}];assert.throws(()=>validatePortfolio(clean));
  clean.budgets=[];clean.snapshots=[{...captureSnapshot(clean),month:shiftMonth(todayKST().slice(0,7),1),asOf:shiftMonth(todayKST().slice(0,7),1)+'-01'}];assert.throws(()=>validatePortfolio(clean));
 });
-test('API preserves budgets and history when a legacy client saves asset updates',async()=>{
- const env={DB:database()},data=samplePortfolio('2026-11-16');assert.equal((await handleApi(req('owner','PUT',{data,revision:0}),env)).status,200);
- const legacy=structuredClone(data);delete legacy.budgets;delete legacy.snapshots;legacy.deposits[0].balance=300;
+test('API preserves budgets, actual expenses and history when a legacy client saves asset updates',async()=>{
+ const env={DB:database()},data=samplePortfolio('2026-11-16');
+ data.actualSpending=[{month:todayKST().slice(0,7),amount:900000,applied:true}];
+ assert.equal((await handleApi(req('owner','PUT',{data,revision:0}),env)).status,200);
+ const legacy=structuredClone(data);delete legacy.budgets;delete legacy.snapshots;delete legacy.actualSpending;legacy.deposits[0].balance=300;
  assert.equal((await handleApi(req('owner','PUT',{data:legacy,revision:1}),env)).status,200);
  const saved=await(await handleApi(req('owner'),env)).json();assert.equal(saved.data.budgets.length,4);assert.equal(saved.data.snapshots.filter(r=>r.source==='manual').length,4);assert.equal(saved.data.snapshots.at(-1).source,'auto');
+ assert.deepEqual(saved.data.actualSpending,data.actualSpending);
 });
 
 test('fixed expenses respect inclusive start/end months and clamp the monthly payment day',()=>{

@@ -2,7 +2,7 @@ export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cas
 export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직연금·퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
 export const isCardIncludedExpense = row => row.type==='expense'&&row.paymentSource==='card';
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], snapshots: [], loanPayments: [], dashboard: null });
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], actualSpending: [], snapshots: [], loanPayments: [], dashboard: null });
 export function validateDashboard(input) {
   if (input === null || input === undefined) return null;
   if (input.version !== 1 || !Array.isArray(input.widgets) || input.widgets.length > 16) throw new Error('통계 카드는 최대 16개까지 저장할 수 있습니다.');
@@ -143,7 +143,8 @@ export function validatePortfolio(input) {
   }
   count+=clean.cardAccounts.length;
   const validMoney=value=>Number.isSafeInteger(value)&&value>=0&&value<=1_000_000_000_000_000;
-  for (const key of ['budgets','snapshots']) {
+  const currentMonth=todayKST().slice(0,7);
+  for (const key of ['budgets','actualSpending','snapshots']) {
     if (input[key] === undefined) continue;
     if (!Array.isArray(input[key]) || input[key].length>240) throw new Error('월별 기록은 최대 240개월까지 저장할 수 있습니다.');
     const months=new Set();
@@ -153,6 +154,12 @@ export function validatePortfolio(input) {
       if (key==='budgets') {
         if (!validMoney(row.expenseLimit) || !validMoney(row.savingsTarget)) throw new Error('지출 한도와 저축 목표는 0 이상의 원 단위 정수로 입력해 주세요.');
         return {month:row.month,expenseLimit:row.expenseLimit,savingsTarget:row.savingsTarget};
+      }
+      if (key==='actualSpending') {
+        if (row.month>currentMonth) throw new Error('실제 생활비는 이번 달 또는 이전 달에 기록해 주세요.');
+        if (!validMoney(row.amount)) throw new Error('실제 생활비를 0 이상의 원 단위 정수로 입력해 주세요.');
+        if (typeof row.applied!=='boolean') throw new Error('가계부 반영 여부를 선택해 주세요.');
+        return {month:row.month,amount:row.amount,applied:row.applied};
       }
       if (!validDate(row.asOf) || row.asOf.slice(0,7)!==row.month || row.asOf>todayKST()) throw new Error('자산 기록의 기준일은 해당 월의 오늘 이전 날짜로 입력해 주세요.');
       if (!['auto','manual'].includes(row.source)) throw new Error('자산 기록의 구분을 확인해 주세요.');
@@ -213,14 +220,19 @@ export function scheduledCashflows(data,date=todayKST(),range='upcoming') {
 export function retirementContributionsForMonth(data,month) {
  return (data.retirement||[]).filter(row=>(row.monthlyContribution||0)>0&&validDate(row.contributionDate)&&row.contributionDate.slice(0,7)<=month).map(row=>({id:row.id,name:row.name,amount:row.monthlyContribution,date:paymentDate(month,Number(row.contributionDate.slice(8)))}));
 }
+export function actualSpendingForMonth(data,month) {
+  return (data.actualSpending||[]).find(row=>row.month===month);
+}
 export function monthlyFlow(data,month) {
   const records=cashflowForMonth(data,month);
   const sum=type=>records.filter(row=>row.type===type&&!isCardIncludedExpense(row)).reduce((n,row)=>n+row.amount,0);
   const salary=sum('salary'),otherIncome=sum('other_income'),otherExpense=sum('expense');
   const payments=eventsForMonth(data,month).filter(row=>['loans','cards'].includes(row.type)&&!row.paid).reduce((n,row)=>n+row.amount,0);
   const fixed=fixedForMonth(data,month),fixedCash=fixed.filter(row=>row.paymentSource==='account').reduce((n,row)=>n+row.amount,0),fixedCard=fixed.filter(row=>row.paymentSource==='card').reduce((n,row)=>n+row.amount,0);
-  const income=salary+otherIncome,expense=payments+otherExpense+fixedCash;
-  return {salary,otherIncome,otherExpense,fixedCash,fixedCard,fixedTotal:fixedCash+fixedCard,payments,income,expense,balance:income-expense};
+  const actual=actualSpendingForMonth(data,month),actualApplied=actual?.applied===true;
+  const livingExpense=actualApplied?actual.amount:otherExpense+fixedCash;
+  const income=salary+otherIncome,expense=payments+livingExpense;
+  return {salary,otherIncome,otherExpense,fixedCash,fixedCard,fixedTotal:fixedCash+fixedCard,payments,livingExpense,actualApplied,income,expense,balance:income-expense};
 }
 export function fixedForMonth(data,month) {
  return (data.fixed||[]).filter(row=>row.startMonth<=month&&(!row.endMonth||row.endMonth>=month)).map(row=>({...row,occursOn:paymentDate(month,row.day)})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
@@ -327,8 +339,10 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate),events=[];
  for(let index=0;index<monthCount;index++) {
   const month=shiftMonth(firstMonth,index);
-  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate&&!isCardIncludedExpense(row))events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
-  for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
+  // The current balance already reflects paid living expenses. Only replace this month's plans.
+  const livingExpensesSettled=index===0&&actualSpendingForMonth(data,month)?.applied;
+  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate&&!isCardIncludedExpense(row)&&!(livingExpensesSettled&&row.type==='expense'))events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
+  if(!livingExpensesSettled)for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
   for(const row of loanMonths[index].details)if(row.date>startDate&&row.payment>0)events.push({date:row.date,name:row.name,kind:'loan',amount:row.payment,income:false,principal:row.principal,interest:row.interest});
   for(const row of retirementContributionsForMonth(data,month))if(row.date>startDate)events.push({...row,kind:'retirement',income:false});
  }

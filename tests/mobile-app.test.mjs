@@ -46,6 +46,34 @@ test('mobile edits use the same portfolio and appear in the desktop layout',asyn
  const t=await app(domain.samplePortfolio(),'deposits/demo-d1');t.click('.m-hero-actions [data-action=edit]');t.fill({balance:'123,456'});await t.submit();assert.equal(t.state.data.deposits[0].balance,123456);assert.match(t.document.querySelector('.m-balance').textContent,/123,456/);assert.equal(t.state.writes,1);
  t.context.location.search='?display=desktop';await t.visit('deposits');assert.ok(t.document.querySelector('[data-page-shell]'));assert.match(t.document.querySelector('#main').textContent,/123,456/);assert.equal(t.document.body.classList.contains('mobile-app'),false);
 });
+test('monthly ledger saves actuals separately, applies a month with one tap, and shares the resulting budget with desktop',async()=>{
+ const data=domain.emptyPortfolio(),month=domain.todayKST().slice(0,7),previous=domain.shiftMonth(month,-1);
+ data.fixed=[{id:'rent',name:'월세',amount:700000,day:20,startMonth:previous,paymentSource:'account'}];
+ data.actualSpending=[{month:previous,amount:500000,applied:true}];
+ const t=await app(data,'spending'),mode='[data-action=spending-mode]',setAmount='[data-action=spending-form]';
+ assert.equal(t.document.querySelector(mode+'[data-applied=true]').disabled,true);
+ t.click(setAmount);
+ t.change('#spending-amount','900,000');
+ await t.submit();
+ assert.deepEqual(t.state.data.actualSpending.find(row=>row.month===month),{month,amount:900000,applied:false});
+ assert.match(t.document.querySelector('.spending-effective').textContent,/700,000원/);
+ t.click(mode+'[data-applied=true]');await tick();await tick();
+ assert.equal(t.document.querySelector(mode+'[data-applied=true]').getAttribute('aria-pressed'),'true');
+ assert.match(t.document.querySelector('.spending-effective').textContent,/900,000원/);
+ t.click('[data-action=prev-month]');
+ assert.match(t.document.querySelector('.spending-total').textContent,/500,000원/);
+ t.click(mode+'[data-applied=false]');await tick();await tick();
+ assert.match(t.document.querySelector('.spending-effective').textContent,/700,000원/);
+ assert.deepEqual(t.state.data.actualSpending,[{month:previous,amount:500000,applied:false},{month,amount:900000,applied:true}]);
+ assert.equal(t.state.writes,3);
+ t.click('[data-action=next-month]');
+ t.context.location.search='?display=desktop';await t.visit('budget');
+ assert.match(t.document.querySelector('.breakdown-list').textContent,/가계부 생활비[\s\S]*900,000원/);
+ assert.doesNotMatch(t.document.querySelector('.breakdown-list').textContent,/고정지출/);
+ await t.visit('spending');
+ assert.ok(t.document.querySelector('[data-page-shell] .spending-content'));
+ assert.equal(t.document.querySelector(mode+'[data-applied=true]').getAttribute('aria-pressed'),'true');
+});
 test('monthly card entry keeps the card profile and billing month when the actual payment is in another month',async()=>{
  const data=domain.emptyPortfolio();data.cardAccounts=[{id:'my-card',name:'내 카드',day:13,note:'',archived:false}];const t=await app(data,'cards'),month=domain.todayKST().slice(0,7),due=domain.shiftMonth(month,1)+'-13';
  t.click('[data-action=mobile-card-bill]');t.fill({amount:'39,180',dueDate:due});await t.submit();const bill=t.state.data.cards[0];assert.equal(bill.cardAccountId,'my-card');assert.equal(bill.billingMonth,month);assert.equal(bill.dueDate,due);assert.equal(bill.amount,39180);assert.match(t.document.querySelector('.m-bill-card').textContent,/39,180/);
