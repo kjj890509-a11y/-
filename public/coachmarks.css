@@ -46,9 +46,15 @@ body.mobile-app dialog.asset-manage-picker{
 }
 dialog.asset-manage-picker>h3{margin:18px 0 10px;font-size:14px;font-weight:600}
 dialog.asset-manage-picker .asset-manage-add{
- width:100%;min-height:48px;background:#303843;color:white;font-weight:600;
+ width:100%;min-height:48px;background:var(--m-action);color:#fff;font-weight:600;
 }
 
 .asset-manage-picker .coach-picker-text{display:flex;align-items:center;gap:10px}
 .asset-manage-picker .coach-picker-text>.finance-icon{width:32px;height:32px}
 .asset-manage-picker .coach-picker-text>span{min-width:0}
+
+.mobile-app .coach-card .coach-primary{background:var(--m-action)}
+@media(hover:hover){
+ .mobile-app .coach-card .coach-primary:hover,
+ .mobile-app dialog.asset-manage-picker .asset-manage-add:hover{background:var(--m-action-hover)}
+}
