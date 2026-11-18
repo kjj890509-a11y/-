@@ -6,12 +6,12 @@
   --font-xs: 12px; --font-sm: 14px; --font-md: 14px; --font-lg: 16px;
   --font-xl: 20px; --font-2xl: 24px; --font-3xl: 28px;
   --ink: #30313d; --text-secondary: #414552; --muted: #596171;
-  --green: #635bff; --green-dark: #5145cd; --canvas: #f7f8fa;
-  --surface: #ffffff; --soft-surface: #f1efff; --line: #ebeef1;
-  --track: #ebe9ff; --red: #b02a37; --blue: #635bff;
-  --accent-border: #c8c3ff; --accent-muted: #8b83ec; --chart-secondary: #8176db;
+  --green: #3c4a56; --green-dark: var(--ink); --canvas: #f7f8fa;
+  --surface: #ffffff; --soft-surface: #f3f5f6; --line: #ebeef1;
+  --track: #e8eced; --red: #b02a37; --blue: #426980;
+  --accent-border: #cbd4db; --chart-secondary: var(--brand-focus);
   --income: #18764b; --income-soft: #eaf4ed; --expense: #b02a37; --expense-soft: #fbebeb;
-  --asset-stock: #a78bfa; --asset-cash: #635bff; --asset-retirement: #20a4b8;
+  --asset-stock: #6c8ba6; --asset-cash: #3e5163; --asset-retirement: #3c8878;
   --card-shadow: 0 1px 2px #30313d04;
   --radius: 6px; --sidebar-width: 216px;
   font-size: var(--font-md); line-height: 1.6;
@@ -359,7 +359,7 @@ main { max-width:1600px; padding:20px 32px 40px; }
 .home-stat>span { color:var(--ink); font-weight:550; }
 .home-stat strong { font-size:var(--font-2xl); font-weight:600; margin:8px 0 6px; letter-spacing:-.5px; }
 .home-stat small { font-size:var(--font-xs); }
-.home-stat.is-selected { background:var(--soft-surface); box-shadow:inset 0 -2px var(--green); border-color:var(--line); }
+.home-stat.is-selected { background:var(--soft-surface); box-shadow:inset 0 -2px var(--brand-accent); border-color:var(--line); }
 .home-stat:hover { background:var(--canvas); }
 .home-stat:focus-visible { z-index:1; outline-offset:-3px; }
 .home-detail-toolbar { margin-bottom:16px; min-height:36px; font-size:var(--font-xs); }
@@ -375,7 +375,7 @@ main { max-width:1600px; padding:20px 32px 40px; }
 .budget-progress { height:5px; }
 .segmented { border:1px solid var(--line); border-radius:5px; padding:0; background:var(--surface); }
 .segmented button { min-height:30px; padding:4px 10px; border-radius:4px; font-size:var(--font-xs); }
-.segmented button.active { background:var(--soft-surface); color:var(--green-dark); box-shadow:none; }
+.segmented button.active { background:var(--brand-accent-soft); color:var(--brand-ink); box-shadow:none; }
 .asset-total { margin:18px 0 16px; }
 .asset-breakdown>button { padding:13px 0; }
 .allocation-track { gap:0; height:7px; border-radius:3px; }
