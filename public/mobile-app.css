@@ -308,3 +308,17 @@ body.mobile-app{--m-ink:#2f2f2f;--m-muted:#626a71;--m-canvas:#ffffff;--m-yellow:
 @media(max-width:350px){.mobile-app .m-home-header{padding-left:14px;padding-right:14px;gap:5px}.mobile-app .m-home-question strong{font-size:12px}.mobile-app .m-home-intro{padding-left:22px;padding-right:22px;gap:12px}.mobile-app .m-home-intro h2{font-size:19px}.mobile-app .m-home-asset-row{padding-left:14px;padding-right:14px}.mobile-app .m-home-row-action{min-width:48px;padding-left:11px;padding-right:11px}.mobile-app .m-home-asset-row .m-card-copy>strong{font-size:18px}.mobile-app .m-forecast-home .m-card-copy>strong{font-size:20px}}
 
 .mobile-app #toast{left:50%}
+
+/* Individual finance illustrations: keep white surfaces and neutral navigation. */
+.mobile-app .finance-icon{display:block;width:40px;height:40px;max-width:none;flex-shrink:0;object-fit:contain;pointer-events:none;user-select:none}
+.mobile-app .m-home-asset-row .m-card-symbol,.mobile-app .m-forecast-home .m-card-symbol{width:40px;height:40px;background:transparent}
+.mobile-app .m-home-question-icon .finance-icon{width:28px;height:28px}
+.mobile-app .m-home-intro-symbol{opacity:1}
+.mobile-app .m-home-intro-symbol .finance-icon{width:66px;height:66px}
+.mobile-app .m-row-finance-icon{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:36px;height:36px}
+.mobile-app .m-row-finance-icon .finance-icon{width:36px;height:36px}
+.mobile-app .m-menu-group>.m-row .m-row-finance-icon{width:30px;height:30px}
+.mobile-app .m-menu-group>.m-row .finance-icon{width:30px;height:30px}
+.mobile-app .m-bill-title .m-bank-dot{background:transparent;width:34px;height:34px}
+.mobile-app .m-bill-title .finance-icon{width:34px;height:34px}
+@media(max-width:350px){.mobile-app .m-home-asset-row .m-card-main{gap:10px}.mobile-app .m-home-asset-row .m-card-symbol,.mobile-app .m-home-asset-row .finance-icon{width:34px;height:34px}.mobile-app .m-home-intro-symbol .finance-icon{width:56px;height:56px}}
