@@ -1,7 +1,6 @@
 /* These tokens belong to the desktop shell. Mobile has its own navigation and surfaces. */
-html:has(> body:not(.mobile-app)) { background: #fff; }
 body:not(.mobile-app) {
-  --desk-paper: #fff;
+  --desk-paper: var(--canvas);
   --card-shadow: none;
   background: var(--desk-paper);
   --desk-cream: #fff7d7;
@@ -13,7 +12,6 @@ body:not(.mobile-app) {
   --muted: #70685f;
   --line: #eae6e0;
   --track: #e9e5de;
-  --canvas: #faf9f7;
   --soft-surface: #f6f3ed;
   --brand-accent: #ffdc47;
   --brand-accent-hover: #f5cc32;
@@ -29,6 +27,9 @@ body:not(.mobile-app) {
   --asset-stock: #dab354;
   --asset-retirement: #ba9f82;
 }
+body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
+  background: var(--desk-paper);
+}
 @media (min-width: 761px) {
   body:not(.mobile-app) {
     --sidebar-width: clamp(168px, 14vw, 214px);
@@ -36,7 +37,6 @@ body:not(.mobile-app) {
   body:not(.mobile-app) .sidebar {
     padding: 0 10px 8px;
     border: 0;
-    background: var(--desk-paper);
     overflow: hidden;
   }
   body:not(.mobile-app) .sidebar .brand {
@@ -73,7 +73,7 @@ body:not(.mobile-app) {
     font-weight: 500; border-radius: 5px; text-decoration: none;
   }
   .desk-menu-item svg { width: 15px; height: 15px; flex: 0 0 15px; color: #796d5f; }
-  .desk-menu-item:hover { background: #eeebe5; }
+  .desk-menu-item:hover { background: var(--soft-surface); }
   body:not(.mobile-app) .desk-menu-item[aria-current="page"] { color: var(--brand-ink); background: var(--desk-cream); font-weight: 650; box-shadow: none; }
   .desk-menu-item[aria-current="page"] svg { color: var(--desk-cocoa); }
   body:not(.mobile-app) .sidebar-bottom { margin-top: 0; flex: none; padding: 12px 8px 0; border: 0; }
@@ -83,7 +83,7 @@ body:not(.mobile-app) {
     height: 44px; padding: 0 18px;
     display: grid;
     grid-template-columns: minmax(0, .68fr) minmax(190px, 420px) minmax(max-content, 1fr);
-    gap: 12px; background: var(--desk-paper);
+    gap: 12px;
   }
   body:not(.mobile-app) .topbar .breadcrumb { grid-area: 1 / 1; color: var(--muted); }
   body:not(.mobile-app) .global-search-launch {
@@ -99,7 +99,7 @@ body:not(.mobile-app) {
   body:not(.mobile-app) #main {
     width: 100%; max-width: none; min-height: calc(100vh - 44px);
     margin: 0; padding: 26px clamp(20px, 2vw, 38px) 30px;
-    border: 0; border-radius: 0; background: var(--desk-paper);
+    border: 0; border-radius: 0;
   }
   body:not(.mobile-app) #main[data-view="overview"] { padding-bottom: 0; }
   #main[data-view="overview"] > .page-shell > .section-tabs,
@@ -116,8 +116,11 @@ body:not(.mobile-app) #main .page-content :is(
   border: 0;
   box-shadow: none;
 }
-body:not(.mobile-app) #main .page-content :is(.panel, .table-panel, .workspace-widget:not(.widget-chosen)) {
-  background-color: var(--desk-paper);
+body:not(.mobile-app) #main .page-content :is(
+  .panel, .table-panel, .page-metric-card, .summary-card, .stat-card,
+  .workspace-widget:not(.widget-chosen), .forecast-banner, .outlook-strip
+) {
+  background: var(--desk-paper);
 }
 body:not(.mobile-app) #main .page-content .workspace-widget.widget-chosen {
   background-color: var(--desk-cream);
@@ -181,8 +184,9 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 #main .overview-workspace .home-stat {
   min-height: 96px; padding: 12px 8px; border: 0; border-radius: 5px; box-shadow: none; background: var(--surface);
 }
-#main .overview-workspace .home-stat:hover { background: var(--canvas); }
-#main .overview-workspace .home-stat.is-selected { background: var(--desk-cream); }
+#main .overview-workspace .home-stat:is(:hover, .is-selected) .overview-metric-label { color: var(--desk-cocoa); }
+#main .overview-workspace .home-stat.is-selected { background: var(--desk-paper); box-shadow: none; }
+#main .overview-workspace .home-stat.is-selected .overview-metric-label i { background: var(--brand-accent); }
 #main .overview-workspace .overview-metric-label {
   display: flex; justify-content: flex-start; align-items: center; gap: 7px; width: 100%;
   font-size: 13px; color: var(--text-secondary); font-weight: 500;
@@ -208,7 +212,7 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   display: grid; grid-template-columns: 16px 1fr; align-content: center; align-items: center; gap: 3px 7px;
   min-height: 68px; padding: 10px 8px; border: 0; border-radius: 5px;
 }
-.overview-quick-grid a:hover, .overview-event:hover { background: var(--canvas); }
+.overview-quick-grid a:hover, .overview-event:hover { background: var(--soft-surface); }
 .overview-quick-grid i { display: grid; place-items: center; color: var(--desk-cocoa); }
 .overview-quick-grid svg, .overview-actionbar svg { width: 15px; height: 15px; }
 .overview-quick-grid span { color: var(--text-secondary); font-size: 13px; }
@@ -246,7 +250,7 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   padding: 3px 8px; border: 0; border-radius: 4px; color: var(--text-secondary);
   font-size: 12px; font-weight: 550;
 }
-.overview-actionbar a:hover { background: var(--canvas); }
+.overview-actionbar a:hover { background: var(--soft-surface); }
 .overview-actionbar .overview-ask { margin-left: auto; background: var(--desk-cream); color: var(--brand-ink); }
 #main .overview-start { margin-bottom: 14px; padding: 10px 0; background: var(--surface); border: 0; }
 #main .overview-start .button { min-height: 31px; }
