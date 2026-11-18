@@ -20,3 +20,14 @@
 .finance-issuer-label .finance-icon{display:block;flex:none;width:32px;height:32px;object-fit:contain}
 .finance-icon.finance-brand{border-radius:24%;object-fit:contain}
 .loan-card-heading .finance-issuer-label{flex:1}
+
+.loan-brand-icon{position:relative;flex-shrink:0}
+.loan-brand-icon>.finance-brand{
+ display:block;width:100%;height:100%;border-radius:24%;object-fit:contain
+}
+.loan-brand-badge{
+ position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;
+ box-sizing:border-box;width:17px;height:17px;border:1px solid white;border-radius:50%;
+ line-height:1;font-size:10px;font-weight:700;color:white;background:#2554A4
+}
+.loan-brand-credit{background:#117564}

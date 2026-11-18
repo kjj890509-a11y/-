@@ -51,4 +51,4 @@ export {mountAssetConsultation} from './asset-consultation.mjs';
 
 export {createCoachmarkState,mountCoachmarks} from './coachmarks.mjs';
 
-export {renderFinanceIcon} from './finance-icons.mjs';
+export {renderFinanceIcon,renderFinanceRecordIcon} from './finance-icons.mjs';
