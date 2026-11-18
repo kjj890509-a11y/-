@@ -64,3 +64,22 @@ Three changes:
 No API, account, storage, calculation or desktop-layout change. The same portfolio remains in use. No new dependencies.
 
 Verification: 10 targeted mobile/desktop-frame tests passed, including empty/populated routes, shared edits, cross-month cards, privacy, calendar and AI unavailable state. Worker build (45 assets), bundled syntax and whitespace checks passed. Declared foreground/background pairs for primary balances exceed 10:1; checked compact metadata/navigation pairs are at least 4.7:1. These are source-color calculations, not browser-computed measurements. Managed preview still fails with the relay-readiness timeout; actual browser rendering and before/after screenshots remain unverified.
+
+
+## Core features and reference palette — 2026-11-18
+
+This supersedes the lighter secondary palette in the preceding iteration. The user explicitly rejected the pastel adaptation. Mobbin MCP's same Accounts flow was inspected again: primary mint `#c8e3d6`, coral `#ec7e64`, blue `#5486a3`, beige `#c5bcaa`, canvas `#f7f7f7`. These original surface colors are now used directly. Dark text on colored summaries is retained for readable financial labels; this does not claim pixel-identical text rendering.
+
+The original header/banner/primary-card/stack/four-tab composition remains. Its content now prioritizes Moa's core job:
+
+- Banner: AI asset consultation with truthful connection status.
+- Primary mint card: this month's forecast net worth, change from current net worth, current net worth and next payday forecast. Actions open month-end and payday forecasts. Empty data is shown as an empty forecast, not invented assets.
+- Bottom tabs: Home, Asset forecasts, AI consultation, All. All asset, card, inflow/outflow and entry routes remain available from home records or All.
+- Forecast: current-to-future net-worth chart, selectable forecast dates, predicted asset composition, payday-before/after cash and shortage warning. Existing domain calculations handle salary, other/future cashflows, loan principal/interest, card bills, duplicate exclusion and employer pension contributions. The forecast changes no actual balance.
+- AI: general questions about assets/forecasts, with short in-memory conversation history, plus the retained loan additional-repayment comparison. Hiding amounts also hides prior questions/answers and figures.
+
+`POST /api/advisor` supports `mode: assets` in addition to the existing default repayment mode. General consultation does not require a loan. The server loads only the authenticated user's portfolio, verifies revision/origin and usage limits, and creates aggregate month-end/payday forecast context itself. Client-supplied balances are ignored. Context avoids account/company names. Model/effort remain gpt-6.1-terra/xhigh, store:false. Structured answers are checked before display and escaped in the UI. Short conversation history is bounded and treated as untrusted data. No new financial records, permissions, secrets or dependencies are introduced.
+
+**Connection is not complete.** Production environment inspection found revision 0 and no configured runtime variables. No live OpenAI request was made. API behavior was verified with provider mocks. Existing-key relay deployment remains blocked pending explicit approval of the prior rejected access-boundary change; draft PR #3 stays separate from this production UI/API feature change.
+
+Validation: all 217 tests passed, including the existing financial/authentication/cross-device checks and new forecast-date wiring, no-loan asset consultation, authenticated forecast context, bounded conversation history, invalid-answer rejection, privacy and disabled-service states. Build includes 46 local assets. Browser preview still returned a relay-readiness timeout; no rendering screenshot or pixel-parity claim is made.

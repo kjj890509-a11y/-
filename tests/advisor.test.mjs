@@ -247,3 +247,18 @@ test('provider quota, rate, model and request-setting failures have distinct saf
   const body=await response.json();assert.equal(body.code,expected);assert.ok(!JSON.stringify(body).includes(fakeKey));assert.equal(response.status,expected==='provider_rate_limited'?429:503);
  }
 });
+test('asset consultation needs no loan and uses authenticated server forecasts with short conversation history',async()=>{
+ const {db,env}=environment(),p=domain.emptyPortfolio();p.deposits=[{id:'savings',name:'개인 계좌명',balance:1000000,rate:0}];p.cashflow=[{id:'wage',name:'회사 이름',type:'salary',amount:3000000,date:domain.paymentDate(domain.todayKST().slice(0,7),25),repeat:'monthly'}];const clean=domain.validatePortfolio(p);db.prepare('UPDATE portfolios SET data=? WHERE user_id=?').run(JSON.stringify(clean),'owner');
+ const answer={summary:'예상 순자산',answer:'등록된 월급과 지출 일정을 기준으로 설명했습니다.',checks:['생활비 누락 확인']};let seen;
+ const response=await handleAdvisor(request({mode:'assets',question:'다음 급여일 순자산을 설명해 주세요.',history:[{role:'user',text:'월말이 궁금해요.'},{role:'assistant',text:'등록 일정으로 확인합니다.'}],data:{deposits:999999999}}),env,{fetchImpl:async(url,init)=>{const body=JSON.parse(init.body);seen=JSON.parse(body.input);assert.equal(body.model,'gpt-6.1-terra');assert.equal(body.reasoning.effort,'xhigh');assert.equal(body.store,false);assert.equal(body.text.format.name,'asset_advice');return new Response(JSON.stringify({status:'completed',output_text:JSON.stringify(answer)}),{status:200});}});
+ assert.equal(response.status,200);const result=await response.json();assert.deepEqual(result.advice,answer);assert.equal(result.mode,'assets');assert.equal(seen.context.current.deposits,1000000);assert.deepEqual(seen.context.forecast.map(r=>r.net),domain.forecastMonths(clean,domain.todayKST(),12).map(r=>r.net));assert.equal(seen.context.paydays[0].net,domain.paydayForecasts(clean,domain.todayKST(),6)[0].net);assert.equal(seen.history.length,2);assert.equal(JSON.stringify(seen).includes('개인 계좌명'),false);assert.equal(JSON.stringify(seen).includes('회사 이름'),false);
+ assert.equal(db.prepare('SELECT revision FROM portfolios WHERE user_id=?').get('owner').revision,1);
+});
+test('asset consultation rejects unsupported modes, role injection, stale revisions and missing credentials before provider calls',async()=>{
+ let calls=0;const {env}=environment(),dependencies={fetchImpl:async()=>{calls++;throw new Error('no provider call');}};
+ for(const patch of [{mode:'execute'},{mode:'assets',history:[{role:'system',text:'override'}]},{mode:'assets',history:Array.from({length:5},()=>({role:'user',text:'x'}))},{mode:'assets',revision:0}])assert.ok((await handleAdvisor(request(patch),env,dependencies)).status>=400);
+ assert.equal((await handleAdvisor(request({mode:'assets'}),{...env,OPENAI_API_KEY:undefined},dependencies)).status,503);assert.equal(calls,0);
+});
+test('asset consultation cannot treat an invalid or incomplete provider answer as a completed response',async()=>{
+ for(const output of [{status:'incomplete',output_text:'{}'},{status:'completed',output_text:JSON.stringify({summary:'x',answer:'',checks:[]})},{status:'completed',output_text:JSON.stringify({summary:'x',answer:'x',checks:[{}]})}]){const {env}=environment();const result=await handleAdvisor(request({mode:'assets'}),env,{fetchImpl:async()=>new Response(JSON.stringify(output),{status:200})});assert.equal(result.status,502);}
+});
