@@ -122,3 +122,28 @@ test('calendar coaching keeps the selected month and day; closing a picker or ed
  await t.visit('records');t.click('[data-coach="next"]');t.click('[data-coach="act"]');assert.match(t.document.querySelector('.coach-picker').textContent,/등록된 내역이 없습니다/);
  t.click('[data-coach-picker-close]');assert.equal(t.state.writes,0);
 });
+test('mobile category summaries show different financial facts and loan and card marks follow the saved issuer',async()=>{
+ const data=domain.samplePortfolio();
+ data.cardAccounts=[{id:'nh-profile',name:'NH 농협카드',day:10,archived:false,note:''}];
+ data.cards[0].cardAccountId='nh-profile';
+ data.cards[0].billingMonth=domain.todayKST().slice(0,7);
+ const t=await app(data,'deposits');
+ for(const [page,label,fact] of [
+  ['deposits','전체 예금 잔액','만기'],
+  ['stocks','총평가액','평가손익'],
+  ['retirement','현재 퇴직금·연금','기준'],
+  ['loans','대출 잔액 합계','이자']
+ ]){
+  await t.visit(page);
+  assert.equal(t.document.querySelector('.m-account-summary>div>span').textContent,label);
+  assert.ok(t.document.querySelector('.m-account-list .m-row-label small:last-child').textContent.includes(fact));
+ }
+ assert.deepEqual([...t.document.querySelectorAll('.m-account-list img')].map(img=>img.getAttribute('src')),[
+  '/finance-brand-shinhan-bank.png','/finance-brand-kakaobank.png'
+ ]);
+ await t.visit('cards');
+ assert.equal(t.document.querySelector('.m-bill-title img').getAttribute('src'),'/finance-brand-nh-card.png');
+ await t.visit('cards/'+data.cards[0].id);
+ assert.equal(t.document.querySelector('.m-balance-label img').getAttribute('src'),'/finance-brand-nh-card.png');
+ assert.equal(t.state.writes,0);
+});

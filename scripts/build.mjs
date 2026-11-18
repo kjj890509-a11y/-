@@ -4,6 +4,10 @@ import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const assets={};
 for(const filename of await readdir(path.join(root,'public'))){
+ if(filename.startsWith('finance-brand-')&&filename.endsWith('.png')){
+   assets['/'+filename]={body:await readFile(path.join(root,'public',filename),'base64'),type:'image/png',encoding:'base64'};
+   continue;
+ }
  const mime={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',mjs:'text/javascript; charset=utf-8',svg:'image/svg+xml'}[filename.split('.').at(-1)];
  if(mime)assets['/'+filename]={body:await readFile(path.join(root,'public',filename),'utf8'),type:mime};
 }
