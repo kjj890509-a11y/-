@@ -41,13 +41,13 @@ function signedScale(values){
  const min=Math.floor(low/step)*step,max=Math.ceil(high/step)*step;
  return {low:min,high:max,ticks:Array.from({length:Math.round((max-min)/step)+1},(_,i)=>min+step*i)};
 }
-export function renderAmountBars(points,{formatMoney,formatCompact,title}){
+export function renderAmountBars(points,{formatMoney,formatCompact,title,minWidth=700,height=236,showHint=true}){
  if(!points.length)return '<div class="empty-inline">조회된 금액이 없습니다.</div>';
- const width=Math.max(700,points.length*30+88),height=236,left=64,right=20,top=18,bottom=34,plot=height-top-bottom;
+ const width=Math.max(minWidth,points.length*30+88),left=64,right=20,top=18,bottom=34,plot=height-top-bottom;
  const scale=signedScale(points.map(p=>p.value)),slot=(width-left-right)/points.length,barWidth=Math.min(34,slot*.55),position=value=>top+(scale.high-value)/(scale.high-scale.low)*plot,zero=position(0);
  const ticks=scale.ticks.map(v=>`<line x1="${left}" x2="${width-right}" y1="${position(v)}" y2="${position(v)}" stroke="${v===0?'var(--muted)':'var(--line)'}"/><text x="${left-12}" y="${position(v)+4}" text-anchor="end">${esc(formatCompact(v))}</text>`).join('');
  const bars=points.map((p,i)=>{const valueY=position(p.value),h=Math.abs(valueY-zero),x=left+slot*i+slot/2-barWidth/2,y=Math.min(zero,valueY);return `<g class="amount-bar-point" ${inspect(p.detailLabel||p.label,formatMoney(p.value))}><rect x="${left+slot*i}" y="${top}" width="${slot}" height="${plot}" fill="transparent"/><rect class="moa-grow-bar" x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="2" fill="${p.value<0?'var(--red)':'var(--green)'}" style="--bar-delay:${Math.min(i*24,240)}ms;transform-origin:${x+barWidth/2}px ${zero}px"/>${i%Math.max(1,Math.ceil(points.length/12))===0||i===points.length-1?`<text x="${x+barWidth/2}" y="${height-9}" text-anchor="middle">${esc(p.label)}</text>`:''}</g>`;}).join('');
- return `<figure class="amount-bars motion-figure" data-motion-figure data-motion-chart data-motion-key="${key('bars',[title,points.map(p=>[p.label,formatMoney(p.value)])])}"><div class="financial-chart-scroll"><svg viewBox="0 0 ${width} ${height}" style="min-width:${width}px" role="group" aria-label="${esc(title)}">${ticks}${bars}</svg></div><figcaption>단위: 원 · 막대를 누르거나 초점을 맞추면 금액을 확인할 수 있어요.</figcaption></figure>`;
+ return `<figure class="amount-bars motion-figure" data-motion-figure data-motion-chart data-motion-key="${key('bars',[title,points.map(p=>[p.label,formatMoney(p.value)])])}"><div class="financial-chart-scroll"><svg viewBox="0 0 ${width} ${height}" style="min-width:${width}px" role="group" aria-label="${esc(title)}">${ticks}${bars}</svg></div>${showHint?'<figcaption>단위: 원 · 막대를 누르거나 초점을 맞추면 금액을 확인할 수 있어요.</figcaption>':''}</figure>`;
 }
 export const expenseParts=[['principal','대출 원금','var(--green)'],['interest','대출 이자','var(--chart-secondary)'],['cards','카드','var(--asset-stock)'],['fixed','정기 지출','var(--asset-retirement)'],['other','기타 지출','var(--muted)']];
 export function expenseComposition(result){

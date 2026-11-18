@@ -124,7 +124,7 @@ function assetTrend(horizon=6,historyOnly=false){
  return renderTrendChart(points,{formatMoney:money,formatCompact:compact,historyOnly});
 }
 function overview(){
- return renderDashboard(portfolio,{money,compact,svg,chart:homeSelection==='all'?assetTrend(chartHorizon):'',horizon:chartHorizon,hideAmounts:hidden,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
+ return renderDashboard(portfolio,{money,compact,svg,horizon:chartHorizon,hideAmounts:hidden,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
 }
 function homeDetailHeading(title,description,kind){
  return `<div class="home-detail-heading"><div><h2 tabindex="-1" data-home-detail-title>${title}</h2><p class="subtitle">${description}</p></div>${kind?`<button class="button primary" data-action="add" data-kind="${kind}">${svg('plus')}${LABELS[kind]} 추가</button>`:''}</div>`;
@@ -156,7 +156,7 @@ function selectHomeDetail(selection){
  $('home-dashboard').replaceWith(template.content.querySelector('#home-dashboard'));
  document.querySelectorAll('.home-stat').forEach(button=>{
   const selected=button.dataset.detail===selection;
-  button.classList.toggle('is-selected',selected);button.setAttribute('aria-pressed',String(selected));button.querySelector('[data-home-indicator]').textContent=selected?'✓':'↓';
+  button.classList.toggle('is-selected',selected);button.setAttribute('aria-pressed',String(selected));button.querySelector('[data-home-indicator]').textContent=selected?'✓':'↗';
  });
  enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountLoanLayout();mountTrendCharts($('main'));mountFinancialMotion($('main'),{revision,hideAmounts:hidden});
  const target=$('home-dashboard');target.querySelector('[data-home-detail-title]')?.focus({preventScroll:true});
