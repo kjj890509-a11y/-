@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -44,6 +44,7 @@ let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
+let mobileState=createMobileState(),mobileRecordId='';
 let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDrafts={},entrySession=[];
 let entryManagerState=createEntryManagerState();
 let cardBillingState=createCardBillingState();
@@ -58,7 +59,7 @@ function money(value, unit = '원') { return hidden ? '••••••' : `${
 function compact(value) { if(hidden)return '••••'; if(Math.abs(value)>=1e8)return `${(value/1e8).toFixed(2)}억`; if(Math.abs(value)>=1e4)return `${wonFormat.format(Math.round(value/1e4))}만`;return wonFormat.format(value); }
 function percent(value){return hidden?'••%':`${value>0?'+':''}${value.toFixed(2)}%`;}
 const rowsCount = () => KINDS.reduce((n,k)=>n+portfolio[k].length,0);
-const status = (label,error=false) => {$('save-state').innerHTML=`<i style="background:${error?'#c48365':'#7da367'}"></i>${escapeHTML(label)}`;};
+const status = (label,error=false) => {document.querySelector('[data-mobile-sync]')?.replaceChildren(document.createTextNode(label));$('save-state').innerHTML=`<i style="background:${error?'#c48365':'#7da367'}"></i>${escapeHTML(label)}`;};
 let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4200);}
 function openDialog(id){closeMonthPicker(document);const dialog=$(id);if(id==='editor')dialog.classList.toggle('history-editor',Boolean(dialog.querySelector('#plan-asOf')));enhanceEditorHelp(dialog);dialog.showModal();}
@@ -437,7 +438,21 @@ function mountEntryWorkspace(){
   onDetail:openEntryManagerDetail
  }));
 }
-function render(){closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');$('main').dataset.view=view;renderNav();$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
+function renderMobile(){
+ const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorContent:view==='advisor'?advisorPage():''});
+ document.title=(view==='menu'?'전체':navLabels[view]||'모아')+' · 모아';
+ recordCleanups.push(mountMobileControls(root,mobileState,{onRender:render,onPrivacy:()=>$('privacy-toggle').onclick(),onSettings:()=>openDialog('settings-dialog'),onRefresh:async()=>{if(!canRefreshPortfolio()){toast('입력·저장을 마친 뒤 다시 불러와 주세요.');return;}const updated=await refreshPortfolio();toast(updated===null?'연결을 확인한 뒤 다시 불러와 주세요.':updated?'최신 내역을 반영했어요.':'내역을 확인했어요.');},onCardBill:openMobileCardBill}));
+ if(view==='advisor'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountTrendCharts(root);mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}
+ const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#f7f7f7';
+}
+function openMobileCardBill(id){
+ if(saving)return;
+ const account=portfolio.cardAccounts.find(r=>r.id===id);if(!account)return;
+ openEditor('cards',null,{name:account.name,amount:0,dueDate:paymentDate(month,account.day),paid:false,note:account.note||''});
+ const input=document.createElement('input');input.type='hidden';input.name='mobileCardAccountId';input.value=id;$('record-form').append(input);
+ const billing=document.createElement('input');billing.type='hidden';billing.name='mobileBillingMonth';billing.value=month;$('record-form').append(billing);
+}
+function render(){closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);if(mobile){renderMobile();return;}const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#635bff';$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['paymentSource','결제 방식','paymentSource',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -450,6 +465,7 @@ const fields={
 function openEditor(kind,id,rowOverride){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
  entryEditing=false;entryDetailEditing=false;
+ $('record-form').querySelectorAll('[name="mobileCardAccountId"],[name="mobileBillingMonth"]').forEach(el=>el.remove());
  if(!KINDS.includes(kind)){showAddMenu();return;}
  editorKind=kind;editingId=id||null;
  const row=rowOverride||(id?portfolio[kind].find(r=>r.id===id):{});
@@ -516,6 +532,7 @@ async function submitRecord(e){
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
  for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
  if(recordKind==='cashflow'&&record.type!=='expense')record.paymentSource='account';
+ if(recordKind==='cards'&&!editingId&&values.get('mobileCardAccountId')){const account=portfolio.cardAccounts.find(r=>r.id===values.get('mobileCardAccountId'));if(!account){$('form-error').textContent='카드 정보를 다시 확인해 주세요.';return;}record.cardAccountId=account.id;record.billingMonth=String(values.get('mobileBillingMonth'));}
  if(recordKind==='cards'&&editingId){const existing=portfolio.cards.find(row=>row.id===editingId);if(existing?.cardAccountId)record.cardAccountId=existing.cardAccountId;if(existing?.billingMonth)record.billingMonth=existing.billingMonth;}
  if(recordKind==='loans'&&record.calculationMode==='term'){record.interestMode='estimate';}
  if(entryDetailEditing){
@@ -650,5 +667,16 @@ $('import-file').onchange=async e=>{
 };
 $('editor').addEventListener('cancel',()=>{entryDetailEditing=false;if(entryEditing){rememberEntryDraft();entryEditing=false;}});
 window.addEventListener('beforeunload',event=>{if(entryManagerState.drafts.size||cardBillingState.drafts.size){event.preventDefault();event.returnValue='';}});
-function setView(){const hash=location.hash.slice(1);if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[hash]?hash:'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
+function setView(){const hash=location.hash.slice(1),[route,recordId]=hash.split('/');mobileRecordId=/^[a-zA-Z0-9_-]{1,80}$/.test(recordId||'')?recordId:'';if(route!==view){mobileState.search='';mobileState.category='all';mobileState.flowType='all';}if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[route]?route:isMobileViewport(window,location)&&route==='menu'?'menu':'overview';query='';if(!loading)render();window.scrollTo({top:0,behavior:'instant'});}
+function canRefreshPortfolio(){return !loading&&!saving&&!demo&&!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!workspaceState.editing&&!advisorState?.busy&&!document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]');}
+const refreshPortfolio=createPortfolioSync({
+ getRevision:()=>revision,canRefresh:canRefreshPortfolio,
+ fetchPortfolio:async()=>{const res=await fetch('/api/portfolio',{cache:'no-store'}),data=await res.json();if(!res.ok)throw new Error(data.error||'최신 내역에 연결하지 못했습니다.');return data;},
+ apply:result=>{portfolio=validatePortfolio(result.data);revision=result.revision;render();status('최신 내역 반영됨');},
+ onError:()=>status('동기화 연결 확인',true)
+});
+mountPortfolioSync(window,document,refreshPortfolio);
+const mobileViewport=window.matchMedia?.('(max-width: 760px)');
+mobileViewport?.addEventListener?.('change',()=>{if(!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!loading)render();});
+document.body.classList.toggle('mobile-app',isMobileViewport(window,location));
 mountMonthPickers(document);window.addEventListener('hashchange',setView);setView();renderNav();loadData();
