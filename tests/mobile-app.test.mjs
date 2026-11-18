@@ -102,3 +102,23 @@ test('category add buttons render an actual icon and open the matching editor wi
  }
  assert.equal(t.state.writes,0);
 });
+test('coach actions create and edit a real deposit through the shared save path and update desktop data',async()=>{
+ const t=await app(domain.emptyPortfolio(),'deposits');t.click('[data-coach="act"]');
+ assert.ok(t.document.querySelector('#editor').open);assert.equal(t.document.querySelector('#entry-continue').checked,false);
+ t.fill({name:'안내로 입력한 예금',balance:'123,456'});await t.submit();
+ assert.equal(t.state.writes,1);assert.equal(t.state.data.deposits.length,1);const id=t.state.data.deposits[0].id;
+ t.click('[data-coach-open]');t.click('[data-coach="next"]');t.click('[data-coach="act"]');t.click('[data-coach-choice]');
+ assert.equal(t.document.querySelector('#field-name').value,'안내로 입력한 예금');t.fill({balance:'234,567'});await t.submit();
+ assert.equal(t.state.data.deposits[0].id,id);assert.equal(t.state.data.deposits[0].balance,234567);assert.equal(t.state.writes,2);
+ t.context.location.search='?display=desktop';await t.visit('deposits');assert.match(t.document.querySelector('#main').textContent,/234,567/);
+});
+test('calendar coaching keeps the selected month and day; closing a picker or editor performs no write',async()=>{
+ const t=await app(domain.emptyPortfolio(),'schedule'),previous=domain.shiftMonth(domain.todayKST().slice(0,7),-1),date=previous+'-15';
+ t.click('[data-action=prev-month]');t.click('[data-action=mobile-day][data-date="'+date+'"]');
+ t.click('[data-coach-open]');t.click('[data-coach="act"]');t.click('[data-coach-choice="0"]');
+ assert.equal(t.document.querySelector('#field-type').value,'salary');assert.equal(t.document.querySelector('#field-date').value,date);
+ t.click('[data-close=editor]');assert.match(t.document.querySelector('.m-month').textContent,new RegExp(Number(previous.slice(5))+'월'));
+ assert.equal(t.state.writes,0);
+ await t.visit('records');t.click('[data-coach="next"]');t.click('[data-coach="act"]');assert.match(t.document.querySelector('.coach-picker').textContent,/등록된 내역이 없습니다/);
+ t.click('[data-coach-picker-close]');assert.equal(t.state.writes,0);
+});
