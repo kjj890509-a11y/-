@@ -48,3 +48,7 @@ dialog.asset-manage-picker>h3{margin:18px 0 10px;font-size:14px;font-weight:600}
 dialog.asset-manage-picker .asset-manage-add{
  width:100%;min-height:48px;background:#303843;color:white;font-weight:600;
 }
+
+.asset-manage-picker .coach-picker-text{display:flex;align-items:center;gap:10px}
+.asset-manage-picker .coach-picker-text>.finance-icon{width:32px;height:32px}
+.asset-manage-picker .coach-picker-text>span{min-width:0}

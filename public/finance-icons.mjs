@@ -1,5 +1,5 @@
 // Original local SVG artwork. Colors stay inside the icon, never on financial surfaces.
-const keys=['deposits','stocks','retirement','loans','cards','forecast','advisor','cashflow','schedule','budget','entry','history'];
+const keys=['deposits','stocks','retirement','loans','cards','forecast','advisor','cashflow','schedule','budget','entry','history','housing','lease'];
 const aliases={assets:'deposits',overview:'deposits',workspace:'deposits',payday:'forecast',fixed:'schedule',planned:'schedule',records:'entry',statistics:'stocks'};
 export function financeIconKey(kind){return keys.includes(kind)?kind:Object.hasOwn(aliases,kind)?aliases[kind]:'deposits';}
 // Keep issuer matching local and limited to reviewed image filenames.
@@ -43,8 +43,29 @@ export function financeBrandKey(kind,name){
  if(kind==='loans')return matchBrand(banks,name)||matchBrand(cards,name,false);
  return '';
 }
-export function renderFinanceIcon(kind,issuer=''){
- const brand=financeBrandKey(kind,issuer);
+function renderIcon(kind,brand=''){
  const source=brand?`/finance-brand-${brand}.png`:`/finance-icon-${financeIconKey(kind)}.svg`;
  return `<img class="finance-icon${brand?' finance-brand':''}" src="${source}" width="40" height="40" alt="" aria-hidden="true" decoding="async" draggable="false">`;
+}
+export function renderFinanceIcon(kind,issuer=''){
+ return renderIcon(kind,financeBrandKey(kind,issuer));
+}
+
+export function renderFinanceRecordIcon(kind,record,issuer=record.institution||record.name){
+ if(!['deposits','stocks','retirement'].includes(kind))return renderFinanceIcon(kind,issuer);
+ const name=normalize(record.name);
+ if(kind==='deposits'){
+  // A label can describe a different purpose within the same saved category.
+  if(/전세|보증금/.test(name))return renderIcon('lease');
+  if(/연금|퇴직금|^irp$/.test(name))return renderIcon('retirement');
+  if(/주택|청약|부동산/.test(name))return renderIcon('housing');
+  if(/주식|증권|^etf$/.test(name))return renderIcon('stocks');
+ }
+ const brand=matchBrand(banks,record.institution)||matchBrand(banks,record.name,false);
+ if(brand)return renderIcon(kind,brand);
+ if(!name||/^(예금|현금|적금|주식|연금|퇴직금|퇴직연금)$/.test(name))return renderIcon(kind);
+ // Use a stable, locally computed badge for personal names with no known mark.
+ const letters=[...name];
+ const color=letters.reduce((hash,letter)=>(Math.imul(hash,31)+letter.codePointAt(0))>>>0,0)%5;
+ return `<span class="finance-icon finance-monogram finance-monogram-${color}" aria-hidden="true">${letters[0].toUpperCase()}</span>`;
 }

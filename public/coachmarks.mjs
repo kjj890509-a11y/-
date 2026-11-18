@@ -1,3 +1,4 @@
+import {renderFinanceRecordIcon} from './finance-icons.mjs';
 import {entryPresets} from './entry-hub.mjs';
 import {KINDS,LABELS} from './domain.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -103,10 +104,10 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
   if(view==='cards'){const profiles=(getData().cardAccounts||[]).filter(r=>!r.archived);return[{type:'card-account',id:'',label:'카드 등록',sub:'한 번 등록한 카드로 매월 청구액을 입력합니다'},...profiles.map(p=>({type:'card-bill',id:p.id,label:p.name,sub:'월별 청구액 입력'})),...rows];}
   return rows;
  };
- const editChoices=(scope=page.scope)=>{
+ const editChoices=(scope=page.scope,withIcons=false)=>{
   const data=getData();
   if(view==='history')return[...(data.snapshots||[])].sort((a,b)=>b.month.localeCompare(a.month)).map(r=>({type:'plan',kind:'snapshot',id:r.month,label:r.month+' 자산 기록',sub:r.asOf}));
-  const rows=scope.flatMap(kind=>(data[kind]||[]).filter(r=>!recordId||r.id===recordId).map(r=>({type:'record',kind,id:r.id,label:r.name,sub:[LABELS[kind],r.institution,r.dueDate||r.date].filter(Boolean).join(' · '),amount:money(r.balance??r.valuation??r.amount??0)})));
+  const rows=scope.flatMap(kind=>(data[kind]||[]).filter(r=>!recordId||r.id===recordId).map(r=>({type:'record',kind,id:r.id,label:r.name,icon:withIcons?renderFinanceRecordIcon(kind,r):'',sub:[LABELS[kind],r.institution,r.dueDate||r.date].filter(Boolean).join(' · '),amount:money(r.balance??r.valuation??r.amount??0)})));
   if(view==='cards'&&!recordId)rows.push(...(data.cardAccounts||[]).filter(r=>!r.archived).map(r=>({type:'card-account',id:r.id,label:r.name,sub:'카드 기본 정보 수정'})));
   if(['loans','statistics','records'].includes(view)&&!recordId)rows.push(...(data.loanPayments||[]).map(r=>({type:'record',kind:'loan-payment',id:r.id,label:r.name||'대출 상환 기록',sub:r.date||r.month||''})));
   return rows;
@@ -117,7 +118,7 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
   if(mode==='add'&&view==='history')return onPlan('snapshot','');
   const managing=mode==='manage';
   if(managing&&!assets.includes(quickKind))return;
-  const choices=mode==='add'?addChoices():managing?editChoices([quickKind]).filter(row=>row.kind===quickKind):editChoices();
+  const choices=mode==='add'?addChoices():managing?editChoices([quickKind],true).filter(row=>row.kind===quickKind):editChoices();
   if(mode==='add'&&choices.length===1)return execute(choices[0]);
   if(mode==='edit'&&recordId&&choices.length===1)return execute(choices[0]);
   if(doc.querySelector('dialog[open]'))return;
@@ -138,7 +139,7 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
    count.textContent=visible.length>100?`${visible.length}건 중 100건 표시 · 이름을 검색해 범위를 좁혀 주세요.`:`${visible.length}건`;
    count.hidden=!searchable;
    list.innerHTML=visible.length?visible.slice(0,100).map(({row,index})=>`<button type="button" data-coach-choice="${index}">
-    <span><strong>${esc(row.label)}</strong><small>${esc(row.sub)}</small></span>${row.amount?`<b>${esc(row.amount)}</b>`:''}
+    <span class="coach-picker-text">${row.icon||''}<span><strong>${esc(row.label)}</strong><small>${esc(row.sub)}</small></span></span>${row.amount?`<b>${esc(row.amount)}</b>`:''}
     <span aria-hidden="true">›</span></button>`).join(''):`<p class="coach-picker-empty">${choices.length?'검색 결과가 없습니다.':'아직 등록된 내역이 없습니다.'}</p>`;
   };
   state.picker={key,mode,query};renderChoices(query);const search=picker.querySelector('[data-coach-search]');if(search)search.value=query;doc.body.append(picker);
