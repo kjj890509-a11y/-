@@ -449,7 +449,7 @@ function renderMobile(){
  }
  mountTrendCharts(root);
  if(view==='overview'||view==='advisor')checkAdvisorService();
- const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#f7f7f7';
+ const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#ffffff';
 }
 async function requestAssetAdvisor(question){
  if(advisorState?.busy||advisorState?.service!=='ready'||demo)return;
