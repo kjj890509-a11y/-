@@ -47,3 +47,20 @@ No refresh is applied during an open dialog, pending entry/card drafts, dashboar
 - Mobile integration tests cover all routes with populated and empty portfolios, account details, desktop/mobile shared edits, cross-month card bills, remote update conflicts, privacy, calendar duplicate exclusion, record filters and AI unavailable state.
 - Sync tests cover coalescing, stale responses, edits during requests, errors/retry and hidden-page/lifecycle behavior.
 - Browser rendering QA could not run: managed preview returned `relay could not open browser port 4173: timed out waiting for relay readiness`. No screenshot or pixel-match claim is made. No alternate preview server/browser path was used.
+
+
+## Color and hierarchy correction — 2026-11-18
+
+User feedback: the mobile version felt harder to read than KakaoBank, especially the color combinations.
+
+The same [Accounts reference](https://mobbin.com/flows/c06af808-c004-44db-8ba8-cd555924e0c4?tab=screens&utm_source=chatgpt&utm_medium=ai-assistant&utm_source_platform=mcp) was inspected again through Mobbin MCP. Its returned high-resolution home image measures 1179 pixels wide, corresponding to a 393-pixel phone at 3×. The dominant reference canvas is `#f7f7f7` and the primary mint card is `#c8e3d6`. These measurements are evidence for the canvas/primary surface, not a claim that the revised secondary palette is identical to KakaoBank.
+
+Three changes:
+
+1. Keep the header, banner, account stack and four bottom tabs. Give only the primary deposit card the full mint surface; additional deposit cards and unpaid-card summaries are white. Investment, retirement and loan surfaces use lighter versions of their existing hues with dark balances. The lighter secondary palette is a response to this user's feedback, not a color sample claimed from the reference.
+2. Place institution/count metadata beside card names and keep loan interest below its balance. All original records, amounts, detail links and edit actions remain. Separate income/expense labels replace the ambiguous slash between banner values. Compact card padding and type make the primary account distinct from secondary summaries.
+3. Lower the specificity of shared mobile resets with `:where(.m-app)` so local home/menu headings and section labels can use their intended sizes. Previously the shared heading selector overrode local heading sizes. Fix the missing menu-header flex alignment, improve secondary/navigation text contrast and make the desktop-only mobile preview use the reference's phone width. Real phone widths remain responsive.
+
+No API, account, storage, calculation or desktop-layout change. The same portfolio remains in use. No new dependencies.
+
+Verification: 10 targeted mobile/desktop-frame tests passed, including empty/populated routes, shared edits, cross-month cards, privacy, calendar and AI unavailable state. Worker build (45 assets), bundled syntax and whitespace checks passed. Declared foreground/background pairs for primary balances exceed 10:1; checked compact metadata/navigation pairs are at least 4.7:1. These are source-color calculations, not browser-computed measurements. Managed preview still fails with the relay-readiness timeout; actual browser rendering and before/after screenshots remain unverified.
