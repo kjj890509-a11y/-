@@ -38,3 +38,13 @@ dialog.coach-picker .coach-picker-list>button:last-child{border-bottom:0}
 @media(prefers-reduced-motion:reduce){.coach-portal *,.coach-picker *{scroll-behavior:auto;transition:none;animation:none}}
 
 .coach-picker-count{margin:0 0 10px;font-size:12px;line-height:1.7;color:#626c78}
+
+body.mobile-app dialog.asset-manage-picker{
+ width:min(100%,var(--m-frame-width));max-height:calc(100dvh - 32px);
+ margin:auto auto 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));
+ border-radius:22px 22px 0 0;
+}
+dialog.asset-manage-picker>h3{margin:18px 0 10px;font-size:14px;font-weight:600}
+dialog.asset-manage-picker .asset-manage-add{
+ width:100%;min-height:48px;background:#303843;color:white;font-weight:600;
+}

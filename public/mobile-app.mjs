@@ -99,7 +99,9 @@ function accounts(data,kind,{money,hidden}){
  return `${header(kind==='assets'?'내 자산':titles[active],{right:action('mobile-privacy',icon('eye'),'aria-label="금액 표시 전환"','m-icon')})}
   <nav class="m-account-tabs" aria-label="자산 종류">${tabs}</nav>${summary}
   <div class="m-account-list" aria-label="${esc(titles[active])} 목록">
-  ${list||empty('등록된 '+titles[active]+' 내역이 없습니다.')}${add(active,titles[active]+' 추가',{withIcon:true})}</div>
+  ${list||empty('등록된 '+titles[active]+' 내역이 없습니다.')}</div>
+  <button type="button" class="m-asset-fab" data-asset-manage="${active}" aria-haspopup="dialog"
+   aria-label="${esc(titles[active])} 추가·수정">${icon('plus')}</button>
   ${active==='loans'?link('#advisor','AI 상담으로 상환 계획 비교하기 ›','m-under-link'):''}`;
 }
 function recordDetail(data,kind,id,{money,hidden}){
@@ -159,6 +161,17 @@ function budget(data,{money,month}){const p=budgetPlan(data,month);return `${hea
 function history(data,{money}){return `${header('자산 기록',{right:action('snapshot-form',icon('plus'),'aria-label="자산 기록 추가"','m-icon')})}<div class="m-history-list">${[...(data.snapshots||[])].sort((a,b)=>b.month.localeCompare(a.month)).map(r=>row({name:r.month,sub:r.asOf,amount:money(snapshotTotals(r).net),attrs:`data-action="snapshot-form" data-month="${r.month}"`})).join('')||empty('저장한 자산 기록이 없습니다.',action('snapshot-form','현재 자산 기록','','m-primary'))}</div>`;}
 function overviewDetails(data,{money}){const t=totals(data);return `${header('맞춤 대시보드')}<section class="m-budget-hero"><span>순자산</span><strong>${money(t.net)}</strong></section>${details([['총자산',money(t.gross)],['대출·미결제 카드',money(t.debt)]])}<div class="m-workspace-list">${[['deposits',t.deposits],['stocks',t.stock],['retirement',t.retirement],['loans',t.loans],['cards',t.cards]].map(([k,v])=>row({name:titles[k],amount:money(v),href:route(k)})).join('')}${row({name:'월말 자산 전망',href:'#forecast'})}${row({name:'급여일 자산 전망',href:'#payday'})}</div>`;}
 function statistics(data,options){const {money,month}=options,f=monthlyFlow(data,month),loans=loanSchedule(data,month,1)[0];return `${header('기간별 분석')}${monthControl(month)}<section class="m-menu-group"><h2>등록된 월 수입·지출</h2>${details([['월급',money(f.salary)],['기타 수입',money(f.otherIncome)],['정기 지출 · 계좌',money(f.fixedCash)],['기타 지출',money(f.otherExpense)],['대출·카드 납부',money(f.payments)],['수입·지출 차액',money(f.balance)]])}</section><section class="m-menu-group"><h2>대출 예상</h2>${details([['상환 원금',money(loans.principal)],['납부 이자',money(loans.interest)]])}</section>${note('등록 일정과 현재 대출 조건을 기준으로 한 계획입니다. 실제 입출금 완료를 뜻하지 않습니다.')}`;}
+function mobileAdvisor(state,options){
+ const comparing=state.advisorMode==='repayment';
+ const modeAction=action('mobile-advisor-mode',comparing?'← 자산 상담':'대출 상환 비교 ›',
+  `data-mode="${comparing?'assets':'repayment'}"`,'m-advisor-switch');
+ const content=options.hidden
+  ?empty('금액 표시를 켜면 상담을 이용할 수 있습니다.',action('reveal-advisor','금액 표시하고 상담하기','','m-primary'))
+  :comparing?`<div class="m-advisor">${options.advisorContent||''}</div>`:renderAssetConsultation(options.advisorState||{},options);
+ return `${header(comparing?'대출 상환 비교':'AI 상담')}
+  ${comparing?`<div class="m-advisor-tools">${modeAction}</div>`:''}
+  ${content}${!comparing?`<div class="m-advisor-tools">${modeAction}</div>`:''}`;
+}
 export function renderMobilePage(data,view,state,options){
  const id=options.recordId||'';let content;
  if(id&&KINDS.includes(view))content=recordDetail(data,view,id,options);
@@ -174,7 +187,7 @@ export function renderMobilePage(data,view,state,options){
  else if(view==='budget')content=budget(data,options);
  else if(view==='history')content=history(data,options);
  else if(view==='statistics')content=statistics(data,options);
- else if(view==='advisor')content=header('AI 상담')+`<div class="m-inline-tabs">${[['assets','자산 상담'],['repayment','대출 상환 비교']].map(([mode,label])=>action('mobile-advisor-mode',label,`data-mode="${mode}" aria-pressed="${state.advisorMode===mode}"`,state.advisorMode===mode?'is-active':'')).join('')}</div>`+(options.hidden?empty('금액 표시를 켜면 상담과 상환 비교를 볼 수 있습니다.',action('reveal-advisor','금액 표시하고 상담하기','','m-primary')):state.advisorMode==='assets'?renderAssetConsultation(options.advisorState||{},options):`<div class="m-advisor">${options.advisorContent||''}</div>`);
+ else if(view==='advisor')content=mobileAdvisor(state,options);
  else content=overviewDetails(data,options);
  return `<div class="m-app" data-mobile-app data-mobile-view="${esc(view)}">${view!=='overview'?options.demoBanner||'':''}${content}<div class="m-sync-line" role="status" data-mobile-sync>${options.demo?'예시 모드':'내 계정에 저장됨'}</div>${nav(view)}</div>`;
 }

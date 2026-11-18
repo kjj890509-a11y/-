@@ -461,7 +461,7 @@ function mountPageCoachmarks(root,mobile){
   },
   onEdit:(kind,id)=>kind==='loan-payment'?openLoanPaymentEditor(id):!mobile&&view==='entry'?openEntryManagerDetail(kind,id,entryDraftRow(entryManagerState,portfolio,kind,id)):openEditor(kind,id),
   onPlan:(type,selectedMonth)=>openPlanningEditor(type,selectedMonth||month),
-  onCardAccount:openCardAccountEditor,onCardBill:openMobileCardBill
+  onCardAccount:openCardAccountEditor,onCardBill:openMobileCardBill,onQuickAdd:kind=>openEditor(kind)
  }));
 }
 function renderMobile(){

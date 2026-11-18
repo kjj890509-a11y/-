@@ -1,14 +1,63 @@
-const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export function renderAssetConsultation(state,{demo=false}={}){
- const ready=state.service==='ready',messages=state.assetMessages||[];
- const status=ready?'내 자산과 등록 일정에 따른 예측을 바탕으로 답변합니다.':state.service==='unconfigured'?'운영자의 AI 서비스 연결이 설정되지 않았습니다. 연결이 완료되면 질문할 수 있습니다.':state.service==='error'?'AI 연결 상태를 확인하지 못했습니다.':'AI 연결을 확인하고 있습니다…';
- return `<section class="m-consultation"><div class="m-consult-status" data-asset-service><strong>AI 자산 상담</strong><p role="status">${status}</p>${!ready?'<button type="button" data-action="check-advisor">연결 다시 확인</button>':''}</div><div class="m-question-ideas" aria-label="질문 예시">${['올해 말 순자산은 어떻게 달라질까요?','급여일 전에 예금이 부족한 달이 있나요?','월 지출을 줄이면 미래 자산에 어떤 영향이 있나요?'].map(q=>`<button type="button" data-asset-question="${esc(q)}">${esc(q)}</button>`).join('')}</div><div class="m-consult-messages" aria-live="polite">${messages.map(m=>`<article class="m-consult-turn"><p class="m-consult-question">${esc(m.question)}</p><div class="m-consult-answer"><strong>${esc(m.summary)}</strong><p>${esc(m.answer)}</p>${m.checks?.length?`<details><summary>확인할 내용</summary><ul>${m.checks.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></details>`:''}<small>${esc(m.asOf)} 기준 · 답변 후 변경한 내역은 다시 질문해 주세요.</small></div></article>`).join('')}</div>${state.assetError?`<p class="m-consult-error" role="alert">${esc(state.assetError)}</p>`:''}${state.busy?'<p class="m-consult-wait" role="status">내 자산과 예측을 확인하며 답변하고 있습니다…</p>':''}<form id="asset-advisor-form"><label for="asset-advisor-question">궁금한 내용을 질문하세요</label><textarea id="asset-advisor-question" name="question" rows="3" maxlength="2000" required placeholder="예: 다음 급여일 이후 순자산과 앞으로의 지출을 설명해 주세요.">${esc(state.assetQuestion||'')}</textarea><button type="submit" ${!ready||state.busy||demo?'disabled':''}>${state.busy?'답변 중…':'질문하기'}</button></form><p class="m-note">상담을 요청하면 질문·최근 대화와 내 계정의 자산 요약·계산된 전망이 OpenAI로 전송됩니다. 답변은 참고용이며 예측은 등록한 내역과 현재 조건을 기준으로 합니다. 대화는 이번 방문 동안만 표시됩니다.</p>${demo?'<p class="m-note">예시 모드에서는 AI 요청을 보내지 않습니다.</p>':''}</section>`;
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+}[c]));
+
+export function renderAssetConsultation(state, {demo = false} = {}) {
+ const ready = state.service === 'ready';
+ const messages = state.assetMessages || [];
+ const serviceMessage = {
+  unconfigured: 'AI 연결이 설정되지 않았습니다.',
+  error: 'AI 연결을 확인하지 못했습니다.'
+ };
+ const reconnect = Object.hasOwn(serviceMessage, state.service);
+ const status = demo ? '예시 모드에서는 질문을 보낼 수 없습니다.'
+  : ready ? '' : reconnect ? serviceMessage[state.service] : 'AI 연결 확인 중…';
+ const transcript = messages.length ? `<div class="m-consult-messages" aria-live="polite">
+  ${messages.map(message => `<article class="m-consult-turn">
+   <p class="m-consult-question">${esc(message.question)}</p>
+   <div class="m-consult-answer"><strong>${esc(message.summary)}</strong>
+    <p>${esc(message.answer)}</p>
+    ${message.checks?.length ? `<details><summary>확인할 내용</summary>
+     <ul>${message.checks.map(check => `<li>${esc(check)}</li>`).join('')}</ul></details>` : ''}
+    <small>${esc(message.asOf)} 기준</small>
+   </div>
+  </article>`).join('')}
+ </div>` : '';
+
+ return `<section class="m-consultation" aria-label="자산 상담">
+  ${transcript}
+  ${state.assetError ? `<p class="m-consult-error" role="alert">${esc(state.assetError)}</p>` : ''}
+  ${state.busy ? '<p class="m-consult-wait" role="status">답변을 작성하고 있습니다…</p>' : ''}
+  <form id="asset-advisor-form">
+   <label for="asset-advisor-question" class="sr-only">내 자산에 대해 물어보기</label>
+   <textarea id="asset-advisor-question" name="question" rows="2" maxlength="2000" required placeholder="예: 다음 급여일에 얼마가 남을까요?">${esc(state.assetQuestion || '')}</textarea>
+   <button type="submit" ${!ready || state.busy || demo ? 'disabled' : ''}>${state.busy ? '답변 중' : '보내기'}</button>
+  </form>
+  ${status ? `<div class="m-consult-status" data-asset-service>
+   <p role="status">${status}</p>
+   ${reconnect && !demo ? '<button type="button" data-action="check-advisor">다시 확인</button>' : ''}
+  </div>` : ''}
+  <details class="m-consult-data">
+   <summary>상담에 쓰이는 데이터</summary>
+   <p>질문, 최근 대화, 자산 요약과 전망을 OpenAI로 전송합니다. 답변은 참고용이며 대화는 이번 방문 동안만 표시됩니다.</p>
+  </details>
+ </section>`;
 }
-export function mountAssetConsultation(root,state,{onConsult}){
- const form=root.querySelector('#asset-advisor-form');if(!form)return()=>{};
- const field=form.querySelector('[name=question]');const input=()=>{state.assetQuestion=field.value;};
- const submit=event=>{event.preventDefault();if(state.service==='ready'&&!state.busy)onConsult(field.value.trim());};
- const click=event=>{const b=event.target.closest('[data-asset-question]');if(!b)return;field.value=b.dataset.assetQuestion;state.assetQuestion=field.value;field.focus();};
- field.addEventListener('input',input);form.addEventListener('submit',submit);root.addEventListener('click',click);
- return()=>{field.removeEventListener('input',input);form.removeEventListener('submit',submit);root.removeEventListener('click',click);};
+
+export function mountAssetConsultation(root, state, {onConsult}) {
+ const form = root.querySelector('#asset-advisor-form');
+ if (!form) return () => {};
+ const field = form.querySelector('[name=question]');
+ const input = () => { state.assetQuestion = field.value; };
+ const submit = event => {
+  event.preventDefault();
+  const question = field.value.trim();
+  if (question && state.service === 'ready' && !state.busy) onConsult(question);
+ };
+ field.addEventListener('input', input);
+ form.addEventListener('submit', submit);
+ return () => {
+  field.removeEventListener('input', input);
+  form.removeEventListener('submit', submit);
+ };
 }

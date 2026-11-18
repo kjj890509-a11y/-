@@ -64,7 +64,7 @@ test('calendar excludes card-included expenses and record filters operate withou
  await t.visit('records');t.change('[data-mobile-filter=category]','fixed');assert.equal(t.document.querySelectorAll('.m-record-list .m-row').length,1);assert.match(t.document.querySelector('.m-record-list').textContent,/통신/);t.change('[data-mobile-filter=category]','all');const form=t.document.querySelector('[data-mobile-search]');form.querySelector('input').value='택시';form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));assert.equal(t.document.querySelectorAll('.m-record-list .m-row').length,1);assert.match(t.document.querySelector('.m-record-list').textContent,/중복 제외/);assert.equal(t.state.writes,0);
 });
 test('mobile AI readiness stays inside its screen and preserves navigation and comparison controls',async()=>{
- const t=await app(domain.samplePortfolio(),'advisor');assert.ok(t.document.querySelector('#asset-advisor-form button').disabled);assert.match(t.document.querySelector('#main').textContent,/연결이 설정되지 않았습니다/);t.click('[data-action=mobile-advisor-mode][data-mode=repayment]');assert.ok(t.document.querySelector('[data-mobile-app] .m-advisor [data-ui-stage-panel="3"]'));assert.equal(t.document.querySelector('[data-mobile-app] .m-advisor [data-ui-stage-panel="3"]').hidden,false);assert.ok(t.document.querySelector('[data-mobile-app] .m-tabbar'));assert.match(t.document.querySelector('#main').textContent,/연결이 설정되지 않았습니다/);assert.ok(t.document.querySelector('[data-advisor-consult]').disabled);t.click('[data-ui-stage="1"]');assert.equal(t.document.querySelector('[data-ui-stage-panel="1"]').hidden,false);assert.ok(t.document.querySelector('#advisor-form'));assert.equal(t.state.writes,0);
+ const t=await app(domain.samplePortfolio(),'advisor');assert.ok(t.document.querySelector('#asset-advisor-form button').disabled);assert.match(t.document.querySelector('#main').textContent,/연결이 설정되지 않았습니다/);t.click('[data-action=mobile-advisor-mode][data-mode=repayment]');assert.ok(t.document.querySelector('[data-mobile-app] .m-advisor [data-ui-stage-panel="3"]'));assert.equal(t.document.querySelector('[data-mobile-app] .m-advisor [data-ui-stage-panel="3"]').hidden,false);assert.ok(t.document.querySelector('[data-mobile-app] .m-tabbar'));assert.match(t.document.querySelector('#main').textContent,/연결이 설정되지 않았습니다/);assert.ok(t.document.querySelector('[data-advisor-consult]').disabled);t.click('[data-ui-stage="1"]');assert.equal(t.document.querySelector('[data-ui-stage-panel="1"]').hidden,false);assert.ok(t.document.querySelector('#advisor-form'));t.click('[data-action=mobile-advisor-mode][data-mode=assets]');assert.ok(t.document.querySelector('#asset-advisor-form'));assert.equal(t.state.writes,0);
 });
 test('home and bottom navigation foreground net-worth forecasts and AI without losing account entry',async()=>{
  const data=domain.samplePortfolio(),t=await app(data),root=t.document.querySelector('#main'),expected=domain.forecastMonths(t.state.data,domain.todayKST(),1)[0];
@@ -88,19 +88,41 @@ test('white home groups assets, expands the remaining rows and edits the existin
  t.click('.m-account-secondary [data-action=edit]');t.fill({balance:'876,543'});await t.submit();assert.equal(t.state.data.deposits[0].id,before.deposits[0].id);assert.equal(t.state.data.deposits[0].balance,876543);assert.equal(t.state.writes,1);assert.match(t.document.querySelector('.m-account-secondary').textContent,/876,543/);
  t.click('[data-action=mobile-home-more]');assert.equal(t.document.querySelectorAll('.m-home-asset-row').length,5);assert.equal(t.state.writes,1);
 });
-test('category add buttons render an actual icon and open the matching editor without exposing SVG source',async()=>{
+test('mobile plus stays outside asset lists and opens the correct add form for each category',async()=>{
  const t=await app();
- for(const [view,kind,field] of [['deposits','deposits','balance'],['stocks','stocks','valuation'],['loans','loans','rate'],['retirement','retirement','amount'],['cashflow','cashflow','date'],['fixed','fixed','day'],['planned','cashflow','date']]){
+ for(const [view,kind,field] of [['assets','deposits','balance'],['deposits','deposits','balance'],['stocks','stocks','valuation'],['loans','loans','rate'],['retirement','retirement','amount'],['cashflow','cashflow','date'],['fixed','fixed','day'],['planned','cashflow','date']]){
   await t.visit(view);
-  const selector='[data-action=add][data-kind="'+kind+'"]',button=t.document.querySelector(selector);
+  const asset=t.document.querySelector('.m-account-list');
+  const selector=asset?'[data-asset-manage="'+kind+'"]':'[data-action=add][data-kind="'+kind+'"]';
+  const button=t.document.querySelector(selector);
   assert.ok(button,view);assert.ok(button.querySelector('svg'),view+' actual icon');
   assert.doesNotMatch(button.textContent,/<\/?(?:svg|path)\b|stroke=|viewBox=/,view+' readable label');
-  assert.match(button.textContent,/추가/,view+' accessible name');
-  t.click(selector);assert.ok(t.document.querySelector('#editor').open,view+' editor');
+  if(asset)assert.equal(asset.querySelector('[data-action=add],.m-asset-fab'),null);
+  t.click(selector);
+  if(asset){
+   assert.ok(t.document.querySelector('dialog.asset-manage-picker[open]'),view+' chooser');
+   t.click('[data-asset-quick-add]');
+  }
+  assert.ok(t.document.querySelector('#editor').open,view+' editor');
   assert.ok(t.document.querySelector('#field-'+field),view+' matching field');
   t.click('[data-close=editor]');
  }
  assert.equal(t.state.writes,0);
+});
+test('the asset plus edits the selected record and can save a new record in the current category',async()=>{
+ const data=domain.samplePortfolio(),t=await app(data,'assets');
+ t.click('[data-asset-manage=deposits]');
+ assert.equal(t.document.querySelectorAll('.asset-manage-picker [data-coach-choice]').length,data.deposits.length);
+ assert.doesNotMatch(t.document.querySelector('.asset-manage-picker').textContent,/국내 주식|주택담보대출/);
+ t.click('[data-coach-choice="1"]');
+ assert.equal(t.document.querySelector('#field-name').value,data.deposits[1].name);
+ t.fill({balance:'456,789'});await t.submit();
+ assert.equal(t.state.data.deposits[1].id,data.deposits[1].id);
+ assert.equal(t.state.data.deposits[1].balance,456789);
+ t.click('[data-asset-manage=deposits]');t.click('[data-asset-quick-add]');
+ t.fill({name:'새 예금',balance:'1,234'});await t.submit();
+ assert.equal(t.state.data.deposits.at(-1).name,'새 예금');
+ assert.equal(t.state.writes,2);
 });
 test('coach actions create and edit a real deposit through the shared save path and update desktop data',async()=>{
  const t=await app(domain.emptyPortfolio(),'deposits');t.click('[data-coach="act"]');

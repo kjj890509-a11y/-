@@ -49,9 +49,11 @@ function stepsFor(view,detail,mobile){
  return[{title:derived?'계산에 쓸 데이터 입력':view==='cards'?'카드와 월별 청구 입력':page.label+'에 내역 추가',body:derived?'이 화면의 결과는 등록한 자산과 수입·지출로 계산합니다. 필요한 내역을 여기서 바로 입력하세요.':view==='cards'?'카드는 한 번 등록하고, 등록한 카드를 선택해 매월 청구액을 입력할 수 있습니다.':'입력할 종류를 선택하면 이 화면에서 입력 창이 열립니다. 저장 전에는 내역이 추가되지 않습니다.',action:'add',label:'입력 시작',target:page.addTarget||'[data-action="add"],[data-action="add-planned"],.table-heading,.m-count-strip'},
  {title:'저장된 내역 수정',body:view==='entry'&&!mobile?'수정할 내역을 고른 뒤 변경 목록에 담으세요. 변경 저장을 누르면 한꺼번에 반영됩니다.':derived?'결과 금액을 직접 덮어쓰지 않고, 계산의 기준이 되는 내역을 선택해 수정합니다.':'수정할 내역을 직접 고르세요. 이름·금융기관으로 검색할 수 있고, 취소하면 기존 값이 유지됩니다.',action:'edit',label:'수정할 내역 선택',target:page.editTarget||'.m-account-list,.m-flow-list,.m-record-list,[data-ledger-scope],table'},...lastStep];
 }
-export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getData,money,onStart,onEdit,onPlan,onCardAccount,onCardBill}){
+export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getData,money,onStart,onEdit,onPlan,onCardAccount,onCardBill,onQuickAdd}){
  if(!Object.hasOwn(config,view))return()=>{};
  const doc=root.ownerDocument,win=doc.defaultView,page=config[view],key=(mobile?'mobile:':'desktop:')+view+(recordId?':detail':''),steps=stepsFor(view,Boolean(recordId),mobile);
+ const quickLaunch=mobile&&onQuickAdd?root.querySelector('[data-asset-manage]'):null;
+ const quickKind=quickLaunch?.dataset.assetManage;
  let portal=null,picker=null,focusBefore=null;
  const launch=doc.createElement('button');launch.type='button';launch.className='coach-launch';launch.dataset.coachOpen='';launch.setAttribute('aria-haspopup','dialog');launch.setAttribute('aria-controls','coach-card');launch.setAttribute('aria-expanded','false');launch.innerHTML='<span aria-hidden="true">?</span> 입력·수정 안내';
  let bar=null,createdActions=null,host=mobile?null:root.querySelector('.page-header .heading-actions');
@@ -62,6 +64,7 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
  const removePortal=()=>{portal?.remove();portal=null;};
  const close=(restore=true)=>{state.activeKey='';markSeen();removePortal();launch.setAttribute('aria-expanded','false');if(restore&&(focusBefore?.isConnected||launch.isConnected))(focusBefore?.isConnected?focusBefore:launch).focus?.();};
  const targetFor=step=>{
+  if(quickLaunch&&step?.action==='add')return quickLaunch;
   const selector=step?.target;if(!selector)return launch;
   const candidates=[...root.querySelectorAll(selector)];if(selector.includes('#save-state')){const status=doc.getElementById('save-state');if(status)candidates.push(status);}
   return candidates.find(el=>!el.closest('[hidden]')&&(!el.getClientRects||el.getClientRects().length>0))||launch;
@@ -81,7 +84,12 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
   doc.body.append(portal);portal.addEventListener('click',controls);launch.setAttribute('aria-expanded','true');if(scroll)targetFor(step).scrollIntoView?.({block:'center',behavior:'auto'});position();portal.querySelector('[data-coach="act"],[data-coach="next"]')?.focus?.();
  };
  const open=()=>{if(doc.querySelector('dialog[open]'))return;focusBefore=doc.activeElement?.matches?.('button,a,input,select,textarea,[tabindex]')?doc.activeElement:launch;state.activeKey=key;state.step=0;markSeen();draw();};
- const closePicker=()=>{state.picker=null;if(!picker)return;picker.close?.();picker.remove();picker=null;launch.focus?.();};
+ const closePicker=()=>{
+  state.picker=null;
+  if(!picker)return;
+  const opener=picker.classList.contains('asset-manage-picker')?quickLaunch:launch;
+  picker.close?.();picker.remove();picker=null;opener?.focus?.();
+ };
  const execute=choice=>{
   closePicker();
   if(choice.type==='preset')onStart(choice.id);
@@ -95,10 +103,10 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
   if(view==='cards'){const profiles=(getData().cardAccounts||[]).filter(r=>!r.archived);return[{type:'card-account',id:'',label:'카드 등록',sub:'한 번 등록한 카드로 매월 청구액을 입력합니다'},...profiles.map(p=>({type:'card-bill',id:p.id,label:p.name,sub:'월별 청구액 입력'})),...rows];}
   return rows;
  };
- const editChoices=()=>{
+ const editChoices=(scope=page.scope)=>{
   const data=getData();
   if(view==='history')return[...(data.snapshots||[])].sort((a,b)=>b.month.localeCompare(a.month)).map(r=>({type:'plan',kind:'snapshot',id:r.month,label:r.month+' 자산 기록',sub:r.asOf}));
-  const rows=page.scope.flatMap(kind=>(data[kind]||[]).filter(r=>!recordId||r.id===recordId).map(r=>({type:'record',kind,id:r.id,label:r.name,sub:[LABELS[kind],r.institution,r.dueDate||r.date].filter(Boolean).join(' · '),amount:money(r.balance??r.valuation??r.amount??0)})));
+  const rows=scope.flatMap(kind=>(data[kind]||[]).filter(r=>!recordId||r.id===recordId).map(r=>({type:'record',kind,id:r.id,label:r.name,sub:[LABELS[kind],r.institution,r.dueDate||r.date].filter(Boolean).join(' · '),amount:money(r.balance??r.valuation??r.amount??0)})));
   if(view==='cards'&&!recordId)rows.push(...(data.cardAccounts||[]).filter(r=>!r.archived).map(r=>({type:'card-account',id:r.id,label:r.name,sub:'카드 기본 정보 수정'})));
   if(['loans','statistics','records'].includes(view)&&!recordId)rows.push(...(data.loanPayments||[]).map(r=>({type:'record',kind:'loan-payment',id:r.id,label:r.name||'대출 상환 기록',sub:r.date||r.month||''})));
   return rows;
@@ -107,24 +115,45 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
   close(false);
   if(mode==='budget')return onPlan('budget','');
   if(mode==='add'&&view==='history')return onPlan('snapshot','');
-  const choices=mode==='add'?addChoices():editChoices();
+  const managing=mode==='manage';
+  if(managing&&!assets.includes(quickKind))return;
+  const choices=mode==='add'?addChoices():managing?editChoices([quickKind]).filter(row=>row.kind===quickKind):editChoices();
   if(mode==='add'&&choices.length===1)return execute(choices[0]);
   if(mode==='edit'&&recordId&&choices.length===1)return execute(choices[0]);
   if(doc.querySelector('dialog[open]'))return;
-  picker=doc.createElement('dialog');picker.className='coach-picker';picker.setAttribute('aria-labelledby','coach-picker-title');picker.innerHTML=`<header><h2 id="coach-picker-title">${mode==='add'?'입력할 종류':'수정할 내역'} 선택</h2><button type="button" data-coach-picker-close aria-label="선택 창 닫기">×</button></header>${mode==='edit'?'<label class="coach-picker-search"><span class="sr-only">이름·금융기관 검색</span><input type="search" placeholder="이름·금융기관 검색" data-coach-search></label>':''}<p class="coach-picker-count" role="status"></p><div class="coach-picker-list"></div><p class="coach-picker-note">${mode==='add'?'선택하면 입력 창이 열립니다.':'선택한 내역의 수정 창이 열립니다.'} 저장 전에는 변경되지 않습니다.</p>`;
+  const title=managing?config[quickKind].label+' 관리':mode==='add'?'입력할 종류 선택':'수정할 내역 선택';
+  const searchable=mode==='edit'||(managing&&choices.length>0);
+  picker=doc.createElement('dialog');
+  picker.className=managing?'coach-picker asset-manage-picker':'coach-picker';
+  picker.setAttribute('aria-labelledby','coach-picker-title');
+  picker.innerHTML=`<header><h2 id="coach-picker-title">${esc(title)}</h2>
+   <button type="button" data-coach-picker-close aria-label="선택 창 닫기">×</button></header>
+   ${managing?'<button type="button" class="asset-manage-add" data-asset-quick-add>＋ 새 내역 추가</button><h3>기존 내역 수정</h3>':''}
+   ${searchable?'<label class="coach-picker-search"><span class="sr-only">이름·금융기관 검색</span><input type="search" placeholder="이름·금융기관 검색" data-coach-search></label>':''}
+   <p class="coach-picker-count" role="status"></p><div class="coach-picker-list"></div>
+   ${managing?'':`<p class="coach-picker-note">${mode==='add'?'선택하면 입력 창이 열립니다.':'선택한 내역의 수정 창이 열립니다.'} 저장 전에는 변경되지 않습니다.</p>`}`;
   const list=picker.querySelector('.coach-picker-list'),count=picker.querySelector('.coach-picker-count');
-  const renderChoices=query=>{const visible=choices.map((r,index)=>({r,index})).filter(({r})=>[r.label,r.sub].join(' ').toLowerCase().includes(query.toLowerCase()));count.textContent=mode==='edit'?visible.length>100?`${visible.length}건 중 100건 표시 · 이름을 검색해 범위를 좁혀 주세요.`:`${visible.length}건`:'';count.hidden=mode!=='edit';list.innerHTML=visible.length?visible.slice(0,100).map(({r,index})=>`<button type="button" data-coach-choice="${index}"><span><strong>${esc(r.label)}</strong><small>${esc(r.sub)}</small></span>${r.amount?`<b>${esc(r.amount)}</b>`:''}<span aria-hidden="true">›</span></button>`).join(''):`<p class="coach-picker-empty">${choices.length?'검색 결과가 없습니다.':'아직 등록된 내역이 없습니다. 먼저 새 내역을 입력해 주세요.'}</p>`;};
+  const renderChoices=query=>{
+   const visible=choices.map((row,index)=>({row,index})).filter(({row})=>[row.label,row.sub].join(' ').toLowerCase().includes(query.toLowerCase()));
+   count.textContent=visible.length>100?`${visible.length}건 중 100건 표시 · 이름을 검색해 범위를 좁혀 주세요.`:`${visible.length}건`;
+   count.hidden=!searchable;
+   list.innerHTML=visible.length?visible.slice(0,100).map(({row,index})=>`<button type="button" data-coach-choice="${index}">
+    <span><strong>${esc(row.label)}</strong><small>${esc(row.sub)}</small></span>${row.amount?`<b>${esc(row.amount)}</b>`:''}
+    <span aria-hidden="true">›</span></button>`).join(''):`<p class="coach-picker-empty">${choices.length?'검색 결과가 없습니다.':'아직 등록된 내역이 없습니다.'}</p>`;
+  };
   state.picker={key,mode,query};renderChoices(query);const search=picker.querySelector('[data-coach-search]');if(search)search.value=query;doc.body.append(picker);
-  picker.addEventListener('click',e=>{if(e.target.closest('[data-coach-picker-close]'))return closePicker();const button=e.target.closest('[data-coach-choice]');if(button){const choice=choices[Number(button.dataset.coachChoice)];if(choice)execute(choice);}});
+  picker.addEventListener('click',e=>{if(e.target.closest('[data-coach-picker-close]'))return closePicker();if(e.target.closest('[data-asset-quick-add]')){closePicker();onQuickAdd(quickKind);return;}const button=e.target.closest('[data-coach-choice]');if(button){const choice=choices[Number(button.dataset.coachChoice)];if(choice)execute(choice);}});
   picker.addEventListener('input',e=>{if(e.target.matches('[data-coach-search]')){state.picker.query=e.target.value;renderChoices(e.target.value);}});
-  picker.addEventListener('cancel',e=>{e.preventDefault();closePicker();});if(picker.showModal)picker.showModal();else picker.setAttribute('open','');picker.querySelector('input,button[data-coach-choice],button')?.focus?.();
+  picker.addEventListener('cancel',e=>{e.preventDefault();closePicker();});if(picker.showModal)picker.showModal();else picker.setAttribute('open','');picker.querySelector(managing?'[data-asset-quick-add]':'input,button[data-coach-choice],button')?.focus?.();
  };
  function controls(e){const button=e.target.closest('[data-coach]');if(!button)return;const type=button.dataset.coach;if(type==='close')return close();if(type==='act')return choose(steps[state.step].action);if(type==='previous')state.step=Math.max(0,state.step-1);if(type==='next'){if(state.step===steps.length-1)return close();state.step++;}draw();}
  const keydown=e=>{if(e.key==='Escape'&&portal){e.preventDefault();close();}};
  const externalClick=e=>{if(portal&&!e.target.closest('.coach-portal,.coach-launch'))close(false);};
+ const openQuick=()=>choose('manage');
+ quickLaunch?.addEventListener('click',openQuick);
  launch.addEventListener('click',open);doc.addEventListener('keydown',keydown);doc.addEventListener('click',externalClick,true);win?.addEventListener('resize',position);win?.addEventListener('scroll',position,true);
  if(state.activeKey&&state.activeKey!==key)state.activeKey='';
  if(state.picker&&state.picker.key!==key)state.picker=null;
  if(state.picker?.key===key)choose(state.picker.mode,state.picker.query);else if(state.activeKey===key&&!doc.querySelector('dialog[open]'))draw(false);else if(!state.seen.has(key)&&!doc.querySelector('dialog[open]'))open();
- return()=>{removePortal();if(picker){picker.close?.();picker.remove();picker=null;}launch.removeEventListener('click',open);launch.remove();bar?.remove();createdActions?.remove();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',externalClick,true);win?.removeEventListener('resize',position);win?.removeEventListener('scroll',position,true);};
+ return()=>{removePortal();if(picker){picker.close?.();picker.remove();picker=null;}quickLaunch?.removeEventListener('click',openQuick);launch.removeEventListener('click',open);launch.remove();bar?.remove();createdActions?.remove();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',externalClick,true);win?.removeEventListener('resize',position);win?.removeEventListener('scroll',position,true);};
 }
