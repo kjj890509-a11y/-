@@ -33,11 +33,12 @@ export async function handleApi(request, env) {
       if(!previous||previous.revision!==body.revision)return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
       body.data.dashboard=JSON.parse(previous.data).dashboard??null;
     }
-    if (body.data && typeof body.data === 'object' && (['cashflow','fixed','budgets','snapshots','loanPayments'].some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&(row.interestMode===undefined||row.calculationMode===undefined))) || (Array.isArray(body.data.cashflow)&&body.data.cashflow.some(row=>row&&(row.includeInForecast===undefined||row.paymentSource===undefined))) || (Array.isArray(body.data.retirement)&&body.data.retirement.some(row=>row&&(row.monthlyContribution===undefined||row.contributionDate===undefined)))) && body.revision > 0) {
+    const compatibleFields=['cashflow','fixed','budgets','actualSpending','snapshots','loanPayments'];
+    if (body.data && typeof body.data === 'object' && (compatibleFields.some(key=>body.data[key]===undefined) || (Array.isArray(body.data.loans)&&body.data.loans.some(row=>row&&(row.interestMode===undefined||row.calculationMode===undefined))) || (Array.isArray(body.data.cashflow)&&body.data.cashflow.some(row=>row&&(row.includeInForecast===undefined||row.paymentSource===undefined))) || (Array.isArray(body.data.retirement)&&body.data.retirement.some(row=>row&&(row.monthlyContribution===undefined||row.contributionDate===undefined)))) && body.revision > 0) {
       const previous = await readPrevious();
       if (!previous || previous.revision !== body.revision) return responseJSON({error:'다른 기기에서 내역이 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.'},409);
       const stored=JSON.parse(previous.data);
-      for(const key of ['cashflow','fixed','budgets','snapshots','loanPayments'])if(body.data[key]===undefined)body.data[key]=stored[key]||[];
+      for(const key of compatibleFields)if(body.data[key]===undefined)body.data[key]=stored[key]||[];
       const oldFlows=new Map((stored.cashflow||[]).map(row=>[row.id,row]));
       if(Array.isArray(body.data.cashflow))body.data.cashflow=body.data.cashflow.map(row=>row?{...row,includeInForecast:row.includeInForecast===undefined?(oldFlows.get(row.id)?.includeInForecast??true):row.includeInForecast,paymentSource:row.paymentSource===undefined?(oldFlows.get(row.id)?.paymentSource??'account'):row.paymentSource}:row);
       const oldRetirement=new Map((stored.retirement||[]).map(row=>[row.id,row]));

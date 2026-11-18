@@ -31,7 +31,7 @@ function check(t,view,label){
  for(const grid of root.querySelectorAll('.home-stats,.planning-metrics,.metric-strip,.workspace-current-grid,.cf-month-summary,.loan-overview')){assert.ok(grid.classList.contains('page-metrics'),view);assert.equal(grid.dataset.pageMetricCount,String(grid.children.length),view);for(const child of grid.children)assert.ok(child.classList.contains('page-metric-card'),view);}
  assert.doesNotMatch(root.textContent,/등록순은 저장된 내역의 추가 순서|점 9개로 행·열을 이동할 수 있습니다|보기 삭제는 청구 내역을 지우지 않습니다|각 카드의 ‘집계 기준·금액 확인’에서 구분할 수 있어요/,view);
 }
-test('all twenty routes share the page frame and summary hierarchy with populated, empty and masked data',async()=>{
+test('all desktop routes share the page frame and summary hierarchy with populated, empty and masked data',async()=>{
  for(const data of [domain.samplePortfolio(),domain.emptyPortfolio()]){
   const before=structuredClone(data),t=await app(data);for(const [view,label]of Object.entries(navigation.viewLabels)){await t.visit(view);check(t,view,label);}assert.equal(t.writes(),0);assert.deepEqual(data,before);
  }

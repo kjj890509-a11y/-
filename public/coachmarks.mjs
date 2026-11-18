@@ -16,6 +16,7 @@ const config={
  loans:{label:'대출',scope:['loans'],presets:['loans'],editTarget:'.m-account-list,.loan-management,.loan-overview'},
  cards:{label:'카드 청구',scope:['cards'],presets:['cards'],addTarget:'[data-action="mobile-card-bill"],[data-action="card-account-add"],#card-billing',editTarget:'.m-card-bills,#card-billing'},
  cashflow:{label:'수입·지출',scope:['cashflow'],presets:['salary','income','expense']},
+ spending:{label:'가계부',scope:[],presets:[]},
  fixed:{label:'정기 지출',scope:['fixed'],presets:['fixed']},
  planned:{label:'예정 거래',scope:['cashflow'],presets:['planned-income','planned-expense']},
  records:{label:'전체 내역',scope:KINDS,presets:allPresets},
@@ -84,6 +85,10 @@ function stepsFor(view,detail,mobile){
  if(detail)return[{title:'이 내역 수정하기',body:'수정 버튼에서 현재 내역을 열 수 있습니다. 값을 바꾼 뒤 저장하기를 눌러 반영하세요.',action:'edit',label:'이 내역 수정',target:'[data-action="edit"],.m-balance-hero'},...lastStep];
  if(view==='history')return[{title:'월별 자산 기록 남기기',body:'선택한 월의 잔액을 기록합니다. 과거 월은 당시의 실제 잔액을 입력하세요.',action:'add',label:'자산 기록 입력',target:page.addTarget},{title:'기존 월 기록 수정하기',body:'수정할 월을 선택하면 저장된 기록이 열립니다.',action:'edit',label:'기록 선택',target:page.editTarget},...lastStep];
  if(view==='budget')return[{title:'이달 예산 입력·수정',body:'화면에서 선택한 월의 지출 한도와 저축 목표를 입력합니다. 기존 값이 있으면 수정할 수 있습니다.',action:'budget',label:'선택한 월 예산 열기',target:page.addTarget},{title:'지출 계획 수정하기',body:'수입·지출, 대출, 카드 내역을 고치면 예산과 전망에도 함께 반영됩니다.',action:'edit',label:'수정할 내역 선택',target:page.editTarget},...lastStep];
+ if(view==='spending')return[
+  {title:'실제 생활비 기록하기',body:'월을 선택하고 실제로 낸 고정비와 기타 생활비 합계를 적으세요.',target:'.spending-record'},
+  {title:'월 단위로 반영하기',body:'반영을 선택하면 그 달의 생활비 계획을 가계부 합계로 대체합니다. 미반영으로 바꿔도 기록은 보관됩니다.',target:'.spending-apply'}
+ ];
  const derived=['forecast','payday','advisor','statistics','workspace'].includes(view);
  return[{title:derived?'계산에 쓸 데이터 입력':view==='cards'?'카드와 월별 청구 입력':page.label+'에 내역 추가',body:derived?'이 화면의 결과는 등록한 자산과 수입·지출로 계산합니다. 필요한 내역을 여기서 바로 입력하세요.':view==='cards'?'카드는 한 번 등록하고, 등록한 카드를 선택해 매월 청구액을 입력할 수 있습니다.':'입력할 종류를 선택하면 이 화면에서 입력 창이 열립니다. 저장 전에는 내역이 추가되지 않습니다.',action:'add',label:'입력 시작',target:page.addTarget||'[data-action="add"],[data-action="add-planned"],.table-heading,.m-count-strip'},
  {title:'저장된 내역 수정',body:view==='entry'&&!mobile?'수정할 내역을 고른 뒤 변경 목록에 담으세요. 변경 저장을 누르면 한꺼번에 반영됩니다.':derived?'결과 금액을 직접 덮어쓰지 않고, 계산의 기준이 되는 내역을 선택해 수정합니다.':'수정할 내역을 직접 고르세요. 이름·금융기관으로 검색할 수 있고, 취소하면 기존 값이 유지됩니다.',action:'edit',label:'수정할 내역 선택',target:page.editTarget||'.m-account-list,.m-flow-list,.m-record-list,[data-ledger-scope],table'},...lastStep];
