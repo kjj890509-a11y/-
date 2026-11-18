@@ -233,6 +233,6 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
  visualViewport?.addEventListener('scroll',position);
  if(state.activeKey&&state.activeKey!==key)state.activeKey='';
  if(state.picker&&state.picker.key!==key)state.picker=null;
- if(state.picker?.key===key)choose(state.picker.mode,state.picker.query);else if(state.activeKey===key&&!doc.querySelector('dialog[open]'))draw(false);else if(!state.seen.has(key)&&!doc.querySelector('dialog[open]'))open();
+ if(state.picker?.key===key)choose(state.picker.mode,state.picker.query);else if(state.activeKey===key&&!doc.querySelector('dialog[open]'))draw(false);else if((mobile||view!=='overview')&&!state.seen.has(key)&&!doc.querySelector('dialog[open]'))open();
  return()=>{removePortal();if(picker){picker.close?.();picker.remove();picker=null;}quickLaunch?.removeEventListener('click',openQuick);launch.removeEventListener('click',open);launch.remove();bar?.remove();createdActions?.remove();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',externalClick,true);win?.removeEventListener('resize',position);win?.removeEventListener('scroll',position,true);visualViewport?.removeEventListener('resize',position);visualViewport?.removeEventListener('scroll',position);};
 }

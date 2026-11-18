@@ -9,7 +9,7 @@ export function dashboardData(data,today=todayKST()){
  const events=months.flatMap(item=>eventsForMonth(data,item)).filter(row=>!row.paid&&row.date>=today&&row.date<=end).sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
  return {t,budget,events,overdue:data.cards.filter(row=>!row.paid&&row.dueDate<today),month,today,nextPayday:paydayForecasts(data,today,1)[0],monthEnd:forecastMonths(data,today,1)[0],previous:data.snapshots.filter(row=>row.asOf<today).sort((a,b)=>a.asOf.localeCompare(b.asOf)).at(-1)};
 }
-function upcomingAgenda({events,overdue,today},money,svg) {
+function upcomingAgenda({events,overdue,today},money,svg,cashflowCard) {
  const destinations={cashflow:'cashflow',fixed:'fixed',loans:'loans',cards:'cards'};
  const types={fixed:'정기 지출',loans:'대출 원금·이자',cards:'카드 청구'};
  return `<aside class="overview-agenda" aria-labelledby="overview-agenda-title">
@@ -17,39 +17,40 @@ function upcomingAgenda({events,overdue,today},money,svg) {
    ${overdue.length?`<a class="overview-overdue" href="#cards">${svg('info')}<span>결제일 지난 카드 ${overdue.length}건<strong>${money(sum(overdue,'amount'))}</strong></span></a>`:''}
    <div class="overview-agenda-list">${events.length?events.slice(0,6).map(row=>`
      <a class="overview-event" href="#${destinations[row.type]}">
-       <time datetime="${row.date}">${row.date===today?'오늘':row.date.slice(5).replace('-','.')}</time>
-       <span class="overview-event-label"><strong>${esc(row.name)}</strong><small>${types[row.type]||(row.income?'수입':'지출')}</small></span>
+       <span class="overview-event-icon" aria-hidden="true">${svg(row.type)}</span>
+       <span class="overview-event-label"><strong>${esc(row.name)}</strong><small><time datetime="${row.date}">${row.date===today?'오늘':row.date.slice(5).replace('-','.')}</time> · ${types[row.type]||(row.income?'수입':'지출')}</small></span>
        <b class="${row.income?'income-color':''}">${row.income?'+':'−'} ${money(row.amount)}</b>
      </a>`).join(''):'<p class="overview-empty">등록된 일정이 없습니다.</p>'}</div>
    <a class="overview-link overview-agenda-footer" href="#planned">예정 거래 관리 <span aria-hidden="true">→</span></a>
+   ${cashflowCard}
  </aside>`;
 }
 
-export function renderDashboard(data,{money,compact=money,svg,horizon=6,demoBanner='',today=todayKST(),selection='all',detail='',hideAmounts=false}){
+export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBanner='',today=todayKST(),selection='all',detail='',hideAmounts=false}){
  const summary=dashboardData(data,today);
  const {t,budget,month,nextPayday,monthEnd,previous}=summary;
  const delta=previous?t.net-snapshotTotals(previous).net:null;
  const hasAssets=data.deposits.length+data.stocks.length+data.retirement.length+data.loans.length+data.cards.length>0;
  const categories=[['deposits','예금·현금',t.deposits,'계좌 잔액'],['stocks','주식·투자',t.stock,'현재 평가액'],['retirement','퇴직금·연금',t.retirement,'장기 보유 자산']];
- const metric=(label,value,description,key)=>`<button type="button" class="home-stat ${selection===key?'is-selected':''}" data-action="home-detail" data-detail="${key}" aria-pressed="${selection===key}" aria-controls="home-dashboard">
-   <span>${label}<span data-home-indicator aria-hidden="true">${selection===key?'✓':'↗'}</span></span>
+ const metric=(label,value,description,key,icon)=>`<button type="button" class="home-stat ${selection===key?'is-selected':''}" data-action="home-detail" data-detail="${key}" aria-pressed="${selection===key}" aria-controls="home-dashboard">
+   <span class="overview-metric-label"><i aria-hidden="true">${svg(icon)}</i>${label}<span data-home-indicator aria-hidden="true">${selection===key?'✓':'↗'}</span></span>
    <strong data-motion-value data-motion-value-key="home:${key}">${money(value)}</strong><small>${description}</small>
  </button>`;
  const chartPoints=hasAssets&&!hideAmounts&&!detail?forecastMonths(data,today,horizon).map(row=>({
   label:row.month.slice(2).replace('-','.'),detailLabel:row.date+' · 월말 예상 순자산',value:row.net
  })):[];
- const chart=chartPoints.length?renderAmountBars(chartPoints,{formatMoney:money,formatCompact:compact,title:'월말 순자산 전망',minWidth:540,height:186,showHint:false}):
+ const chart=chartPoints.length?renderAmountBars(chartPoints,{formatMoney:money,formatCompact:compact,title:'월말 순자산 전망',minWidth:680,height:232,showHint:false}):
   hideAmounts?'<div class="chart-empty">금액 표시를 켜면 전망을 볼 수 있습니다.</div>':'<div class="chart-empty">잔액을 등록하면 월말 전망이 표시됩니다.</div>';
  const selectedLabels={net:'순자산',deposits:'예금·현금',debt:'남은 부채',cashflow:'수입·지출',stocks:'주식·투자',retirement:'퇴직금·연금',cards:'카드 청구'};
- return `<div class="page-heading overview-heading"><div class="overview-title"><span class="overview-home-icon" aria-hidden="true">${svg('overview')}</span><div><h1>자산 한눈에</h1><p class="subtitle">${today.replaceAll('-','.')} 기준</p></div></div><div class="heading-actions"><button class="button primary" data-action="add">${svg('plus')}내역 추가</button></div></div>${demoBanner}
+ return `<div class="page-heading overview-heading"><div class="overview-title"><span class="overview-home-icon" aria-hidden="true">${svg('home')}</span><div><h1>자산 한눈에</h1><p class="subtitle">${today.replaceAll('-','.')} 기준</p></div></div><div class="heading-actions"><button class="button primary" data-action="add">${svg('plus')}내역 추가</button></div></div>${demoBanner}
  ${hasAssets?'':`<section class="getting-started overview-start"><div><h2>현재 잔액부터 등록해 주세요</h2></div><div><button class="button secondary" data-action="add" data-kind="deposits">예금 등록</button><button class="button secondary" data-action="demo">예시 보기</button></div></section>`}
  <div class="overview-workspace">
   <div class="overview-main">
-   <div class="home-stats" aria-label="현재 자산과 이달의 수입·지출">
-    ${metric('순자산',t.net,delta===null?'총자산 − 부채':`${previous.asOf.slice(5).replace('-','.')} 대비 ${delta>0?'+':''}${money(delta)}`,'net')}
-    ${metric('예금·현금',t.deposits,'현재 계좌 잔액','deposits')}
-    ${metric('남은 부채',t.debt,'대출 + 미결제 카드','debt')}
-    ${metric('이달 수입 − 지출',budget.balance,budget.actualApplied?'가계부 반영':'등록 일정 기준','cashflow')}
+   <div class="overview-section-head"><h2 id="current-assets-title">현재 자산</h2></div>
+   <div class="home-stats" aria-labelledby="current-assets-title">
+    ${metric('순자산',t.net,delta===null?'총자산 − 부채':`${previous.asOf.slice(5).replace('-','.')} 대비 ${delta>0?'+':''}${money(delta)}`,'net','overview')}
+    ${metric('예금·현금',t.deposits,'현재 계좌 잔액','deposits','deposits')}
+    ${metric('남은 부채',t.debt,'대출 + 미결제 카드','debt','loans')}
    </div>
    <section id="home-dashboard" class="home-dashboard" aria-label="자산 상세">
    ${detail?`<div class="home-detail-toolbar"><span role="status">${selectedLabels[selection]} 상세</span><button type="button" class="button secondary" data-action="home-detail" data-detail="all" aria-controls="home-dashboard">전체 보기</button></div>${detail}`: `
@@ -65,9 +66,9 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=6,demoBann
     <section class="overview-quick" aria-labelledby="overview-quick-title">
      <div class="overview-section-head"><h2 id="overview-quick-title">잔액 전망과 가계부</h2></div>
      <div class="overview-quick-grid">
-      <a href="#payday"><span>${nextPayday?nextPayday.date.slice(5).replace('-','.')+' 급여일 예금':'다음 급여일 예금'}</span><strong>${nextPayday?money(nextPayday.deposits):'급여 등록하기'}</strong></a>
-      <a href="#forecast"><span>${Number(month.slice(5))}월 말 예금</span><strong class="${monthEnd.cashShortage?'text-danger':''}">${money(monthEnd.deposits)}</strong></a>
-      <a href="#spending"><span>${Number(month.slice(5))}월 가계부</span><strong>${budget.actualApplied?'생활비 반영 중':'가계부 열기'}</strong></a>
+      <a href="#payday"><i aria-hidden="true">${svg('payday')}</i><span>${nextPayday?nextPayday.date.slice(5).replace('-','.')+' 급여일 예금':'다음 급여일 예금'}</span><strong>${nextPayday?money(nextPayday.deposits):'급여 등록하기'}</strong></a>
+      <a href="#forecast"><i aria-hidden="true">${svg('forecast')}</i><span>${Number(month.slice(5))}월 말 예금</span><strong class="${monthEnd.cashShortage?'text-danger':''}">${money(monthEnd.deposits)}</strong></a>
+      <a href="#spending"><i aria-hidden="true">${svg('budget')}</i><span>${Number(month.slice(5))}월 가계부</span><strong>${budget.actualApplied?'생활비 반영 중':'가계부 열기'}</strong></a>
      </div>
     </section>
     <div class="home-secondary-grid overview-support">
@@ -89,8 +90,12 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=6,demoBann
     </div>`}
    </section>
   </div>
-  ${upcomingAgenda(summary,money,svg)}
- </div>`;
+  ${upcomingAgenda(summary,money,svg,metric('이달 수입 − 지출',budget.balance,budget.actualApplied?'가계부 반영':'등록 일정 기준','cashflow','cashflow'))}
+ </div>
+ <nav class="overview-actionbar" aria-label="홈 빠른 작업">
+   <a href="#entry">${svg('edit')} 내역 입력·수정</a><a href="#schedule">${svg('schedule')} 입출금 달력</a>
+   <a class="overview-ask" href="#advisor">${svg('advisor')} AI 상담</a>
+ </nav>`;
 }
 export function renderAssets(data,{money,svg,demoBanner=''}){
  const t=totals(data),categories=[['deposits','예금·현금',t.deposits,'생활비 통장부터 정기예금까지',data.deposits],['stocks','주식·투자',t.stock,'계좌·종목별 현재 평가액',data.stocks],['retirement','퇴직금·연금',t.retirement,'퇴직금과 퇴직연금 계좌',data.retirement]];
