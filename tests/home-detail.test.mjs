@@ -30,6 +30,21 @@ async function start(data=domain.samplePortfolio()){
  return {document,window,Event,context,state,click,select};
 }
 
+test('desktop home charts change period and hide values while upcoming events stay available',async()=>{
+ const {document,state,click}=await start();
+ const bars=()=>document.querySelectorAll('.overview-forecast [data-chart-inspect]');
+ assert.equal(bars().length,6);
+ assert.ok(document.querySelector('.overview-agenda a[href="#schedule"]'));
+ click('.overview-forecast [data-range="12"]');
+ assert.equal(bars().length,12);
+ assert.equal(document.querySelector('.overview-forecast [data-range="12"]').getAttribute('aria-pressed'),'true');
+ document.querySelector('#privacy-toggle').onclick();
+ assert.equal(bars().length,0);
+ assert.match(document.querySelector('.overview-forecast').textContent,/금액 표시/);
+ assert.ok(document.querySelector('.overview-agenda a[href="#schedule"]'));
+ assert.equal(state.writes,0);
+});
+
 test('home cards replace only the detail area and reset without navigation or writes',async()=>{
  const {document,context,state,select}=await start();
  const cards=document.querySelector('.home-stats'),heading=document.querySelector('h1'),nav=document.querySelector('#main-nav');
