@@ -47,3 +47,33 @@ test('coach positions remain inside narrow and wide viewports and above the mobi
   assert.ok(pos.left>=16);assert.ok(pos.left+pos.width<=width-16);assert.ok(pos.top>=16);assert.ok(pos.top+panelHeight<=height-(mobile?102:16));
  }
 });
+test('an embedded phone frame keeps the coach inside the app even when a lower right button anchors it',()=>{
+ const target={left:322,top:763,right:376,bottom:817,width:54,height:54};
+ const layout=coachmarkPosition(target,{
+  width:554,height:936,mobile:true,frame:{left:0,right:392,width:392},
+  navTop:831,panelHeight:285
+ });
+ assert.equal(layout.frame.right,392);
+ assert.ok(layout.left>=16);
+ assert.ok(layout.left+layout.width<=376);
+ assert.ok(layout.top+285<=target.top-12);
+ assert.equal(layout.spotBottom,831);
+
+ const centered=coachmarkPosition({left:650,top:725,width:54,bottom:779},{
+  width:1100,height:900,mobile:true,frame:{left:353,right:746,width:393},
+  navTop:801,panelHeight:280
+ });
+ assert.ok(centered.left>=369);
+ assert.ok(centered.left+centered.width<=730);
+});
+test('short and panned viewports keep the card scrollable without shifting out of the visible phone frame',()=>{
+ const position=coachmarkPosition({left:350,width:48,top:215,bottom:263},{
+  width:550,height:900,mobile:true,frame:{left:100,right:493,width:393},
+  viewport:{offsetLeft:140,offsetTop:60,width:260,height:280},navTop:796,panelHeight:430
+ });
+ assert.ok(position.left>=156);
+ assert.ok(position.left+position.width<=384);
+ assert.ok(position.top>=76);
+ assert.ok(position.top+position.maxHeight<=324);
+ assert.ok(position.maxHeight<430);
+});

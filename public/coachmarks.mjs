@@ -34,11 +34,49 @@ export function createCoachmarkState(storage){
  let seen=[];try{const value=JSON.parse(storage?.getItem(storageKey)||'[]');if(Array.isArray(value))seen=value.filter(validKey).slice(0,100);}catch{}
  return{seen:new Set(seen),storage,activeKey:'',step:0,picker:null};
 }
-export function coachmarkPosition(target,{width,height,panelHeight=240,mobile=false}){
- const margin=16,panelWidth=Math.min(360,Math.max(0,width-2*margin)),bottom=height-(mobile?102:margin),maxTop=Math.max(margin,bottom-panelHeight);
- const center=target?target.left+target.width/2:width/2,left=Math.max(margin,Math.min(width-panelWidth-margin,center-panelWidth/2));
- let top=target?target.bottom+12:margin;
- if(top>maxTop)top=target&&target.top-panelHeight-12>=margin?target.top-panelHeight-12:maxTop; return{left,top:Math.max(margin,Math.min(maxTop,top)),width:panelWidth};
+function coachmarkFrame({width,height,mobile,frame,viewport}){
+ const left=viewport?.offsetLeft||0,top=viewport?.offsetTop||0;
+ const right=left+(viewport?.width||width),bottom=top+(viewport?.height||height);
+ if(mobile&&frame?.width>0){
+  const start=Math.max(left,frame.left),end=Math.min(right,frame.right);
+  if(end>start)return {left:start,right:end,top,bottom};
+ }
+ return {left,right,top,bottom};
+}
+
+export function coachmarkPosition(target,options){
+ const {panelHeight=240,mobile=false,navTop}=options;
+ const frame=coachmarkFrame(options);
+ const navVisible=navTop>frame.top&&navTop<=frame.bottom;
+ const spotBottom=navVisible?navTop:frame.bottom;
+ const reservedBottom=navVisible?12:mobile&&navTop==null?102:0;
+ const bottomLimit=Math.max(frame.top+1,spotBottom-reservedBottom);
+ const availableHeight=bottomLimit-frame.top;
+ const horizontalInset=Math.min(16,(frame.right-frame.left)/4);
+ const verticalInset=Math.min(16,availableHeight/4);
+ const leftEdge=frame.left+horizontalInset,rightEdge=frame.right-horizontalInset;
+ const topEdge=frame.top+verticalInset,bottomEdge=bottomLimit-verticalInset;
+ const cardWidth=Math.min(360,rightEdge-leftEdge);
+ const visibleTarget=target&&target.left+target.width>frame.left&&target.left<frame.right
+  &&target.bottom>frame.top&&target.top<bottomLimit;
+ const center=visibleTarget?target.left+target.width/2:(frame.left+frame.right)/2;
+ const left=Math.max(leftEdge,Math.min(rightEdge-cardWidth,center-cardWidth/2));
+
+ const fullHeight=Math.max(1,bottomEdge-topEdge);
+ const desiredHeight=Math.min(panelHeight,fullHeight);
+ const above=visibleTarget?Math.max(0,Math.min(bottomEdge,target.top-12)-topEdge):0;
+ const below=visibleTarget?Math.max(0,bottomEdge-Math.max(topEdge,target.bottom+12)):0;
+ let maxHeight=fullHeight,top=topEdge;
+ if(below>=desiredHeight||(below>=144&&below>=above)){
+  maxHeight=below;
+  top=bottomEdge-below;
+ }else if(above>=desiredHeight||above>=144){
+  maxHeight=above;
+  top=topEdge+above-Math.min(desiredHeight,above);
+ }else if(visibleTarget){
+  top=topEdge+(fullHeight-desiredHeight)/2;
+ }
+ return {left,top,width:cardWidth,maxHeight,frame,spotBottom};
 }
 const saveStep=[{title:'저장 후 다른 화면에도 반영',body:'입력 창의 저장하기를 눌러야 내 계정에 반영됩니다. 같은 계정의 PC·모바일이 이 내역을 함께 사용합니다. 안내를 다시 보려면 입력·수정 안내를 누르세요.',target:'[data-mobile-sync],#save-state'}];
 function stepsFor(view,detail,mobile){
@@ -73,16 +111,38 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
  const position=()=>{
   if(!portal)return;
   const panel=portal.querySelector('.coach-card'),target=targetFor(steps[state.step]);
-  const rect=target.getBoundingClientRect?.(),width=win?.innerWidth||393,height=win?.innerHeight||852;
-  const pos=coachmarkPosition(rect,{width,height,panelHeight:Math.min(panel.offsetHeight||240,height-(mobile?134:32)),mobile});
-  Object.assign(panel.style,{left:pos.left+'px',top:pos.top+'px',width:pos.width+'px',maxHeight:Math.max(150,height-(mobile?134:32))+'px'});
-  const spot=portal.querySelector('.coach-spotlight');spot.hidden=!rect||rect.width<=0||rect.height<=0;
-  if(!spot.hidden){const left=Math.max(4,rect.left-5),top=Math.max(4,rect.top-5),right=Math.min(width-4,rect.right+5),bottom=Math.min(height-(mobile?100:4),rect.bottom+5);spot.hidden=right<=left||bottom<=top;if(!spot.hidden)Object.assign(spot.style,{left:left+'px',top:top+'px',width:right-left+'px',height:bottom-top+'px'});}
+  const rect=target.getBoundingClientRect?.();
+  const navRect=mobile?root.querySelector('.m-tabbar')?.getBoundingClientRect?.():null;
+  const options={width:win?.innerWidth||393,height:win?.innerHeight||852,mobile,
+   viewport:win?.visualViewport,frame:mobile?root.getBoundingClientRect?.():null,
+   navTop:navRect?.height?navRect.top:undefined};
+  const initial=coachmarkPosition(null,options),frame=initial.frame;
+  Object.assign(portal.style,{left:frame.left+'px',top:frame.top+'px',
+   width:(frame.right-frame.left)+'px',height:(frame.bottom-frame.top)+'px'});
+
+  // Measure wrapped text after applying the width of the visible app frame.
+  Object.assign(panel.style,{width:initial.width+'px',maxHeight:initial.maxHeight+'px'});
+  const panelHeight=panel.offsetHeight||240;
+  const pos=coachmarkPosition(rect,{...options,panelHeight});
+  Object.assign(panel.style,{left:(pos.left-frame.left)+'px',top:(pos.top-frame.top)+'px',maxHeight:pos.maxHeight+'px'});
+
+  const spot=portal.querySelector('.coach-spotlight');
+  spot.hidden=true;
+  if(rect?.width>0&&rect.height>0){
+   const left=Math.max(frame.left+4,rect.left-5),top=Math.max(frame.top+4,rect.top-5);
+   const right=Math.min(frame.right-4,rect.right+5),bottom=Math.min(pos.spotBottom,rect.bottom+5);
+   const overlaps=left<pos.left+pos.width&&right>pos.left&&top<pos.top+Math.min(panelHeight,pos.maxHeight)&&bottom>pos.top;
+   if(right>left&&bottom>top&&!overlaps){
+    spot.hidden=false;
+    Object.assign(spot.style,{left:(left-frame.left)+'px',top:(top-frame.top)+'px',width:(right-left)+'px',height:(bottom-top)+'px'});
+   }
+  }
+  portal.classList.toggle('coach-unanchored',spot.hidden);
  };
  const draw=(scroll=true)=>{
   removePortal();const step=steps[state.step];if(!step)return close();
   portal=doc.createElement('div');portal.className='coach-portal';portal.innerHTML=`<div class="coach-spotlight" aria-hidden="true" hidden></div><section class="coach-card" id="coach-card" role="dialog" aria-modal="false" aria-labelledby="coach-title" aria-describedby="coach-body"><header><span>${esc(page.label)} · ${state.step+1}/${steps.length}</span><button type="button" data-coach="close" aria-label="안내 닫기">×</button></header><h2 id="coach-title">${esc(step.title)}</h2><p id="coach-body">${esc(step.body)}</p>${step.action?`<button type="button" class="coach-primary" data-coach="act">${esc(step.label)}</button>`:''}<footer>${state.step?'<button type="button" data-coach="previous">이전</button>':'<button type="button" data-coach="close">나중에</button>'}<button type="button" data-coach="next">${state.step===steps.length-1?'안내 마치기':'다음'}</button></footer></section>`;
-  doc.body.append(portal);portal.addEventListener('click',controls);launch.setAttribute('aria-expanded','true');if(scroll)targetFor(step).scrollIntoView?.({block:'center',behavior:'auto'});position();portal.querySelector('[data-coach="act"],[data-coach="next"]')?.focus?.();
+  doc.body.append(portal);portal.addEventListener('click',controls);launch.setAttribute('aria-expanded','true');if(scroll)targetFor(step).scrollIntoView?.({block:'center',behavior:'auto'});position();portal.querySelector('[data-coach="act"],[data-coach="next"]')?.focus?.({preventScroll:true});
  };
  const open=()=>{if(doc.querySelector('dialog[open]'))return;focusBefore=doc.activeElement?.matches?.('button,a,input,select,textarea,[tabindex]')?doc.activeElement:launch;state.activeKey=key;state.step=0;markSeen();draw();};
  const closePicker=()=>{
@@ -153,8 +213,11 @@ export function mountCoachmarks(root,state,{view,mobile=false,recordId='',getDat
  const openQuick=()=>choose('manage');
  quickLaunch?.addEventListener('click',openQuick);
  launch.addEventListener('click',open);doc.addEventListener('keydown',keydown);doc.addEventListener('click',externalClick,true);win?.addEventListener('resize',position);win?.addEventListener('scroll',position,true);
+ const visualViewport=win?.visualViewport;
+ visualViewport?.addEventListener('resize',position);
+ visualViewport?.addEventListener('scroll',position);
  if(state.activeKey&&state.activeKey!==key)state.activeKey='';
  if(state.picker&&state.picker.key!==key)state.picker=null;
  if(state.picker?.key===key)choose(state.picker.mode,state.picker.query);else if(state.activeKey===key&&!doc.querySelector('dialog[open]'))draw(false);else if(!state.seen.has(key)&&!doc.querySelector('dialog[open]'))open();
- return()=>{removePortal();if(picker){picker.close?.();picker.remove();picker=null;}quickLaunch?.removeEventListener('click',openQuick);launch.removeEventListener('click',open);launch.remove();bar?.remove();createdActions?.remove();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',externalClick,true);win?.removeEventListener('resize',position);win?.removeEventListener('scroll',position,true);};
+ return()=>{removePortal();if(picker){picker.close?.();picker.remove();picker=null;}quickLaunch?.removeEventListener('click',openQuick);launch.removeEventListener('click',open);launch.remove();bar?.remove();createdActions?.remove();doc.removeEventListener('keydown',keydown);doc.removeEventListener('click',externalClick,true);win?.removeEventListener('resize',position);win?.removeEventListener('scroll',position,true);visualViewport?.removeEventListener('resize',position);visualViewport?.removeEventListener('scroll',position);};
 }
