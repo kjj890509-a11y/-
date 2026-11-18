@@ -50,3 +50,5 @@ export {createPortfolioSync,mountPortfolioSync} from './portfolio-sync.mjs';
 export {mountAssetConsultation} from './asset-consultation.mjs';
 
 export {createCoachmarkState,mountCoachmarks} from './coachmarks.mjs';
+
+export {renderFinanceIcon} from './finance-icons.mjs';
