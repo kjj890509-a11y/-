@@ -1,0 +1,40 @@
+/* Contextual guidance uses the existing editors; it never writes financial records. */
+.coach-launchbar{display:flex;justify-content:flex-end;margin:0 0 16px;min-width:0}
+.coach-launch{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 11px;border:1px solid #e1e5ea;border-radius:10px;background:#fff;color:#505a66;font:500 12px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;cursor:pointer;white-space:nowrap;box-shadow:none}
+.coach-launch>span{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:1px solid #9ca5ae;border-radius:50%;font-size:11px;line-height:1}
+.mobile-app .coach-launchbar{margin:0 16px 12px}
+.mobile-app .m-app .coach-launch{font-size:12px;min-height:38px;background:#fff;border:1px solid #e1e5ea;box-shadow:none;padding:7px 11px;color:#505a66}
+.coach-portal{position:fixed;inset:0;z-index:250;pointer-events:none}
+.coach-spotlight{position:fixed;border:2px solid #485565;border-radius:12px;box-shadow:0 0 0 9999px #17212e38;pointer-events:none}
+.coach-card{position:fixed;pointer-events:auto;box-sizing:border-box;padding:18px;border:1px solid #dce1e7;border-radius:18px;background:#fff;color:#252b33;box-shadow:0 12px 40px #15203024;overflow-y:auto;overscroll-behavior:contain;font:400 14px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;letter-spacing:-.2px}
+.coach-card header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 8px}
+.coach-card header>span{font-size:12px;color:#626c78}
+.coach-card button,dialog.coach-picker button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:8px 12px;min-height:44px;border:0;border-radius:10px;background:transparent;color:inherit;font:inherit;line-height:1.5;cursor:pointer;box-shadow:none}
+.coach-card header>button,dialog.coach-picker header>button{min-width:44px;padding:4px;font-size:24px;flex-shrink:0}
+.coach-card h2{margin:0;font-size:17px;font-weight:650;line-height:1.5;color:#252b33}
+.coach-card p{margin:8px 0 16px;font-size:13px;color:#5a6571;line-height:1.8;white-space:normal}
+.coach-card .coach-primary{display:flex;width:100%;min-height:46px;padding:11px 14px;border-radius:10px;background:#303843;color:#fff;font-size:14px;font-weight:600}
+.coach-card footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 0;padding:0;border:0;background:transparent;font-size:13px}
+.coach-card footer>button:first-child{color:#626c78}
+.coach-card footer>button:last-child{font-weight:600}
+.coach-launch:focus-visible,.coach-card button:focus-visible,dialog.coach-picker :focus-visible{outline:2px solid #2878bf;outline-offset:3px}
+dialog.coach-picker,body.mobile-app dialog.coach-picker{box-sizing:border-box;width:calc(100% - 32px);max-width:480px;max-height:calc(100dvh - 48px);height:auto;margin:auto;padding:20px;border:1px solid #dce1e7;border-radius:22px;background:#fff;color:#252b33;box-shadow:0 20px 60px #15203024;overflow-y:auto;overscroll-behavior:contain;font:400 14px/1.6 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}
+dialog.coach-picker::backdrop{background:#17212e59}
+dialog.coach-picker header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 14px}
+dialog.coach-picker h2{margin:0;font-size:17px;font-weight:650;line-height:1.5}
+.coach-picker-search{display:block;margin:0 0 14px}
+dialog.coach-picker .coach-picker-search input{box-sizing:border-box;width:100%;min-width:0;min-height:46px;padding:11px 12px;border:1px solid #dce1e7;border-radius:12px;background:#f7f8fa;color:#252b33;font:inherit;font-size:16px;box-shadow:none}
+.coach-picker-list{border:1px solid #e6e9ed;border-radius:14px;overflow:hidden}
+dialog.coach-picker .coach-picker-list>button{display:flex;width:100%;gap:10px;padding:14px;min-height:68px;border:0;border-bottom:1px solid #e6e9ed;border-radius:0;background:#fff;text-align:left;justify-content:flex-start}
+dialog.coach-picker .coach-picker-list>button:last-child{border-bottom:0}
+.coach-picker-list>button>span:first-child{flex:1;min-width:0;overflow-wrap:anywhere}
+.coach-picker-list small{display:block;margin-top:3px;font-size:12px;font-weight:400;line-height:1.6;color:#626c78}
+.coach-picker-list b{max-width:42%;font-size:14px;line-height:1.5;overflow-wrap:anywhere;text-align:right;font-variant-numeric:tabular-nums}
+.coach-picker-list>button>span:last-child:not(:first-child){color:#7f8995;flex-shrink:0}
+.coach-picker-note,.coach-picker-empty{padding:0;margin:14px 0 0;font-size:12px;line-height:1.8;color:#626c78}
+.coach-picker-empty{margin:0;padding:24px 16px;text-align:center;font-size:13px}
+@media(hover:hover){.coach-launch:hover,.coach-card footer>button:hover,dialog.coach-picker .coach-picker-list>button:hover{background:#f4f6f8}}
+@media(max-width:350px){.coach-card{padding:16px}.coach-card h2{font-size:16px}dialog.coach-picker,body.mobile-app dialog.coach-picker{padding:16px}.coach-picker-list b{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.coach-portal *,.coach-picker *{scroll-behavior:auto;transition:none;animation:none}}
+
+.coach-picker-count{margin:0 0 10px;font-size:12px;line-height:1.7;color:#626c78}

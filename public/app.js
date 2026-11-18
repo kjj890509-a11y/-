@@ -5,7 +5,7 @@ import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
-import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation} from '/navigation.mjs';
+import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation, createCoachmarkState, mountCoachmarks} from '/navigation.mjs';
 import {renderDashboard, renderAssets} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 const icons = {
@@ -45,6 +45,7 @@ let paydaySalaryId='all',paydaySelectedDate='';
 let view = 'overview', month = todayKST().slice(0,7), query = '', editorKind, editingId;
 let homeSelection='all';
 let mobileState=createMobileState(),mobileRecordId='';
+const coachmarkState=createCoachmarkState(localStorage);
 let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDrafts={},entrySession=[];
 let entryManagerState=createEntryManagerState();
 let cardBillingState=createCardBillingState();
@@ -438,6 +439,27 @@ function mountEntryWorkspace(){
   onDetail:openEntryManagerDetail
  }));
 }
+function mountPageCoachmarks(root,mobile){
+ recordCleanups.push(mountCoachmarks(root,coachmarkState,{view,mobile,recordId:mobile?mobileRecordId:'',getData:()=>portfolio,money,
+  onStart:type=>{
+   if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
+   const selectedMonth=month,preset=entryPresets.find(p=>p.id===type);if(!preset)return;
+   startEntryEditor(type);month=selectedMonth;
+   if($('entry-continue'))$('entry-continue').checked=false;
+   $('record-form').querySelector('button[type="submit"]').textContent='저장하기';
+   if(preset.kind==='cards'&&selectedMonth!==todayKST().slice(0,7))$('field-dueDate').value=paymentDate(selectedMonth,Number(todayKST().slice(8)));
+   if(preset.kind==='fixed'&&$('field-startMonth'))$('field-startMonth').value=selectedMonth;
+   if(preset.kind==='cashflow'){
+    const selected=mobile?mobileState.selectedDate:calendarSelected;
+    const date=selected?.startsWith(selectedMonth)?selected:selectedMonth===todayKST().slice(0,7)?todayKST():selectedMonth+'-01';
+    if(!preset.future||date>todayKST())$('field-date').value=date;
+   }
+  },
+  onEdit:(kind,id)=>kind==='loan-payment'?openLoanPaymentEditor(id):!mobile&&view==='entry'?openEntryManagerDetail(kind,id,entryDraftRow(entryManagerState,portfolio,kind,id)):openEditor(kind,id),
+  onPlan:(type,selectedMonth)=>openPlanningEditor(type,selectedMonth||month),
+  onCardAccount:openCardAccountEditor,onCardBill:openMobileCardBill
+ }));
+}
 function renderMobile(){
  advisorState??=initialAdvisorState();
  const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
@@ -449,6 +471,7 @@ function renderMobile(){
  }
  mountTrendCharts(root);
  if(view==='overview'||view==='advisor')checkAdvisorService();
+ mountPageCoachmarks(root,true);
  const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#ffffff';
 }
 async function requestAssetAdvisor(question){
@@ -471,7 +494,7 @@ function openMobileCardBill(id){
  const input=document.createElement('input');input.type='hidden';input.name='mobileCardAccountId';input.value=id;$('record-form').append(input);
  const billing=document.createElement('input');billing.type='hidden';billing.name='mobileBillingMonth';billing.value=month;$('record-form').append(billing);
 }
-function render(){closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);if(mobile){renderMobile();return;}const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#635bff';$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});}
+function render(){closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);if(mobile){renderMobile();return;}const theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.content='#635bff';$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});mountPageCoachmarks($('main'),false);}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['paymentSource','결제 방식','paymentSource',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],

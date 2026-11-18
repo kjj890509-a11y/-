@@ -42,3 +42,11 @@ test('page normalization keeps header actions, calculation help and partial home
  await t.visit('statistics');assert.match(root.textContent,/실제 입출금 완료를 뜻하지 않습니다/);await t.visit('assets');assert.ok(root.querySelector('.page-header .heading-actions [data-action=add]'));await t.visit('advisor');assert.ok(root.querySelector('[data-ui-stage="3"]'));assert.equal(root.querySelector('[data-ui-stage-panel="3"]').hidden,false);assert.match(root.textContent,/연결이 설정되지 않았습니다/);
  await t.visit('overview');const heading=root.querySelector('.page-header'),tabs=root.querySelector('.section-tabs');root.querySelector('[data-home-detail][data-detail=debt]')?.click?.();const target=root.querySelector('[data-action=home-detail][data-detail=debt]');assert.ok(target);target.dispatchEvent(new t.Event('click',{bubbles:true}));assert.strictEqual(root.querySelector('.page-header'),heading);assert.strictEqual(root.querySelector('.section-tabs'),tabs);check(t,'overview',navigation.viewLabels.overview);assert.equal(t.writes(),0);
 });
+test('desktop coaching opens the selected actual record and preserves entry batch-edit staging',async()=>{
+ const data=domain.samplePortfolio(),t=await app(data),click=selector=>{const el=t.document.querySelector(selector);assert.ok(el,selector);el.dispatchEvent(new t.Event('click',{bubbles:true}));};
+ await t.visit('entry');click('[data-coach="next"]');click('[data-coach="act"]');
+ const search=t.document.querySelector('[data-coach-search]');search.value=data.deposits[0].name;search.dispatchEvent(new t.Event('input',{bubbles:true}));click('[data-coach-choice]');
+ assert.equal(t.document.querySelector('#field-name').value,data.deposits[0].name);
+ assert.match(t.document.querySelector('#record-form button[type=submit]').textContent,/변경 목록에 담기/);
+ assert.equal(t.writes(),0);click('[data-close=editor]');
+});

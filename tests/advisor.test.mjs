@@ -143,12 +143,13 @@ test('customers request AI advice without a key or model field and retain compar
  assert.deepEqual(visibleStep(),['2']);
  assert.equal(document.querySelector('.advisor-strategies .primary').textContent,'적은 잔액 우선');
  assert.equal(document.querySelector('.stats-trend .forecast-key').textContent,'기존 계획');
- assert.equal(storageWrites.length,0);
+ // Only page-guide completion flags may persist; AI inputs, replies and credentials stay out of storage.
+ for(const [key,value]of storageWrites){assert.equal(key,'moa-page-coachmarks-v1');assert.deepEqual(JSON.parse(value),['desktop:advisor']);}
  document.getElementById('privacy-toggle').onclick();assert.equal(document.querySelector('#advisor-form'),null);
  document.querySelector('[data-action="reveal-advisor"]').dispatchEvent(new Event('click',{bubbles:true}));
  stage(3);
  assert.equal(document.querySelector('[data-advisor-disconnect]'),null);
- assert.ok(storageWrites.every(([key])=>key==='moa-hide-amounts'));
+ for(const [key,value]of storageWrites){if(key==='moa-hide-amounts')assert.ok(['true','false'].includes(value));else{assert.equal(key,'moa-page-coachmarks-v1');assert.deepEqual(JSON.parse(value),['desktop:advisor']);}}
  context.location.hash='#loans';window.dispatchEvent(new Event('hashchange'));
  assert.equal(document.querySelector('.heading-actions a[href="#advisor"]').textContent,'AI 상담');
  assert.equal(document.querySelector('.topbar a[href="#advisor"]').textContent,'AI 상담');
