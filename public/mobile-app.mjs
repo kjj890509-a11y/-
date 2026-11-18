@@ -34,19 +34,18 @@ function eventRows(events,money){return events.map(r=>row({name:r.name,sub:r.typ
 function home(data,state,{money,demoBanner,advisorStatus='unknown',hidden=false}){
  const t=totals(data),today=todayKST(),month=today.slice(0,7),flow=monthlyFlow(data,month),events=eventsForMonth(data,month).filter(e=>e.date>=today&&!e.paid),next=events[0];
  const upcoming=forecastMonths(data,today,1)[0],salary=paydayForecasts(data,today,1)[0],hasData=KINDS.some(k=>data[k].length),delta=upcoming.net-t.net;
- const item=(kind,name,amount,sub='',id='',issuer='')=>{
-  const picture=id?renderFinanceRecordIcon(kind,{name,institution:sub},issuer):renderFinanceIcon(kind,issuer);
+ const item=(kind,name,amount,sub='',id='',picture=renderFinanceIcon(kind))=>{
   return `<article class="m-account-card m-home-asset-row m-${kind}${kind==='deposits'?' m-account-secondary':''}">${link(route(kind,id),`<span class="m-card-symbol" aria-hidden="true">${picture}</span><span class="m-card-copy"><strong>${money(amount)}</strong><span class="m-card-label"><span>${esc(name)}</span></span>${sub?`<small>${esc(sub)}</small>`:''}</span>`,'m-card-main')}${id?action('edit','수정',`data-kind="${kind}" data-id="${esc(id)}" aria-label="${esc(name)} 수정"`,'m-home-row-action'):link(route(kind),'보기','m-home-row-action')}</article>`;
  };
  const profit=hidden?money(t.profit):signedMoney(t.profit,money);
  const retirementMonthly=data.retirement.reduce((sum,row)=>sum+(row.monthlyContribution||0),0);
  const unpaidCards=data.cards.filter(row=>!row.paid);
  const items=[
-  ...data.deposits.map(r=>item('deposits',r.name,r.balance,r.institution,r.id)),
+  ...data.deposits.map(r=>item('deposits',r.name,r.balance,r.institution,r.id,renderFinanceRecordIcon('deposits',r))),
   ...(data.stocks.length?[item('stocks','주식·투자 총평가액',t.stock,'평가손익 '+profit)]:[]),
   ...(data.retirement.length?[item('retirement','퇴직금·연금',t.retirement,'회사 월 납입 '+money(retirementMonthly))]:[]),
-  ...(data.loans.length?[item('loans','대출 잔액',t.loans,'월 이자 '+money(t.monthlyInterest),'',data.loans.length===1?issuerFor('loans',data.loans[0],data):'')]:[]),
-  ...(data.cards.length||data.cardAccounts?.length?[item('cards','미결제 카드',t.cards,unpaidCards.length+'건 결제 예정','',unpaidCards.length===1?issuerFor('cards',unpaidCards[0],data):'')]:[])
+  ...(data.loans.length?[item('loans','대출 잔액',t.loans,'월 이자 '+money(t.monthlyInterest),'',data.loans.length===1?renderFinanceRecordIcon('loans',data.loans[0]):undefined)]:[]),
+  ...(data.cards.length||data.cardAccounts?.length?[item('cards','미결제 카드',t.cards,unpaidCards.length+'건 결제 예정','',unpaidCards.length===1?renderFinanceIcon('cards',issuerFor('cards',unpaidCards[0],data)):undefined)]:[])
  ];
  const visible=state.showAllHomeAssets?items:items.slice(0,5);
  const aiLabel=advisorStatus==='unconfigured'?'서비스 연결 필요':advisorStatus==='error'?'연결 상태 확인 필요':advisorStatus==='ready'?'내 자산과 예측을 바탕으로 질문하기':'연결 확인 중';

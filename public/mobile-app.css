@@ -425,12 +425,12 @@ body.mobile-app{--m-caption:12px;--m-body:14px;--m-label:13px;--m-heading:18px;-
 .mobile-app .m-app:has(.m-asset-fab){padding-bottom:calc(168px + env(safe-area-inset-bottom,0px))}
 @media(hover:hover){.mobile-app .m-asset-fab:hover,.mobile-app #asset-advisor-form>button:not(:disabled):hover{background:var(--m-action-hover)}}
 
-.mobile-app .finance-icon.finance-monogram {
+.finance-icon.finance-monogram {
  display:grid;place-items:center;border-radius:50%;font-size:15px;
  font-weight:700;line-height:1;letter-spacing:0;
 }
-.mobile-app .finance-monogram-0{background:#E3EEFF;color:#264D8F}
-.mobile-app .finance-monogram-1{background:#DDF2E8;color:#176044}
-.mobile-app .finance-monogram-2{background:#FDE8CF;color:#73430D}
-.mobile-app .finance-monogram-3{background:#EEE7FC;color:#50349B}
-.mobile-app .finance-monogram-4{background:#FCE5E9;color:#8E334B}
+.finance-monogram-0{background:#E3EEFF;color:#264D8F}
+.finance-monogram-1{background:#DDF2E8;color:#176044}
+.finance-monogram-2{background:#FDE8CF;color:#73430D}
+.finance-monogram-3{background:#EEE7FC;color:#50349B}
+.finance-monogram-4{background:#FCE5E9;color:#8E334B}

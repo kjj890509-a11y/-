@@ -194,3 +194,29 @@ test('records saved in the same asset category show distinct purpose and name ic
  assert.deepEqual(t.state.data.deposits.map(record=>record.name),names);
  assert.equal(t.state.writes,0);
 });
+test('loan icons distinguish product names with missing issuers and preserve explicit issuers',async()=>{
+ const data=domain.emptyPortfolio();
+ const names=['전세대출','bnk모바일','IBK사잇돌','I빅론','I-one 직장인스마트론','디올저축','상환용 대출','IBK사잇돌'];
+ data.loans=names.map((name,index)=>({
+  id:'loan-'+index,name,balance:1000*(index+1),principal:100,interest:10,
+  rate:4,day:20,method:'원금균등',
+  institution:index===6?'다올저축은행':index===7?'신한은행':'',note:''
+ }));
+ const t=await app(data,'loans');
+ const signatures=container=>[...t.document.querySelectorAll(container+' .finance-icon')].map(icon=>{
+  const source=(icon.matches('img')?icon:icon.querySelector('img'))?.getAttribute('src');
+  return [source,icon.textContent.trim()].filter(Boolean).join(' ');
+ });
+ const expected=[
+  '/finance-icon-lease.svg','/finance-brand-bnk-group.png',
+  '/finance-brand-ibk-savings.png 사','/finance-brand-ibk-savings.png 빅',
+  '/finance-brand-ibk-bank.png','디','/finance-brand-daol-savings.png','/finance-brand-shinhan-bank.png'
+ ];
+ assert.deepEqual(signatures('.m-account-list'),expected);
+ t.click('[data-asset-manage=loans]');
+ assert.deepEqual(signatures('.asset-manage-picker'),expected);
+ t.click('[data-coach-picker-close]');
+ await t.visit('loans/loan-3');
+ assert.deepEqual(signatures('.m-balance-label'),[expected[3]]);
+ assert.equal(t.state.writes,0);
+});
