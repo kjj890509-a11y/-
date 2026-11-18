@@ -6,7 +6,7 @@
   --font-xs: 12px; --font-sm: 14px; --font-md: 14px; --font-lg: 16px;
   --font-xl: 20px; --font-2xl: 24px; --font-3xl: 28px;
   --ink: #30313d; --text-secondary: #414552; --muted: #596171;
-  --green: #3c4a56; --green-dark: var(--ink); --canvas: #f7f8fa;
+  --green: #3c4a56; --green-dark: var(--ink);
   --surface: #ffffff; --soft-surface: #f3f5f6; --line: #ebeef1;
   --track: #e8eced; --red: #b02a37; --blue: #426980;
   --accent-border: #cbd4db; --chart-secondary: var(--brand-focus);
