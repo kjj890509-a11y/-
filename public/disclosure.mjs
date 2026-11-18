@@ -1,11 +1,13 @@
+import {enableContextTips,helpId} from './context-tips.mjs';
 const states=new WeakMap();
-let sourceSequence=0;
+
 function closeDialog(dialog,state){if(!dialog)return;if(state.modal===dialog.id)state.modal='';if(dialog.id==='ui-info-dialog')dialog.querySelector('[data-ui-info-content]').replaceChildren();if(typeof dialog.close==='function')dialog.close();else dialog.removeAttribute('open');}
 function stateFor(document){
+ enableContextTips(document);
  if(states.has(document))return states.get(document);
  const state={view:'',sections:new Map(),modal:'',advisorStep:3};states.set(document,state);
  document.addEventListener('click',event=>{
-  const target=event.target.closest('[data-ui-close],[data-ui-open],[data-info-sources],[data-info-template],[data-ui-stage]');if(!target)return;
+  const target=event.target.closest('[data-ui-close],[data-ui-open],[data-info-template],[data-ui-stage]');if(!target)return;
   event.preventDefault();
   if(target.hasAttribute('data-ui-close')){closeDialog(target.closest('dialog'),state);return;}
   if(target.hasAttribute('data-ui-stage')){state.advisorStep=Number(target.dataset.uiStage);setStage(document.getElementById('main'),state.advisorStep);return;}
@@ -14,10 +16,6 @@ function stateFor(document){
   const content=dialog.querySelector('[data-ui-info-content]');content.replaceChildren();
   const template=target.querySelector('template');
   if(template)content.append(template.content.cloneNode(true));
-  else for(const id of (target.dataset.infoSources||'').split(' ')){
-   const source=document.getElementById(id);if(!source)continue;
-   const copy=source.cloneNode(true);copy.removeAttribute('hidden');copy.removeAttribute('id');copy.className='info-copy';copy.querySelectorAll('svg[aria-hidden="true"]').forEach(icon=>icon.remove());content.append(copy);
-  }
   show(dialog);
  });
  document.addEventListener('toggle',event=>{const element=event.target;if(element.matches?.('details[data-ui-section]')){state.sections.set(state.view+':'+element.dataset.uiSection,element.hasAttribute('open'));const hint=element.querySelector(':scope > summary .disclosure-hint');if(hint)hint.textContent=element.hasAttribute('open')?'접기':'펼쳐 보기';}},true);
@@ -34,10 +32,48 @@ function infoDialog(document){
 }
 function help(source,target,title){
  if(!source||!target||source.dataset.helpSource)return;
- source.dataset.helpSource='true';source.id||=`help-source-${++sourceSequence}`;source.hidden=true;
+ source.dataset.helpSource='true';source.id||=helpId();source.hidden=true;
  let button=target.querySelector(':scope > [data-info-sources]');
- if(!button){button=source.ownerDocument.createElement('button');button.type='button';button.className='info-button';button.textContent='i';button.setAttribute('aria-label',title+' 설명 보기');button.setAttribute('aria-haspopup','dialog');button.dataset.infoSources='';target.append(button);target.classList.add('with-info');}
- button.dataset.infoSources=(button.dataset.infoSources+' '+source.id).trim();
+ if(!button){button=source.ownerDocument.createElement('button');button.type='button';button.className='info-button context-tip-trigger';button.setAttribute('aria-label',title+' 설명 보기');button.dataset.infoSources='';target.append(button);target.classList.add('with-info');}
+ const liveIds=(button.dataset.infoSources||'').split(' ').filter(id=>id&&source.ownerDocument.getElementById(id));
+ button.dataset.infoSources=[...liveIds,source.id].join(' ');
+ button.setAttribute('aria-describedby',button.dataset.infoSources);
+}
+// Attach authored explanatory copy to its nearest heading or amount label.
+// Status, timestamps, user notes, and interactive content remain in their original places.
+function attachNotes(root, selector, scope, heading) {
+ for (const source of root.querySelectorAll(selector)) {
+  if (source.dataset.helpSource || source.matches('[role="status"],[role="alert"],[data-advisor-notice]') ||
+      source.querySelector('a,button,input,select,textarea')) continue;
+  const target = source.closest(scope)?.querySelector(heading);
+  if (target && !target.closest('a,button,label') && !target.contains(source)) {
+   help(source, target, target.firstChild?.textContent?.trim() || '표시 기준');
+  }
+ }
+}
+
+function mobileNotes(root) {
+ for (const source of root.querySelectorAll('[data-mobile-help]')) {
+  const title = source.closest('section')?.querySelector('h2') || root.querySelector('.m-header h1');
+  help(source, title, title?.firstChild?.textContent || '계산 기준');
+ }
+}
+
+function pageNotes(root) {
+ attachNotes(root, '[data-metric-help],.cf-month-summary > div > small,.flow-metrics > div > small',
+  '.metric-box,.cf-month-summary > div,.flow-metrics > div', ':scope > span');
+ attachNotes(root, '.page-heading:not(.overview-heading):not(:has([data-action="reveal-advisor"])) .subtitle,.home-detail-heading .subtitle',
+  '.page-heading,.home-detail-heading','h1,h2');
+ attachNotes(root, '.overview-forecast .overview-section-head p', '.overview-forecast', 'h2');
+ attachNotes(root, '.home-chart .panel-header p,.history-trend .panel-header p,.stats-trend .panel-header p,.expense-composition-panel .panel-header p,.loan-comparison .panel-header p,.planning-columns .panel-header p',
+  '.panel','h2');
+ attachNotes(root, '.asset-group > p', '.asset-group', 'h2');
+ attachNotes(root, '.entry-hub-note,.section-footnote,.workspace-analysis-heading > div > span',
+  '.workspace-analysis-heading,.page-shell,#main','h2,h1');
+ attachNotes(root, '.spending-record > p', '.spending-record','h2');
+ attachNotes(root, '.spending-apply > p', '.spending-apply','h3');
+ attachNotes(root, '[data-loan-term-help]', '.loan-forecast-panel','h2');
+ attachNotes(root, '.card-history-heading > p', '.card-history-heading','h2');
 }
 function fold(element,key,title,state){
  if(!element||element.closest('details[data-ui-section]'))return;
@@ -59,6 +95,7 @@ export function expandSection(root,key){
  if(details){details.setAttribute('open','');const hint=details.querySelector('.disclosure-hint');if(hint)hint.textContent='접기';}
 }
 export function rememberDisclosure(root){
+ enableContextTips(root.ownerDocument)();
  const document=root.ownerDocument,state=stateFor(document);
  for(const element of root.querySelectorAll('details[data-ui-section]'))state.sections.set(state.view+':'+element.dataset.uiSection,element.hasAttribute('open'));
  const modal=document.getElementById(state.modal),active=document.activeElement;
@@ -106,8 +143,9 @@ function statisticsFilters(root,state){
  for(const id of ['stats-start','stats-end']){const input=panel.querySelector('#'+id);if(input)input.closest('label').hidden=preset!=='custom';}
  const warning=root.querySelector('.inline-warning[role="alert"]');if(warning)panel.querySelector('#stats-filter-error').textContent=warning.textContent;
 }
-export function enhanceDisclosure(root,{view=''}={}){
+export function enhanceDisclosure(root,{view='',mobile=false}={}){
  const document=root.ownerDocument,state=stateFor(document);
+ if(mobile){mobileNotes(root);return;}
  if(state.view!==view){state.modal='';state.focus=null;if(view==='advisor')state.advisorStep=3;}state.view=view;
  document.querySelectorAll('dialog.info-dialog').forEach(dialog=>{if(dialog.hasAttribute('open'))closeDialog(dialog,state);else dialog.querySelector('[data-ui-info-content]').replaceChildren();});
  if(view==='advisor')advisorStages(root,state);
@@ -116,8 +154,9 @@ export function enhanceDisclosure(root,{view=''}={}){
  for(const form of root.querySelectorAll('#advisor-form,#statistics-filter-form'))if(!form.dataset.uiSubmit){form.dataset.uiSubmit='true';form.addEventListener('submit',()=>{if(form.id==='advisor-form')state.advisorStep=2;else closeDialog(form.closest('dialog'),state);});}
 
 
+ pageNotes(root);
  for(const source of root.querySelectorAll('.panel-note,.category-note,.loan-schedule-note,.stats-note,.advisor-key-note,.intro-note,.dashboard-notice,.table-hint,.forecast-banner p')){
-  if(source.closest('dialog')||source.getAttribute('role')==='status'||source.textContent.includes('대출을 먼저')||source.textContent.includes('예시 모드'))continue;
+  if(source.closest('dialog')||source.matches('[data-advisor-notice],[role=alert]')||source.querySelector('a,button')||source.getAttribute('role')==='status'||source.textContent.includes('대출을 먼저')||source.textContent.includes('예시 모드'))continue;
   const section=source.closest('.panel,.table-panel'),target=section?.querySelector('.panel-header h2,.table-heading h2')||root.querySelector('h1');
   help(source,target,'계산·표시 기준');
  }
@@ -133,5 +172,16 @@ export function enhanceDisclosure(root,{view=''}={}){
 }
 export function enhanceEditorHelp(dialog){
  stateFor(dialog.ownerDocument);
+ for(const source of dialog.querySelectorAll('.field-hint,[data-form-help]')){
+  if(source.dataset.helpSource)continue;
+  const label=source.closest('.field')?.querySelector('label') || dialog.querySelector('label[for="field-calculationMode"]') || dialog.querySelector('#form-fields .field label');
+  if(!label)continue;
+  let heading=label.closest('.field-tip-label');
+  if(!heading){
+   heading=dialog.ownerDocument.createElement('div');heading.className='field-tip-label';
+   label.before(heading);heading.append(label);
+  }
+  help(source,heading,label.textContent.trim());
+ }
  for(const source of dialog.querySelectorAll('.storage-note'))help(source,source.closest('.field')?.querySelector('label')||dialog.querySelector('.dialog-heading h2'),'입력 안내');
 }

@@ -50,3 +50,42 @@ test('desktop coaching opens the selected actual record and preserves entry batc
  assert.match(t.document.querySelector('#record-form button[type=submit]').textContent,/변경 목록에 담기/);
  assert.equal(t.writes(),0);click('[data-close=editor]');
 });
+
+test('home definitions open independently from financial actions, on hover, focus and tap',async()=>{
+ const t=await app(domain.samplePortfolio()),doc=t.document;
+ const tip=doc.querySelector('.home-tip-card button[aria-label="남은 부채 설명 보기"]');
+ const card=doc.querySelector('.home-stat[data-detail="debt"]');
+ const source=doc.getElementById(tip.getAttribute('aria-describedby'));
+ assert.ok(source.hidden);assert.match(source.textContent,/대출 원금과 미결제 카드/);
+ assert.equal(card.contains(tip),false);
+ const fire=(el,type)=>el.dispatchEvent(new t.Event(type,{bubbles:true,cancelable:true}));
+ const opened=()=>doc.querySelector('.context-tip-bubble[role=tooltip]');
+ fire(tip,'pointerover');assert.equal(opened().textContent,source.textContent);
+ assert.equal(tip.getAttribute('aria-describedby'),opened().id);
+ const escape=new t.Event('keydown',{bubbles:true,cancelable:true});escape.key='Escape';tip.dispatchEvent(escape);
+ assert.equal(opened(),null);assert.equal(tip.getAttribute('aria-describedby'),source.id);
+ fire(tip,'focusin');assert.ok(opened());fire(tip,'click');fire(tip,'click');assert.equal(opened(),null);
+ fire(tip,'click');fire(doc.body,'click');assert.equal(opened(),null);
+ assert.equal(card.getAttribute('aria-pressed'),'false');fire(card,'click');
+ assert.equal(doc.querySelector('.home-stat[data-detail="debt"]').getAttribute('aria-pressed'),'true');
+ assert.equal(t.writes(),0);
+});
+
+test('explanations stay contextual across desktop and mobile pages and cached help closes on navigation',async()=>{
+ const t=await app(domain.samplePortfolio()),doc=t.document;
+ const cases=[['budget','월급 + 기타 수입'],['deposits','잔액 × 연 이율'],['fixed','카드대금과 중복'],['schedule','결제 완료 카드 제외'],['statistics','등록한 날짜와 반복 일정 기준']];
+ const find=(text)=>[...doc.querySelectorAll('#main button[data-info-sources]')].find(b=>b.dataset.infoSources.split(' ').some(id=>doc.getElementById(id)?.textContent.includes(text)));
+ for(const [view,copy] of cases){
+  await t.visit(view);assert.equal(doc.querySelector('.context-tip-bubble[role=tooltip]'),null);
+  const button=find(copy);assert.ok(button,view);button.dispatchEvent(new t.Event('click',{bubbles:true}));
+  assert.ok(doc.querySelector('.context-tip-bubble[role=tooltip]').textContent.includes(copy));
+ }
+ t.context.location.search='?display=mobile';
+ for(const [view,copy] of [['workspace','미결제 카드 청구액'],['forecast','현재 잔액에 오늘까지'],['cards','청구 월과 실제 결제일'],['statistics','현재 대출 조건을 기준']]){
+  await t.visit(view);const button=find(copy);assert.ok(button,view);
+  const source=doc.getElementById(button.dataset.infoSources.split(' ')[0]);assert.ok(source.hidden);
+  button.dispatchEvent(new t.Event('click',{bubbles:true}));assert.ok(doc.querySelector('.context-tip-bubble[role=tooltip]').textContent.includes(copy));
+  assert.equal(doc.querySelector('#main').dataset.view,view);
+ }
+ assert.equal(t.writes(),0);
+});

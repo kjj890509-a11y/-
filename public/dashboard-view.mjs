@@ -1,3 +1,4 @@
+import {contextTip} from './context-tips.mjs';
 import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate} from './domain.mjs';
 import {renderAmountBars,renderAssetDonut,renderBudgetRing,renderSparkline,snapshotSeries} from './financial-charts.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -32,10 +33,10 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
  const delta=previous?t.net-snapshotTotals(previous).net:null;
  const hasAssets=data.deposits.length+data.stocks.length+data.retirement.length+data.loans.length+data.cards.length>0;
  const categories=[['deposits','예금·현금',t.deposits,'계좌 잔액'],['stocks','주식·투자',t.stock,'현재 평가액'],['retirement','퇴직금·연금',t.retirement,'장기 보유 자산']];
- const metric=(label,value,description,key,icon)=>`<button type="button" class="home-stat ${selection===key?'is-selected':''}" data-action="home-detail" data-detail="${key}" aria-pressed="${selection===key}" aria-controls="home-dashboard">
+ const metric=(label,value,description,key,icon,fact='')=>`<div class="home-tip-card"><button type="button" class="home-stat ${selection===key?'is-selected':''}" data-action="home-detail" data-detail="${key}" aria-pressed="${selection===key}" aria-controls="home-dashboard">
    <span class="overview-metric-label"><i aria-hidden="true">${svg(icon)}</i>${label}<span data-home-indicator aria-hidden="true">${selection===key?'✓':'↗'}</span></span>
-   <strong data-motion-value data-motion-value-key="home:${key}">${money(value)}</strong><small>${description}</small>
- </button>`;
+   <strong data-motion-value data-motion-value-key="home:${key}">${money(value)}</strong>${fact?`<small>${fact}</small>`:''}
+ </button>${contextTip(label,description)}</div>`;
  const chartPoints=hasAssets&&!hideAmounts&&!detail?forecastMonths(data,today,horizon).map(row=>({
   label:row.month.slice(2).replace('-','.'),detailLabel:row.date+' · 월말 예상 순자산',value:row.net
  })):[];
@@ -48,9 +49,9 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
   <div class="overview-main">
    <div class="overview-section-head"><h2 id="current-assets-title">현재 자산</h2></div>
    <div class="home-stats" aria-labelledby="current-assets-title">
-    ${metric('순자산',t.net,delta===null?'총자산 − 부채':`${previous.asOf.slice(5).replace('-','.')} 대비 ${delta>0?'+':''}${money(delta)}`,'net','overview')}
-    ${metric('예금·현금',t.deposits,'현재 계좌 잔액','deposits','deposits')}
-    ${metric('남은 부채',t.debt,'대출 + 미결제 카드','debt','loans')}
+    ${metric('순자산',t.net,'총자산에서 남은 부채를 뺀 금액입니다.','net','overview',delta===null?'':`${previous.asOf.slice(5).replace('-','.')} 대비 ${delta>0?'+':''}${money(delta)}`)}
+    ${metric('예금·현금',t.deposits,'등록한 예금과 현금 잔액을 합산합니다.','deposits','deposits')}
+    ${metric('남은 부채',t.debt,'남은 대출 원금과 미결제 카드 청구액의 합계입니다.','debt','loans')}
    </div>
    <section id="home-dashboard" class="home-dashboard" aria-label="자산 상세">
    ${detail?`<div class="home-detail-toolbar"><span role="status">${selectedLabels[selection]} 상세</span><button type="button" class="button secondary" data-action="home-detail" data-detail="all" aria-controls="home-dashboard">전체 보기</button></div>${detail}`: `
@@ -90,7 +91,7 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
     </div>`}
    </section>
   </div>
-  ${upcomingAgenda(summary,money,svg,metric('이달 수입 − 지출',budget.balance,budget.actualApplied?'가계부 반영':'등록 일정 기준','cashflow','cashflow'))}
+  ${upcomingAgenda(summary,money,svg,metric('이달 수입 − 지출',budget.balance,'이달 수입에서 이달 지출을 뺀 금액입니다.','cashflow','cashflow',budget.actualApplied?'가계부 반영':''))}
  </div>
  <nav class="overview-actionbar" aria-label="홈 빠른 작업">
    <a href="#entry">${svg('edit')} 내역 입력·수정</a><a href="#schedule">${svg('schedule')} 입출금 달력</a>
