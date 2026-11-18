@@ -1,3 +1,4 @@
+import {contextTip} from './context-tips.mjs';
 import {totals, todayKST, paymentDate, forecastMonths, snapshotTotals, budgetPlan, paydayForecasts, validateDashboard} from './domain.mjs';
 import {buildStatistics, statisticsKinds, statisticsMetrics, statisticsBases, statisticsOptions, statisticsPeriod, statisticsSeries, metricsForKind} from './statistics.mjs';
 import {renderTrendChart} from './chart.mjs';
@@ -5,7 +6,7 @@ import {renderTrendChart} from './chart.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const option=(value,label,current)=>`<option value="${esc(value)}" ${value===current?'selected':''}>${esc(label)}</option>`;
 const workspaceDragDots='<span class="drag-nine-dots" aria-hidden="true">'+Array.from({length:9},()=>'<i></i>').join('')+'</span>';
-const info=(label,copy)=>`<button type="button" class="info-button" data-info-template aria-label="${esc(label)} 설명 보기" aria-haspopup="dialog">i<template><p>${copy}</p></template></button>`;
+const info=contextTip;
 const button=(action,label,extra='')=>`<button type="button" class="button secondary small" data-board-action="${action}" ${extra}>${label}</button>`;
 const common={type:'analysis',title:'내 통계',kind:'all',metric:'expense',bank:'',item:'',query:'',basis:'all',display:'trend',width:'standard'};
 export const widgetTemplates=[

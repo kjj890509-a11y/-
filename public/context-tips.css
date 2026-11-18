@@ -1,0 +1,27 @@
+button.context-tip-trigger {
+  display: inline-grid; place-items: center; vertical-align: middle; flex: none;
+  width: 23px; height: 23px; min-height: 0; padding: 0; margin: 0 0 0 3px;
+  border: 0; border-radius: 50%; color: var(--muted); background: transparent;
+  font: 600 12px/1 system-ui,sans-serif; cursor: help; position: relative;
+}
+button.context-tip-trigger::after { content: "i"; }
+button.context-tip-trigger::before {
+  content: ''; position: absolute; inset: 4px; border: 1px solid currentColor; border-radius: 50%;
+}
+button.context-tip-trigger:hover, button.context-tip-trigger:focus-visible { color: var(--brand-ink); background: var(--brand-accent-soft); }
+.mobile-app button.context-tip-trigger { width: 28px; height: 28px; }
+.mobile-app button.context-tip-trigger::before { inset: 6px; }
+.context-tip-bubble {
+  position: fixed; inset: auto; z-index: 1000; box-sizing: border-box; width: max-content; margin: 0;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 7px;
+  background: white; color: var(--ink); box-shadow: 0 3px 14px #36291724;
+  font: 400 13px/1.6 system-ui,sans-serif; text-align: left; white-space: pre-line; overflow: auto; overflow-wrap: anywhere;
+}
+#main .home-stats > .home-tip-card, #main .overview-agenda .home-tip-card {
+  position: relative; display: block; width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; box-shadow: none; background: none;
+}
+#main .home-tip-card > .context-tip-trigger { position: absolute; top: 11px; right: 11px; }
+#main .home-tip-card .home-stat { height: 100%; min-height: 88px; }
+#main .home-tip-card .overview-metric-label { padding-right: 24px; }
+#main .home-tip-card [data-home-indicator] { display: none; }
+.field-tip-label { display: flex; align-items: center; gap: 2px; }

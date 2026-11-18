@@ -29,13 +29,13 @@ export function renderStatisticsPage(data, filters, {formatMoney,formatCompact,t
   try { result=buildStatistics(data,filters,today); }
   catch(error) { return heading+controls+`<p class="inline-warning" role="alert">${esc(error.message)}</p>`; }
   const {totals,months,rows,groups} = result;
-  const metric = (label,value,caption='') => `<div class="metric-box"><span class="label">${label}</span><strong>${value}</strong>${caption?`<small>${caption}</small>`:''}</div>`;
+  const metric = (label,value,caption='',explain=false) => `<div class="metric-box"><span class="label">${label}</span><strong>${value}</strong>${caption?`<small ${explain?'data-metric-help':''}>${caption}</small>`:''}</div>`;
   const loanView = filters.kind==='loans'||Boolean(filters.bank)||filters.item.startsWith('loans:')||filters.item.startsWith('recorded-loan:');
   const pensionView=filters.kind==='retirement'||filters.item.startsWith('retirement:');
   const hasPension=totals.retirementContribution>0||pensionView;
-  const metrics = pensionView?metric('회사 납입 예정액',money(totals.retirementContribution),'예금 수입·지출에 포함하지 않는 회사 납입 일정')+metric('납입 일정',rows.length+'건')+metric('조회 기간',months.length+'개월'):loanView
+  const metrics = pensionView?metric('회사 납입 예정액',money(totals.retirementContribution),'예금 수입·지출에 포함하지 않는 회사 납입 일정',true)+metric('납입 일정',rows.length+'건')+metric('조회 기간',months.length+'개월'):loanView
     ? metric('대출 상환 합계',money(totals.loanPayment),`상환 기록 ${money(totals.actualLoanPayment)} · 예상 ${money(totals.projectedLoanPayment)}`)+metric('상환 원금',money(totals.principal))+metric('대출 이자 합계',money(totals.interest))+metric('조회 건수',rows.length+'건')
-    : metric('수입 합계',money(totals.income))+metric('지출·상환 합계',money(totals.expense),'대출 원금·이자 포함')+metric('대출 이자',money(totals.interest))+metric('수입·지출 차액',money(totals.income-totals.expense));
+    : metric('수입 합계',money(totals.income))+metric('지출·상환 합계',money(totals.expense),'대출 원금·이자 포함',true)+metric('대출 이자',money(totals.interest))+metric('수입·지출 차액',money(totals.income-totals.expense));
   const availableMetrics=metricsForKind(pensionView?'retirement':loanView?'loans':filters.kind);
   const selectedMetric=Object.hasOwn(availableMetrics,filters.metric)?filters.metric:Object.keys(availableMetrics)[0];
   const points = statisticsSeries(result,selectedMetric);
