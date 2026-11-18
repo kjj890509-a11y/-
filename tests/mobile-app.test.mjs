@@ -169,3 +169,28 @@ test('mobile category summaries show different financial facts and loan and card
  assert.equal(t.document.querySelector('.m-balance-label img').getAttribute('src'),'/finance-brand-nh-card.png');
  assert.equal(t.state.writes,0);
 });
+test('records saved in the same asset category show distinct purpose and name icons',async()=>{
+ const data=domain.emptyPortfolio();
+ const names=['예금','주택','연금','전세금','로켓존','생활비'];
+ data.deposits=names.map((name,index)=>({
+  id:'account-'+index,name,balance:1000*(index+1),rate:0,maturity:'',
+  institution:index===5?'신한은행':''
+ }));
+ const t=await app(data,'assets');
+ const rowIcons=selector=>[...t.document.querySelectorAll(selector)].map(icon=>
+  icon.getAttribute('src')||icon.textContent.trim());
+ const expected=[
+  '/finance-icon-deposits.svg','/finance-icon-housing.svg','/finance-icon-retirement.svg',
+  '/finance-icon-lease.svg','로','/finance-brand-shinhan-bank.png'
+ ];
+ assert.deepEqual(rowIcons('.m-account-list .finance-icon'),expected);
+ t.click('[data-asset-manage=deposits]');
+ assert.deepEqual(rowIcons('.asset-manage-picker .finance-icon'),expected);
+ t.click('[data-coach-picker-close]');
+ await t.visit('deposits/account-3');
+ assert.deepEqual(rowIcons('.m-balance-label .finance-icon'),['/finance-icon-lease.svg']);
+ await t.visit('overview');
+ assert.deepEqual(rowIcons('.m-home-asset-list .finance-icon'),expected.slice(0,5));
+ assert.deepEqual(t.state.data.deposits.map(record=>record.name),names);
+ assert.equal(t.state.writes,0);
+});
