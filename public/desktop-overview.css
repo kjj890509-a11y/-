@@ -120,6 +120,15 @@ body:not(.mobile-app) #main .page-content :is(
 body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card {
   background-color: color-mix(in srgb, var(--brand-accent) 18%, var(--desk-paper));
 }
+body:not(.mobile-app) #main .page-content .loan-accounts .loan-card {
+  padding: 18px 20px 14px;
+  border-radius: 10px;
+  background: var(--desk-panel);
+}
+body:not(.mobile-app) #main .loan-card-heading { margin-bottom: 14px; }
+body:not(.mobile-app) #main .loan-card-inline { padding-top: 10px; }
+body:not(.mobile-app) #main :is(.loan-card-meta, .loan-card-details) { margin-top: 12px; }
+body:not(.mobile-app) #main .loan-card-details > summary { padding-block: 8px; }
 .forecast-toggle-cell {
   display: flex;
   flex-direction: column;
