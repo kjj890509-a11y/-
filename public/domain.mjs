@@ -2,7 +2,8 @@ export const KINDS = ['stocks', 'loans', 'retirement', 'deposits', 'cards', 'cas
 export const LABELS = { stocks: '주식', loans: '대출', retirement: '퇴직연금·퇴직금', deposits: '예금', cards: '카드', cashflow: '수입·지출', fixed:'고정지출' };
 export const FLOW_LABELS = {salary:'월급', other_income:'기타 수입', expense:'기타 지출'};
 export const isCardIncludedExpense = row => row.type==='expense'&&row.paymentSource==='card';
-export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], actualSpending: [], snapshots: [], loanPayments: [], dashboard: null });
+export const expenseConfirmationStart = '2026-11-19';
+export const emptyPortfolio = () => ({ version: 1, stocks: [], loans: [], retirement: [], deposits: [], cards: [], cardAccounts: [], cashflow: [], fixed: [], budgets: [], actualSpending: [], snapshots: [], loanPayments: [], expenseConfirmations: [], dashboard: null });
 export function validateDashboard(input) {
   if (input === null || input === undefined) return null;
   if (input.version !== 1 || !Array.isArray(input.widgets) || input.widgets.length > 16) throw new Error('통계 카드는 최대 16개까지 저장할 수 있습니다.');
@@ -186,6 +187,19 @@ export function validatePortfolio(input) {
       return {id:row.id,loanId:row.loanId||'',name:row.name.trim(),institution:row.institution.trim(),date:row.date,principal:row.principal,interest:row.interest,note:row.note||''};
     });
   }
+  if(input.expenseConfirmations!==undefined){
+    if(!Array.isArray(input.expenseConfirmations)||input.expenseConfirmations.length>6000)throw new Error('지출 확인 기록은 최대 6,000건까지 저장할 수 있습니다.');
+    const confirmed=new Set();
+    clean.expenseConfirmations=input.expenseConfirmations.map(row=>{
+      if(!row||typeof row.key!=='string'||!/^(fixed|cashflow|cards):[a-zA-Z0-9_-]{1,80}(?::\d{4}-(0[1-9]|1[0-2]))?$/.test(row.key)||confirmed.has(row.key))throw new Error('지출 확인 기록을 확인해 주세요.');
+      if(typeof row.name!=='string'||!row.name.trim()||row.name.length>100||!validMoney(row.amount)||row.amount===0)throw new Error('확인한 지출의 이름과 금액을 확인해 주세요.');
+      if(!validDate(row.dueDate)||!validDate(row.confirmedOn)||row.dueDate>row.confirmedOn||row.confirmedOn>todayKST())throw new Error('지출 확인 날짜를 확인해 주세요.');
+      if(typeof row.depositId!=='string'||!/^([a-zA-Z0-9_-]{1,80})?$/.test(row.depositId))throw new Error('지출을 반영한 계좌를 확인해 주세요.');
+      confirmed.add(row.key);
+      return {key:row.key,name:row.name.trim(),amount:row.amount,dueDate:row.dueDate,confirmedOn:row.confirmedOn,depositId:row.depositId};
+    });
+    if(clean.cards.some(row=>!row.paid&&confirmed.has('cards:'+row.id)))throw new Error('잔액 반영으로 처리한 카드대금은 결제 완료 상태로 관리해 주세요.');
+  }
   clean.dashboard=validateDashboard(input.dashboard);
   if (count > 2000) throw new Error('최대 2,000개 항목까지 저장할 수 있습니다.');
   return clean;
@@ -204,11 +218,12 @@ export function paymentDate(month, day) {
   return `${month}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
 }
 export function eventsForMonth(data, month) {
+  const confirmed=new Set((data.expenseConfirmations||[]).map(row=>row.key));
   return [
     ...loanEventsForMonth(data,month),
     ...data.cards.filter(row => row.dueDate.startsWith(month)).map(row => ({id: row.id, name: row.name, date: row.dueDate, amount: row.amount, type: 'cards', paid: row.paid})),
-    ...fixedForMonth(data,month).filter(row=>row.paymentSource==='account').map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'fixed',paid:false})),
-    ...cashflowForMonth(data,month).filter(row=>!isCardIncludedExpense(row)).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:false}))
+    ...fixedForMonth(data,month).filter(row=>row.paymentSource==='account').map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'fixed',paid:confirmed.has(expenseConfirmationKey('fixed',row,row.occursOn))})),
+    ...cashflowForMonth(data,month).filter(row=>!isCardIncludedExpense(row)).map(row=>({id:row.id,name:row.name,date:row.occursOn,amount:row.amount,type:'cashflow',flowType:row.type,income:row.type!=='expense',paid:row.type==='expense'&&confirmed.has(expenseConfirmationKey('cashflow',row,row.occursOn))}))
   ].sort((a,b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
 export function cashflowForMonth(data,month,includeExcluded=false) {
@@ -236,6 +251,42 @@ export function monthlyFlow(data,month) {
 }
 export function fixedForMonth(data,month) {
  return (data.fixed||[]).filter(row=>row.startMonth<=month&&(!row.endMonth||row.endMonth>=month)).map(row=>({...row,occursOn:paymentDate(month,row.day)})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
+}
+function expenseConfirmationKey(kind,row,date){
+ return kind+':'+row.id+(kind==='fixed'||row.repeat==='monthly'?':'+date.slice(0,7):'');
+}
+export function pendingExpenses(data,asOf=todayKST()){
+ if(!validDate(asOf)||!validMonth(asOf.slice(0,7))||asOf<expenseConfirmationStart)return [];
+ const confirmed=new Set((data.expenseConfirmations||[]).map(row=>row.key)),pending=[];
+ const add=(kind,row,dueDate)=>{
+  const key=expenseConfirmationKey(kind,row,dueDate);
+  if(row.amount>0&&dueDate<=asOf&&!confirmed.has(key))pending.push({key,kind,id:row.id,name:row.name,amount:row.amount,dueDate});
+ };
+ for(let month=expenseConfirmationStart.slice(0,7);month<=asOf.slice(0,7);month=shiftMonth(month,1)){
+  if(actualSpendingForMonth(data,month)?.applied)continue;
+  for(const row of fixedForMonth(data,month)){
+   if(row.paymentSource==='account'&&row.occursOn>=expenseConfirmationStart)add('fixed',row,row.occursOn);
+  }
+  for(const row of cashflowForMonth(data,month)){
+   if(row.type==='expense'&&!isCardIncludedExpense(row)&&row.occursOn>=expenseConfirmationStart)add('cashflow',row,row.occursOn);
+  }
+ }
+ for(const row of data.cards)if(!row.paid)add('cards',row,row.dueDate);
+ return pending.sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.name.localeCompare(b.name,'ko'));
+}
+export function confirmExpense(data,key,{depositId='',asOf=todayKST()}={}){
+ const expense=pendingExpenses(data,asOf).find(item=>item.key===key);
+ if(!expense)throw new Error('이미 처리했거나 확인할 지출을 찾을 수 없습니다.');
+ const next=structuredClone(data);
+ if(depositId){
+  const account=next.deposits.find(row=>row.id===depositId);
+  if(!account)throw new Error('차감할 계좌를 다시 선택해 주세요.');
+  if(account.balance<expense.amount)throw new Error('선택한 계좌의 잔액이 지출액보다 적습니다.');
+  account.balance-=expense.amount;
+ }
+ if(expense.kind==='cards')next.cards.find(row=>row.id===expense.id).paid=true;
+ (next.expenseConfirmations??=[]).push({key,name:expense.name,amount:expense.amount,dueDate:expense.dueDate,confirmedOn:asOf,depositId});
+ return next;
 }
 export function estimatedMonthlyInterest(balance,rate) {return Math.round(balance*rate/1200);}
 export function interestForLoan(loan,balance=loan.balance) {return balance<=0?0:loan.calculationMode==='term'||loan.interestMode==='estimate'?estimatedMonthlyInterest(balance,loan.rate):loan.interest;}
@@ -336,13 +387,15 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  const firstMonth=startDate.slice(0,7),lastMonth=dates.at(-1).slice(0,7);
  const monthCount=(Number(lastMonth.slice(0,4))-Number(firstMonth.slice(0,4)))*12+Number(lastMonth.slice(5))-Number(firstMonth.slice(5))+1;
  if(monthCount>120)throw new Error('예상 기간은 10년 이내로 선택해 주세요.');
- const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate),events=[];
+ const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate);
+ const confirmed=new Set((data.expenseConfirmations||[]).map(row=>row.key));
+ const events=pendingExpenses(data,startDate).map(row=>({...row,date:startDate,kind:row.kind==='cards'?'card':row.kind==='cashflow'?'expense':'fixed',income:false}));
  for(let index=0;index<monthCount;index++) {
   const month=shiftMonth(firstMonth,index);
   // The current balance already reflects paid living expenses. Only replace this month's plans.
   const livingExpensesSettled=index===0&&actualSpendingForMonth(data,month)?.applied;
-  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate&&!isCardIncludedExpense(row)&&!(livingExpensesSettled&&row.type==='expense'))events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
-  if(!livingExpensesSettled)for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate)events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
+  for(const row of cashflowForMonth(data,month))if(row.occursOn>startDate&&!isCardIncludedExpense(row)&&!(row.type==='expense'&&(livingExpensesSettled||confirmed.has(expenseConfirmationKey('cashflow',row,row.occursOn)))))events.push({date:row.occursOn,name:row.name,kind:row.type,amount:row.amount,income:row.type!=='expense'});
+  if(!livingExpensesSettled)for(const row of fixedForMonth(data,month))if(row.paymentSource==='account'&&row.occursOn>startDate&&!confirmed.has(expenseConfirmationKey('fixed',row,row.occursOn)))events.push({date:row.occursOn,name:row.name,kind:'fixed',amount:row.amount,income:false});
   for(const row of loanMonths[index].details)if(row.date>startDate&&row.payment>0)events.push({date:row.date,name:row.name,kind:'loan',amount:row.payment,income:false,principal:row.principal,interest:row.interest});
   for(const row of retirementContributionsForMonth(data,month))if(row.date>startDate)events.push({...row,kind:'retirement',income:false});
  }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows,retirementContributionsForMonth} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows,retirementContributionsForMonth,expenseConfirmationStart,pendingExpenses,confirmExpense} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -125,7 +125,11 @@ test('monthly actuals replace living expenses only and never reduce the current 
  assert.equal(after[1].expense,before[1].expense);
  assert.equal(budgetPlan(p,'2026-12').livingExpense,800000);
  assert.deepEqual(totals(p),baseline);
- assert.deepEqual(forecastMonths(p,'2026-12-01',1),forecastMonths({...p,actualSpending:[]},'2026-12-01',1));
+ const december=forecastMonths(p,'2026-12-01',1)[0];
+ const decemberWithoutActuals=forecastMonths({...p,actualSpending:[]},'2026-12-01',1)[0];
+ assert.equal(december.fixedCash,700000);
+ assert.equal(december.otherExpense,100000);
+ assert.equal(decemberWithoutActuals.expense-december.expense,800000);
  p.actualSpending[0].amount=0;
  assert.equal(budgetPlan(p,month).expense,350000);
  p.actualSpending[0].applied=false;
@@ -344,4 +348,63 @@ test('the API retains retirement plans for old clients and permits explicitly st
  saved.data.retirement[0].monthlyContribution=0;saved.data.retirement[0].contributionDate='';
  assert.equal((await handleApi(req('pension-owner','PUT',{data:saved.data,revision:2}),env)).status,200);
  saved=await(await handleApi(req('pension-owner'),env)).json();assert.equal(saved.data.retirement[0].monthlyContribution,0);assert.equal(saved.data.retirement[0].contributionDate,'');
+});
+
+test('due and overdue expenses stay in forecasts until a withdrawal or existing balance is confirmed',()=>{
+ const start=expenseConfirmationStart,month=start.slice(0,7);
+ const p=validatePortfolio({...emptyPortfolio(),
+  deposits:[{id:'bank',name:'생활비 계좌',balance:1000000,rate:0}],
+  cards:[{id:'bill',name:'확인할 카드',amount:300000,dueDate:'2026-11-17',paid:false}],
+  fixed:[
+   {id:'rent',name:'정기 지출',amount:100000,day:19,startMonth:month,paymentSource:'account'},
+   {id:'older',name:'기존 정기 지출',amount:200000,day:10,startMonth:month,paymentSource:'account'},
+   {id:'duplicate',name:'카드에 포함된 정기 지출',amount:70000,day:19,startMonth:month,paymentSource:'card'}
+  ],
+  cashflow:[
+   {id:'planned',name:'예정 지출',amount:20000,date:start,type:'expense',repeat:'once'},
+   {id:'excluded',name:'예상 제외',amount:80000,date:start,type:'expense',repeat:'once',includeInForecast:false}
+  ]
+ });
+ assert.deepEqual(pendingExpenses(p,start).map(r=>r.key).sort(),['cards:bill','cashflow:planned','fixed:rent:'+month]);
+ assert.equal(pendingExpenses(p,'2026-11-21').length,3);
+ assert.equal(totals(p).deposits,1000000);
+ assert.equal(totals(p).net,700000);
+ const projected=forecastOnDates(p,[start],start)[0];
+ assert.equal(projected.deposits,580000);
+ assert.equal(projected.cards,0);
+ assert.equal(projected.net,580000);
+ assert.throws(()=>confirmExpense(p,'cards:bill',{depositId:'missing',asOf:start}),/계좌/);
+ const smallBalance={...p,deposits:[{...p.deposits[0],balance:5}]};
+ assert.throws(()=>confirmExpense(smallBalance,'cards:bill',{depositId:'bank',asOf:start}),/잔액이 지출액보다/);
+
+ let saved=validatePortfolio(confirmExpense(p,'cards:bill',{depositId:'bank',asOf:start}));
+ assert.equal(totals(saved).deposits,700000);
+ assert.equal(totals(saved).cards,0);
+ assert.equal(totals(saved).net,700000);
+ assert.equal(forecastOnDates(saved,[start],start)[0].net,projected.net);
+ assert.throws(()=>confirmExpense(saved,'cards:bill',{depositId:'bank',asOf:start}),/이미 처리/);
+ saved=validatePortfolio(confirmExpense(saved,'fixed:rent:'+month,{asOf:start}));
+ assert.equal(saved.deposits[0].balance,700000);
+ assert.deepEqual(pendingExpenses(saved,'2026-11-22').map(r=>r.key),['cashflow:planned']);
+ assert.equal(eventsForMonth(saved,month).find(r=>r.id==='rent').paid,true);
+ assert.ok(pendingExpenses(saved,'2026-12-19').some(r=>r.key==='fixed:rent:2026-12'));
+ assert.equal(p.deposits[0].balance,1000000);
+});
+
+test('expense confirmation is atomic and persists through an older portfolio client',async()=>{
+ const env={DB:database()},today=todayKST();
+ const initial=validatePortfolio({...emptyPortfolio(),deposits:[{id:'account',name:'계좌',balance:5000,rate:0}],
+  cards:[{id:'same-bill',name:'카드대금',amount:2000,dueDate:today,paid:false}]});
+ assert.equal((await handleApi(req('expense-owner','PUT',{data:initial,revision:0}),env)).status,200);
+ const paid=confirmExpense(initial,'cards:same-bill',{depositId:'account',asOf:today});
+ assert.equal((await handleApi(req('expense-owner','PUT',{data:paid,revision:1}),env)).status,200);
+ assert.equal((await handleApi(req('expense-owner','PUT',{data:paid,revision:1}),env)).status,409);
+ const legacy=structuredClone(paid);
+ delete legacy.expenseConfirmations;
+ assert.equal((await handleApi(req('expense-owner','PUT',{data:legacy,revision:2}),env)).status,200);
+ const saved=await(await handleApi(req('expense-owner'),env)).json();
+ assert.equal(saved.data.deposits[0].balance,3000);
+ assert.equal(saved.data.cards[0].paid,true);
+ assert.equal(saved.data.expenseConfirmations.length,1);
+ assert.throws(()=>confirmExpense(saved.data,'cards:same-bill',{depositId:'account',asOf:today}),/이미 처리/);
 });

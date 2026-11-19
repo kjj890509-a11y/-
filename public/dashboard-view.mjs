@@ -1,5 +1,5 @@
 import {contextTip} from './context-tips.mjs';
-import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate} from './domain.mjs';
+import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate,pendingExpenses} from './domain.mjs';
 import {renderAmountBars,renderAssetDonut,renderBudgetRing,renderSparkline,snapshotSeries} from './financial-charts.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=(rows,key)=>rows.reduce((total,row)=>total+(row[key]||0),0);
@@ -10,12 +10,19 @@ export function dashboardData(data,today=todayKST()){
  const events=months.flatMap(item=>eventsForMonth(data,item)).filter(row=>!row.paid&&row.date>=today&&row.date<=end).sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
  return {t,budget,events,overdue:data.cards.filter(row=>!row.paid&&row.dueDate<today),month,today,nextPayday:paydayForecasts(data,today,1)[0],monthEnd:forecastMonths(data,today,1)[0],previous:data.snapshots.filter(row=>row.asOf<today).sort((a,b)=>a.asOf.localeCompare(b.asOf)).at(-1)};
 }
-function upcomingAgenda({events,overdue,today},money,svg,cashflowCard) {
+export function renderExpenseConfirmationSummary(data,{money,today=todayKST()}){
+ const pending=pendingExpenses(data,today);
+ return `<div class="expense-confirmation-summary">
+  <button type="button" class="button secondary" data-action="expense-confirmations">${pending.length?'확인할 지출 '+pending.length+'건':'지출 반영 확인'}</button>
+  ${pending.length?`<div><span>확인할 지출 반영 후 예상 예금</span><strong>${money(totals(data).deposits-sum(pending,'amount'))}</strong></div>`:''}
+ </div>`;
+}
+function upcomingAgenda({events,today},money,svg,cashflowCard,expenseSummary) {
  const destinations={cashflow:'cashflow',fixed:'fixed',loans:'loans',cards:'cards'};
  const types={fixed:'정기 지출',loans:'대출 원금·이자',cards:'카드 청구'};
  return `<aside class="overview-agenda" aria-labelledby="overview-agenda-title">
    <div class="overview-section-head"><div><h2 id="overview-agenda-title">다가오는 입출금</h2><p>오늘부터 30일</p></div><a class="overview-link" href="#schedule">달력 보기</a></div>
-   ${overdue.length?`<a class="overview-overdue" href="#cards">${svg('info')}<span>결제일 지난 카드 ${overdue.length}건<strong>${money(sum(overdue,'amount'))}</strong></span></a>`:''}
+   ${expenseSummary}
    <div class="overview-agenda-list">${events.length?events.slice(0,6).map(row=>`
      <a class="overview-event" href="#${destinations[row.type]}">
        <span class="overview-event-icon" aria-hidden="true">${svg(row.type)}</span>
@@ -91,7 +98,7 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
     </div>`}
    </section>
   </div>
-  ${upcomingAgenda(summary,money,svg,metric('이달 수입 − 지출',budget.balance,'이달 수입에서 이달 지출을 뺀 금액입니다.','cashflow','cashflow',budget.actualApplied?'가계부 반영':''))}
+  ${upcomingAgenda(summary,money,svg,metric('이달 수입 − 지출',budget.balance,'이달 수입에서 이달 지출을 뺀 금액입니다.','cashflow','cashflow',budget.actualApplied?'가계부 반영':''),renderExpenseConfirmationSummary(data,{money,today}))}
  </div>
  <nav class="overview-actionbar" aria-label="홈 빠른 작업">
    <a href="#entry">${svg('edit')} 내역 입력·수정</a><a href="#schedule">${svg('schedule')} 입출금 달력</a>
