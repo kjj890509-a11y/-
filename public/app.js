@@ -89,7 +89,7 @@ async function loadData(){
   try{
     const data=await fetchPortfolio();
     portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
-  }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button><p><a href="/privacy.html">데이터 처리 안내</a></p></div>`;renderNav();}
+  }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">돈모아</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button><p><a href="/privacy.html">데이터 처리 안내</a></p></div>`;renderNav();}
 }
 async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
   if(saving)throw new Error('저장 중입니다. 잠시만 기다려 주세요.');
@@ -620,7 +620,8 @@ function renderMobile(){
  advisorState??=initialAdvisorState();
  const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
  enhanceDisclosure(root,{view,mobile:true});
- document.title=(view==='menu'?'전체':navLabels[view]||'모아')+' · 모아';
+ const pageTitle=view==='menu'?'전체':navLabels[view];
+ document.title=view==='overview'||!pageTitle?'돈모아':pageTitle+' · 돈모아';
  recordCleanups.push(mountMobileControls(root,mobileState,{onRender:render,onPrivacy:()=>$('privacy-toggle').onclick(),onSettings:()=>openDialog('settings-dialog'),onRefresh:async()=>{if(!canRefreshPortfolio()){toast('입력·저장을 마친 뒤 다시 불러와 주세요.');return;}const updated=await refreshPortfolio();toast(updated===null?'연결을 확인한 뒤 다시 불러와 주세요.':updated?'최신 내역을 반영했어요.':'내역을 확인했어요.');},onCardBill:openMobileCardBill}));
  if(view==='advisor'){
   if(mobileState.advisorMode==='repayment'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});}
@@ -760,7 +761,7 @@ async function exitDemo(){entrySession=[];entryDrafts={};entryEditing=false;entr
 function downloadTable(csv,title){
  if(!csv){toast('내려받을 내역이 없습니다.');return;}
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
- link.href=url;link.download=`모아-${title.replace(/[\\/:*?"<>|]/g,'').slice(0,60)}-${todayKST()}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('현재 조회 내역을 CSV로 내려받았어요.');
+ link.href=url;link.download=`돈모아-${title.replace(/[\\/:*?"<>|]/g,'').slice(0,60)}-${todayKST()}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('현재 조회 내역을 CSV로 내려받았어요.');
 }
 function updateDashboardSearch(){
  $('dashboard-search-results').innerHTML=renderDashboardSearch(searchDashboard(portfolio,$('dashboard-search').value,navLabels),$('dashboard-search').value);
@@ -903,7 +904,7 @@ $('erase-data').onclick=async()=>{
   return;
  }
  $('settings-dialog').close();
- const accepted=await confirmAction('모아에 저장된 내역을 모두 지울까요?',
+ const accepted=await confirmAction('돈모아에 저장된 내역을 모두 지울까요?',
   '현재 로그인한 계정의 자산·가계부 내역, 보기 설정, 상담 사용기록이 삭제됩니다. 지운 내역은 앱에서 복구할 수 없습니다. 필요한 내역은 먼저 백업해 주세요.',
   '내 데이터 지우기');
  if(!accepted)return;
@@ -921,7 +922,7 @@ $('erase-data').onclick=async()=>{
 };
 $('export-data').onclick=()=>{
  if(demo){toast('예시 모드를 종료한 뒤 실제 내역을 백업해 주세요.');return;}
- const file=new Blob([JSON.stringify(portfolio,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=`moa-assets-${todayKST()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('백업 파일을 내려받았어요.');
+ const file=new Blob([JSON.stringify(portfolio,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=`돈모아-자산-${todayKST()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('백업 파일을 내려받았어요.');
 };
 $('import-data').onclick=()=>{if(demo){toast('예시 모드를 종료한 뒤 복원해 주세요.');return;}$('import-file').click();};
 $('import-file').onchange=async e=>{

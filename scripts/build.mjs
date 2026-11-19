@@ -7,8 +7,8 @@ const memberPreview=await readFile(path.join(root,'.openai/member-preview'),'utf
  .then(value=>value.trim()==='true',error=>{if(error.code==='ENOENT')return false;throw error;});
 const assets={};
 for(const filename of await readdir(path.join(root,'public'))){
- if(filename.startsWith('finance-brand-')&&filename.endsWith('.png')){
-   if(memberPreview)continue;
+ if(filename.endsWith('.png')){
+   if(memberPreview&&filename.startsWith('finance-brand-'))continue;
    assets['/'+filename]={body:await readFile(path.join(root,'public',filename),'base64'),type:'image/png',encoding:'base64'};
    continue;
  }
@@ -19,7 +19,7 @@ if(memberPreview){
  assets['/finance-icons.mjs'].body=assets['/finance-icons.mjs'].body.replace(
   'const displayProviderLogos=true;', 'const displayProviderLogos=false;');
  assets['/index.html'].body=assets['/index.html'].body.replace(
-  '<title>모아 — 나의 자산관리</title>', '<title>모아 · 회원용 테스트</title>');
+  '<title>돈모아 — 나의 자산관리</title>', '<title>돈모아 · 회원용 테스트</title>');
 }
 // A new stylesheet gets a new URL even when an existing tab has cached the previous release.
 const indexPage = assets['/index.html'];

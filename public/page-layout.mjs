@@ -25,5 +25,5 @@ export function applyPageLayout(root,{title}={}){
   grid.classList.add('page-metrics');grid.style.setProperty('--page-metric-columns',String(Math.min(cards.length,4)));grid.dataset.pageMetricCount=String(cards.length);
   for(const card of cards)card.classList.add('page-metric-card');
  }
- if(title)root.ownerDocument.title=title+' · 모아';
+ if(title)root.ownerDocument.title=title+' · 돈모아';
 }

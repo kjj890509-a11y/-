@@ -24,7 +24,7 @@ export function renderStatisticsPage(data, filters, {formatMoney,formatCompact,t
       <label class="stats-filter-wide">이름·메모 검색<input id="stats-query" name="query" type="search" value="${esc(filters.query)}" placeholder="예: 도치, 신한은행, 보험료"></label>
     </div><div class="stats-filter-actions"><p id="stats-filter-error" role="alert"></p><button type="button" class="button secondary" data-stats-reset>초기화</button><button type="submit" class="button primary">통계 조회</button></div>
   </form></section>`;
-  const heading = `<div class="page-heading"><div><span class="eyebrow">MOA / STATISTICS</span><h1>기간별 분석</h1><p class="subtitle">원하는 기간의 은행별 대출과 항목별 수입·지출을 확인하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="pin-statistics">맞춤 대시보드에 추가</button><button class="button secondary" data-action="add-loan-payment">상환 기록 추가</button></div></div>`;
+  const heading = `<div class="page-heading"><div><span class="eyebrow">돈모아</span><h1>기간별 분석</h1><p class="subtitle">원하는 기간의 은행별 대출과 항목별 수입·지출을 확인하세요.</p></div><div class="heading-actions"><button class="button secondary" data-action="pin-statistics">맞춤 대시보드에 추가</button><button class="button secondary" data-action="add-loan-payment">상환 기록 추가</button></div></div>`;
   let result;
   try { result=buildStatistics(data,filters,today); }
   catch(error) { return heading+controls+`<p class="inline-warning" role="alert">${esc(error.message)}</p>`; }
