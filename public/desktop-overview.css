@@ -3,6 +3,12 @@ body:not(.mobile-app) {
   --desk-paper: var(--canvas);
   --desk-panel: #f3f3f3;
   --desk-panel-active: #e9e9e9;
+  --desk-tint-gold: #ffedac;
+  --desk-tint-cream: #fff5d7;
+  --desk-tint-sand: #f2e9d8;
+  --desk-tint-clay: #f3e3dd;
+  --desk-tint-stone: #eee9e4;
+  --desk-tint-slate: #e9edf1;
   --card-shadow: none;
   background: var(--desk-paper);
   --ink: #252525;
@@ -126,7 +132,7 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
   #main[data-view="overview"] + footer { display: none; }
 }
 
-/* Keep the page and data panels white. Give neighboring cards their own surface. */
+/* Reserve the palette for summaries and independent cards. */
 body:not(.mobile-app) #main .page-content :is(
   .panel:not(.page-metrics), .table-panel, .page-metric-card, .summary-card, .stat-card,
   .disclosure-card, .loan-card,
@@ -143,12 +149,58 @@ body:not(.mobile-app) #main .page-content :is(
   .loan-account-list > .loan-card,
   .asset-groups > .asset-group,
   .overview-support > .panel,
-  .spending-columns > .panel
+  .spending-columns > .panel,
+  .planning-columns > .panel,
+  .flow-metrics > div,
+  .entry-tile
 ) {
   border: 0;
   border-radius: 10px;
   box-shadow: none;
-  background: var(--desk-panel);
+  background: var(--desk-card-fill, var(--desk-tint-slate));
+}
+body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 1) { --desk-card-fill: var(--desk-tint-gold); }
+body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 2) { --desk-card-fill: var(--desk-tint-slate); }
+body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 3) { --desk-card-fill: var(--desk-tint-sand); }
+body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 4) { --desk-card-fill: var(--desk-tint-clay); }
+
+body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-sand); }
+body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(3),
+body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-clay); }
+body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(4) { --desk-card-fill: var(--desk-tint-slate); }
+body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(1) { --desk-card-fill: var(--desk-tint-sand); }
+body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(3) { --desk-card-fill: var(--desk-tint-gold); }
+body:not(.mobile-app) #main :is(.workspace-month-grid, .cf-month-summary) > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-clay); }
+body:not(.mobile-app) #main :is(.workspace-month-grid, .cf-month-summary) > .page-metric-card:nth-child(3) { --desk-card-fill: var(--desk-tint-slate); }
+
+body:not(.mobile-app) #main :is(
+  .home-budget, .spending-budget, .planning-columns > .panel:first-child,
+  .asset-groups > .asset-group:first-child, .flow-metrics > div:first-child,
+  .workspace-widget[data-widget-category="all"],
+  .workspace-widget[data-widget-category="composition"]
+) { --desk-card-fill: var(--desk-tint-cream); }
+body:not(.mobile-app) #main :is(
+  .spending-record, .flow-metrics > div:nth-child(2),
+  .workspace-widget[data-widget-category="loans"], .workspace-widget[data-widget-category="cards"]
+) { --desk-card-fill: var(--desk-tint-clay); }
+body:not(.mobile-app) #main :is(
+  .workspace-widget[data-widget-category="expense"], .workspace-widget[data-widget-category="budget"],
+  .asset-groups > .asset-group:nth-child(2)
+) { --desk-card-fill: var(--desk-tint-sand); }
+body:not(.mobile-app) #main :is(
+  .loan-account-list > .loan-card:nth-child(even), .entry-tile:nth-child(even),
+  .workspace-widget[data-widget-category="schedule"]
+) { --desk-card-fill: var(--desk-tint-stone); }
+body:not(.mobile-app) #main .workspace-widget[data-widget-category="income"] { --desk-card-fill: var(--desk-tint-gold); }
+
+body:not(.mobile-app) #main .page-content .flow-metrics {
+  gap: clamp(12px, 1.4vw, 20px);
+}
+body:not(.mobile-app) #main .page-content .flow-metrics > div {
+  padding: 16px;
+}
+body:not(.mobile-app) #main .page-content .entry-tile:hover {
+  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink));
 }
 body:not(.mobile-app) #main .page-content .workspace-grid {
   gap: clamp(16px, 1.6vw, 24px);
@@ -171,13 +223,11 @@ body:not(.mobile-app) #main .workspace-widget .widget-edit-actions {
 body:not(.mobile-app) #main .workspace-widget .widget-edit-actions .button.secondary {
   background: transparent;
 }
-body:not(.mobile-app) #main .workspace-widget .widget-edit-actions .button.secondary:hover,
-body:not(.mobile-app) #main .page-content .workspace-grid > .workspace-widget.widget-chosen {
+body:not(.mobile-app) #main .workspace-widget .widget-edit-actions .button.secondary:hover {
   background: var(--desk-panel-active);
 }
-body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card,
-body:not(.mobile-app) #main .page-content .workspace-current-grid > .page-metric-card.gross {
-  background-color: color-mix(in srgb, var(--brand-accent) 18%, var(--desk-paper));
+body:not(.mobile-app) #main .page-content .workspace-grid > .workspace-widget.widget-chosen {
+  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 92%, var(--ink));
 }
 body:not(.mobile-app) #main .page-content .loan-accounts .loan-card {
   padding: 18px 20px 14px;
@@ -299,10 +349,16 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 .overview-link:hover { text-decoration: underline; }
 #main .overview-main .home-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 24px; }
 #main .overview-workspace .home-stat {
-  min-height: 96px; padding: 14px 16px; border: 0; border-radius: var(--radius); box-shadow: none; background: var(--desk-panel);
+  min-height: 96px; padding: 14px 16px; border: 0; border-radius: var(--radius); box-shadow: none;
+  background: var(--desk-card-fill, var(--desk-tint-slate));
 }
+#main .overview-workspace .home-stat[data-detail="net"] { --desk-card-fill: var(--desk-tint-gold); }
+#main .overview-workspace .home-stat[data-detail="deposits"] { --desk-card-fill: var(--desk-tint-slate); }
+#main .overview-workspace .home-stat[data-detail="debt"] { --desk-card-fill: var(--desk-tint-clay); }
 #main .overview-workspace .home-stat:is(:hover, .is-selected) .overview-metric-label { color: var(--ink); }
-#main .overview-workspace .home-stat:hover { background: var(--desk-panel-active); }
+#main .overview-workspace .home-stat:is(:hover, .is-selected) {
+  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink));
+}
 #main .overview-workspace .home-stat.is-selected .overview-metric-label { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 #main .overview-workspace .overview-metric-label {
   display: flex; justify-content: flex-start; align-items: center; gap: 7px; width: 100%;
@@ -327,10 +383,14 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 .overview-quick-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
 .overview-quick-grid a {
   display: grid; grid-template-columns: 16px 1fr; align-content: center; align-items: center; gap: 3px 7px;
-  min-height: 68px; padding: 12px 16px; border: 0; border-radius: var(--radius); background: var(--desk-panel);
+  min-height: 68px; padding: 12px 16px; border: 0; border-radius: var(--radius);
+  background: var(--desk-card-fill, var(--desk-tint-slate));
 }
-.overview-quick-grid a:hover { background: var(--desk-panel-active); }
-.overview-event:hover { background: var(--soft-surface); }
+.overview-quick-grid a[href="#payday"] { --desk-card-fill: var(--desk-tint-cream); }
+.overview-quick-grid a[href="#forecast"] { --desk-card-fill: var(--desk-tint-sand); }
+.overview-quick-grid a:hover { background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink)); }
+.overview-agenda-list { border-radius: 10px; padding: 4px 12px; background: var(--desk-tint-stone); }
+.overview-event:hover { background: var(--desk-paper); border-radius: 6px; }
 .overview-quick-grid i { display: grid; place-items: center; color: var(--ink); }
 .overview-quick-grid svg, .overview-actionbar svg { width: 15px; height: 15px; }
 .overview-quick-grid span { color: var(--text-secondary); font-size: 13px; }
