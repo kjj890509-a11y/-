@@ -81,7 +81,7 @@ test('explanations stay contextual across desktop and mobile pages and cached he
   assert.ok(doc.querySelector('.context-tip-bubble[role=tooltip]').textContent.includes(copy));
  }
  t.context.location.search='?display=mobile';
- for(const [view,copy] of [['workspace','미결제 카드 청구액'],['forecast','현재 잔액에 오늘까지'],['cards','청구 월과 실제 결제일'],['statistics','현재 대출 조건을 기준']]){
+ for(const [view,copy] of [['workspace','미결제 카드 청구액'],['forecast','미확인 지출과 앞으로의 등록 일정'],['cards','청구 월과 실제 결제일'],['statistics','현재 대출 조건을 기준']]){
   await t.visit(view);const button=find(copy);assert.ok(button,view);
   const source=doc.getElementById(button.dataset.infoSources.split(' ')[0]);assert.ok(source.hidden);
   button.dispatchEvent(new t.Event('click',{bubbles:true}));assert.ok(doc.querySelector('.context-tip-bubble[role=tooltip]').textContent.includes(copy));

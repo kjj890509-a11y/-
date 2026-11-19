@@ -324,3 +324,33 @@ test('loan cards and monthly card profiles can be reordered without writing fina
 test('home debt drill-down mounts loan dragging after partial navigation and filtered loan dragging keeps hidden positions',async()=>{
  const p=domain.samplePortfolio();p.loans.push({...p.loans[0],id:'extra-loan',name:'주택 추가 대출'});const t=await start(p);t.context.location.hash='#overview';t.window.dispatchEvent(new t.Event('hashchange'));t.click('[data-action=home-detail][data-detail=debt]');await tick();assert.ok(t.sortables.has('loan-cards:.record-row-handle'));const search=t.document.querySelector('#loan-card-search');search.value='주택';search.dispatchEvent(new t.Event('input',{bubbles:true}));await tick();const drag=t.sortables.get('loan-cards:.record-row-handle');const visible=[...drag.node.querySelectorAll('[data-layout-row]')];assert.ok(visible.length>1);drag.node.prepend(drag.node.lastElementChild);drag.config.onEnd();await tick();assert.equal(t.state.writes,0);assert.equal(t.document.querySelector('[data-loan-card]').dataset.loanCard,'extra-loan');t.click('[data-layout-save]');await tick();await tick();assert.deepEqual(t.state.prefs.tables['loan-cards'].rowOrder,['loans:extra-loan','loans:demo-l2','loans:demo-l1']);
 });
+
+test('home expense confirmation saves a card and account together, and supports already reflected expenses',async()=>{
+ const p=domain.emptyPortfolio(),today=domain.todayKST();
+ p.deposits=[{id:'bank',name:'생활비',balance:400000,rate:0}];
+ p.cards=[{id:'bill',name:'카드대금',amount:120000,paid:false,dueDate:today}];
+ p.cashflow=[{id:'cost',name:'예정 지출',type:'expense',amount:30000,date:today,repeat:'once'}];
+ const t=await start(p);
+ t.context.location.hash='#overview';
+ t.window.dispatchEvent(new t.Event('hashchange'));
+ assert.match(t.document.querySelector('.expense-confirmation-summary').textContent,/확인할 지출 2건/);
+ t.click('[data-action=expense-confirmations]');
+ assert.equal(t.document.querySelectorAll('[data-action=expense-confirmation-open]').length,2);
+ t.click('[data-expense-key="cards:bill"]');
+ await t.submit();
+ assert.match(t.document.querySelector('#form-error').textContent,/방식을 선택/);
+ assert.equal(t.state.writes,0);
+ t.change('expense-payment-account','deposit:bank');
+ await t.submit();
+ assert.equal(t.state.writes,1);
+ assert.equal(t.state.data.cards[0].paid,true);
+ assert.equal(t.state.data.deposits[0].balance,280000);
+ assert.equal(t.document.querySelector('[data-expense-key="cards:bill"]'),null);
+ t.click('[data-expense-key="cashflow:cost"]');
+ t.change('expense-payment-account','recorded');
+ await t.submit();
+ assert.equal(t.state.writes,2);
+ assert.equal(t.state.data.deposits[0].balance,280000);
+ assert.equal(t.state.data.expenseConfirmations.length,2);
+ assert.match(t.document.querySelector('#form-fields').textContent,/확인할 지출이 없습니다/);
+});

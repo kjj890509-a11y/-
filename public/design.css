@@ -549,3 +549,63 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
 .ledger-header-handle { display:inline-flex; vertical-align:middle; }.ledger-column-handle { display:inline-flex; align-items:center; justify-content:center; }
 .workspace-widget-header>.widget-handle { order:-1; min-width:36px; min-height:36px; background:transparent; color:var(--muted); }
 .workspace-widget-header>div { flex:1; }
+
+.expense-confirmation-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+}
+#main .expense-confirmation-summary .button.secondary {
+  background: color-mix(in srgb, var(--brand-accent) 24%, var(--surface));
+  color: var(--brand-ink);
+  font-weight: 650;
+}
+.expense-confirmation-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+}
+.expense-confirmation-summary span {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+.expense-confirmation-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+.m-app > .expense-confirmation-summary,
+.m-account-stack .expense-confirmation-summary {
+  margin: 4px 18px 12px;
+}
+.expense-confirmation-list {
+  display: grid;
+  gap: 12px;
+  max-height: 48vh;
+  overflow: auto;
+}
+.expense-confirmation-list h3 { margin-top: 8px; }
+.expense-confirmation-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.expense-confirmation-row strong,
+.expense-confirmation-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.expense-confirmation-row small {
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+.expense-confirmation-row b { font-variant-numeric: tabular-nums; }
+.expense-confirmation-detail {
+  display: grid;
+  gap: 12px;
+}
+.expense-confirmation-detail > .text-button { justify-self: start; }
