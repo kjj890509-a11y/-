@@ -3,12 +3,7 @@ body:not(.mobile-app) {
   --desk-paper: var(--canvas);
   --desk-panel: #f3f3f3;
   --desk-panel-active: #e9e9e9;
-  --desk-tint-gold: #ffedac;
-  --desk-tint-cream: #fff5d7;
-  --desk-tint-sand: #f2e9d8;
-  --desk-tint-clay: #f3e3dd;
-  --desk-tint-stone: #eee9e4;
-  --desk-tint-slate: #e9edf1;
+  --desk-highlight: #fff4c9;
   --card-shadow: none;
   background: var(--desk-paper);
   --ink: #252525;
@@ -157,41 +152,16 @@ body:not(.mobile-app) #main .page-content :is(
   border: 0;
   border-radius: 10px;
   box-shadow: none;
-  background: var(--desk-card-fill, var(--desk-tint-slate));
+  background: var(--desk-card-fill, var(--desk-panel));
 }
-body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 1) { --desk-card-fill: var(--desk-tint-gold); }
-body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 2) { --desk-card-fill: var(--desk-tint-slate); }
-body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 3) { --desk-card-fill: var(--desk-tint-sand); }
-body:not(.mobile-app) #main .page-metrics > .page-metric-card:nth-child(4n + 4) { --desk-card-fill: var(--desk-tint-clay); }
-
-body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-sand); }
-body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(3),
-body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-clay); }
-body:not(.mobile-app) #main .workspace-current-grid > .page-metric-card:nth-child(4) { --desk-card-fill: var(--desk-tint-slate); }
-body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(1) { --desk-card-fill: var(--desk-tint-sand); }
-body:not(.mobile-app) #main .asset-hub-metrics > .page-metric-card:nth-child(3) { --desk-card-fill: var(--desk-tint-gold); }
-body:not(.mobile-app) #main :is(.workspace-month-grid, .cf-month-summary) > .page-metric-card:nth-child(2) { --desk-card-fill: var(--desk-tint-clay); }
-body:not(.mobile-app) #main :is(.workspace-month-grid, .cf-month-summary) > .page-metric-card:nth-child(3) { --desk-card-fill: var(--desk-tint-slate); }
-
-body:not(.mobile-app) #main :is(
-  .home-budget, .spending-budget, .planning-columns > .panel:first-child,
-  .asset-groups > .asset-group:first-child, .flow-metrics > div:first-child,
-  .workspace-widget[data-widget-category="all"],
-  .workspace-widget[data-widget-category="composition"]
-) { --desk-card-fill: var(--desk-tint-cream); }
-body:not(.mobile-app) #main :is(
-  .spending-record, .flow-metrics > div:nth-child(2),
-  .workspace-widget[data-widget-category="loans"], .workspace-widget[data-widget-category="cards"]
-) { --desk-card-fill: var(--desk-tint-clay); }
-body:not(.mobile-app) #main :is(
-  .workspace-widget[data-widget-category="expense"], .workspace-widget[data-widget-category="budget"],
-  .asset-groups > .asset-group:nth-child(2)
-) { --desk-card-fill: var(--desk-tint-sand); }
-body:not(.mobile-app) #main :is(
-  .loan-account-list > .loan-card:nth-child(even), .entry-tile:nth-child(even),
-  .workspace-widget[data-widget-category="schedule"]
-) { --desk-card-fill: var(--desk-tint-stone); }
-body:not(.mobile-app) #main .workspace-widget[data-widget-category="income"] { --desk-card-fill: var(--desk-tint-gold); }
+body:not(.mobile-app) #main .page-content :is(
+  .home-stat[data-detail="net"], .home-budget,
+  .workspace-current-grid > .page-metric-card:first-child,
+  .asset-hub-metrics > .page-metric-card:last-child
+),
+body:not(.mobile-app) #main .page-content > :is(.planning-metrics:not(.asset-hub-metrics), .metric-strip, .loan-overview) > .page-metric-card:first-child {
+  --desk-card-fill: var(--desk-highlight);
+}
 
 body:not(.mobile-app) #main .page-content .flow-metrics {
   gap: clamp(12px, 1.4vw, 20px);
@@ -200,7 +170,7 @@ body:not(.mobile-app) #main .page-content .flow-metrics > div {
   padding: 16px;
 }
 body:not(.mobile-app) #main .page-content .entry-tile:hover {
-  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink));
+  background: var(--desk-panel-active);
 }
 body:not(.mobile-app) #main .page-content .workspace-grid {
   gap: clamp(16px, 1.6vw, 24px);
@@ -227,7 +197,7 @@ body:not(.mobile-app) #main .workspace-widget .widget-edit-actions .button.secon
   background: var(--desk-panel-active);
 }
 body:not(.mobile-app) #main .page-content .workspace-grid > .workspace-widget.widget-chosen {
-  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 92%, var(--ink));
+  background: var(--desk-panel-active);
 }
 body:not(.mobile-app) #main .page-content .loan-accounts .loan-card {
   padding: 18px 20px 14px;
@@ -350,14 +320,11 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 #main .overview-main .home-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 24px; }
 #main .overview-workspace .home-stat {
   min-height: 96px; padding: 14px 16px; border: 0; border-radius: var(--radius); box-shadow: none;
-  background: var(--desk-card-fill, var(--desk-tint-slate));
+  background: var(--desk-card-fill, var(--desk-panel));
 }
-#main .overview-workspace .home-stat[data-detail="net"] { --desk-card-fill: var(--desk-tint-gold); }
-#main .overview-workspace .home-stat[data-detail="deposits"] { --desk-card-fill: var(--desk-tint-slate); }
-#main .overview-workspace .home-stat[data-detail="debt"] { --desk-card-fill: var(--desk-tint-clay); }
 #main .overview-workspace .home-stat:is(:hover, .is-selected) .overview-metric-label { color: var(--ink); }
 #main .overview-workspace .home-stat:is(:hover, .is-selected) {
-  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink));
+  background: color-mix(in srgb, var(--desk-card-fill, var(--desk-panel)) 94%, var(--ink));
 }
 #main .overview-workspace .home-stat.is-selected .overview-metric-label { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 #main .overview-workspace .overview-metric-label {
@@ -384,12 +351,10 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 .overview-quick-grid a {
   display: grid; grid-template-columns: 16px 1fr; align-content: center; align-items: center; gap: 3px 7px;
   min-height: 68px; padding: 12px 16px; border: 0; border-radius: var(--radius);
-  background: var(--desk-card-fill, var(--desk-tint-slate));
+  background: var(--desk-panel);
 }
-.overview-quick-grid a[href="#payday"] { --desk-card-fill: var(--desk-tint-cream); }
-.overview-quick-grid a[href="#forecast"] { --desk-card-fill: var(--desk-tint-sand); }
-.overview-quick-grid a:hover { background: color-mix(in srgb, var(--desk-card-fill, var(--desk-tint-slate)) 94%, var(--ink)); }
-.overview-agenda-list { border-radius: 10px; padding: 4px 12px; background: var(--desk-tint-stone); }
+.overview-quick-grid a:hover { background: var(--desk-panel-active); }
+.overview-agenda-list { border-radius: 10px; padding: 4px 12px; background: var(--desk-panel); }
 .overview-event:hover { background: var(--desk-paper); border-radius: 6px; }
 .overview-quick-grid i { display: grid; place-items: center; color: var(--ink); }
 .overview-quick-grid svg, .overview-actionbar svg { width: 15px; height: 15px; }
