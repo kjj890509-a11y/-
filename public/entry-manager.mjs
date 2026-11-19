@@ -12,7 +12,7 @@ const spec={
 const columns={
  all:['name','institution','primary','note'],cashflow:['name','type','amount','date','repeat','paymentSource','includeInForecast','note'],fixed:['name','amount','day','paymentSource','startMonth','endMonth','note'],deposits:['name','institution','balance','rate','maturity','note'],stocks:['name','institution','cost','valuation','note'],retirement:['name','institution','amount','monthlyContribution','contributionDate','asOf','note'],loans:['name','institution','balance','rate','remainingMonths','nextPaymentDate','day','note'],cards:['name','amount','dueDate','paid','note']
 };
-export const createEntryManagerState=()=>({mode:'manage',category:'all',query:'',sort:'default',page:1,pageSize:20,changedOnly:false,drafts:new Map(),layouts:{},appliedOrder:{},busy:false,error:'',message:''});
+export const createEntryManagerState=()=>({mode:'manage',category:'all',query:'',sort:'default',page:1,pageSize:20,changedOnly:false,drafts:new Map(),layouts:{},appliedOrder:{},busy:false,savingKey:'',error:'',message:''});
 const keyFor=(kind,id)=>kind+':'+id;
 const normalize=(key,value)=>{
  const type=spec[key]?.[1];
@@ -56,9 +56,11 @@ export function entryDraftRow(state,data,kind,id){
  const draft=state.drafts.get(keyFor(kind,id));if(!draft)return data[kind]?.find(r=>r.id===id);
  const check=emptyPortfolio();check.cardAccounts=data.cardAccounts||[];check[kind]=[mergeDraft(data,draft)];return validatePortfolio(check)[kind][0];
 }
-export function applyEntryDrafts(data,state){
+export function applyEntryDrafts(data,state,keys=state.drafts.keys()){
  const next=structuredClone(data);
- for(const draft of state.drafts.values()){
+ for(const key of keys){
+  const draft=state.drafts.get(key);
+  if(!draft)continue;
   const row=mergeDraft(data,draft);
   next[draft.kind][next[draft.kind].findIndex(r=>r.id===draft.id)]=row;
   // Use the same validation and derived loan calculations as individual forms.
@@ -106,6 +108,14 @@ function cell(item,column,state,{money,hidden}){
  const old=type==='money'?money(row[field]||0):type==='select'||type==='boolean'?definition[2].find(([v])=>String(row[field])===v)?.[1]:String(row[field]??'')||'없음';
  return `<td data-layout-column="${column}" class="entry-edit-cell ${type==='money'||type==='number'?'entry-number-cell':''} ${dirty?'is-changed':''}">${input}${dirty?`<small class="entry-before">이전: ${esc(old)}</small>`:''}</td>`;
 }
+function entryRowActions(item,state){
+ const key=esc(item.key),busy=state.busy?'disabled':'',visibility=state.drafts.has(item.key)?'':'hidden';
+ return `<td class="entry-row-actions"><div class="entry-row-controls">
+  <button type="button" class="entry-recent-edit" data-entry-detail="${key}" ${busy}>상세 수정</button>
+  <button type="button" class="text-button" data-entry-undo="${key}" ${visibility} ${busy}>되돌리기</button>
+  <button type="button" class="button primary small" data-entry-save-row="${key}" aria-label="${esc(item.row.name)} 이 행 저장" ${visibility} ${busy}>${state.savingKey===item.key?'저장 중…':'이 행 저장'}</button>
+ </div></td>`;
+}
 export function renderEntryManager(data,state,options){
  const allCount=order.reduce((total,kind)=>total+data[kind].length,0);
  const filters=['all',...order].map(kind=>{
@@ -138,7 +148,7 @@ function renderEntryTable(data,state,options){
  const busy=state.busy?'disabled':'';
  return `<div class="entry-manager-tools"><label class="entry-search"><span class="sr-only">이름·기관·메모 검색</span><input type="search" maxlength="200" data-entry-query placeholder="이름·기관·메모 검색" value="${esc(state.query)}" ${busy}></label><label class="entry-changed-filter"><input type="checkbox" data-entry-changed-only ${state.changedOnly?'checked':''} ${busy}>변경된 내역만</label><label class="entry-sort">정렬<select data-entry-sort ${busy}>${sorts.map(([v,l])=>`<option value="${v}" ${state.sort===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
  <p class="entry-result-count">${rows.length}건 조회${options.hidden?' · 금액 표시를 켜면 금액 셀을 수정할 수 있습니다.':''}${state.category==='loans'?' · 원금·이자와 상환 방식은 상세 수정에서 확인하세요. 다음 납부일과 매월 납부일은 별도입니다.':''}</p>
- ${missing.length?`<div class="entry-missing-drafts">${missing.map(draft=>`<p><span>${esc(draft.base.name)} · 원본이 삭제되어 저장할 수 없습니다.</span><button type="button" class="text-button" data-entry-undo="${esc(keyFor(draft.kind,draft.id))}" ${busy}>이 변경 취소</button></p>`).join('')}</div>`:''}<div data-record-layout="${scope}">${layoutToolbar()}<div class="entry-edit-scroll"><table class="entry-edit-table"><caption class="sr-only">기존 내역 일괄 수정. Tab으로 다음 셀로 이동합니다. 변경 저장 전에는 서버에 반영되지 않습니다.</caption><thead><tr><th class="record-drag-cell"><span class="sr-only">행 이동</span></th>${keys.map(heading).join('')}<th>관리</th></tr></thead><tbody>${visible.map(item=>`<tr data-layout-row="${esc(item.key)}" data-entry-row="${esc(item.key)}" class="${state.drafts.has(item.key)?'has-changes':''}"><td class="record-drag-cell">${layoutRowHandle(item.row.name)}</td>${state.category==='all'?`<td data-layout-column="kind" class="entry-kind-label">${esc(LABELS[item.kind])}</td>`:''}${fields.map(k=>cell(item,k,state,options)).join('')}<td class="entry-row-actions"><button type="button" class="entry-recent-edit" data-entry-detail="${esc(item.key)}" ${busy}>상세 수정</button><button type="button" class="text-button" data-entry-undo="${esc(item.key)}" ${state.drafts.has(item.key)?'':'hidden'} ${busy}>되돌리기</button><span class="entry-row-marker" ${state.drafts.has(item.key)?'':'hidden'}>수정 중</span></td></tr>`).join('')||`<tr><td colspan="${keys.length+2}" class="entry-manager-empty">${order.some(k=>data[k].length)?'조회 조건에 맞는 내역이 없습니다.':'아직 저장된 내역이 없습니다. 위의 새 내역 등록에서 시작하세요.'}</td></tr>`}</tbody></table></div></div>
+ ${missing.length?`<div class="entry-missing-drafts">${missing.map(draft=>`<p><span>${esc(draft.base.name)} · 원본이 삭제되어 저장할 수 없습니다.</span><button type="button" class="text-button" data-entry-undo="${esc(keyFor(draft.kind,draft.id))}" ${busy}>이 변경 취소</button></p>`).join('')}</div>`:''}<div data-record-layout="${scope}">${layoutToolbar()}<div class="entry-edit-scroll"><table class="entry-edit-table"><caption class="sr-only">기존 내역 일괄 수정. Tab으로 다음 셀로 이동합니다. 변경 저장 전에는 서버에 반영되지 않습니다.</caption><thead><tr><th class="record-drag-cell"><span class="sr-only">행 이동</span></th>${keys.map(heading).join('')}<th class="entry-actions-heading" scope="col">관리</th></tr></thead><tbody>${visible.map(item=>`<tr data-layout-row="${esc(item.key)}" data-entry-row="${esc(item.key)}" class="${state.drafts.has(item.key)?'has-changes':''}"><td class="record-drag-cell">${layoutRowHandle(item.row.name)}</td>${state.category==='all'?`<td data-layout-column="kind" class="entry-kind-label">${esc(LABELS[item.kind])}</td>`:''}${fields.map(k=>cell(item,k,state,options)).join('')}${entryRowActions(item,state)}</tr>`).join('')||`<tr><td colspan="${keys.length+2}" class="entry-manager-empty">${order.some(k=>data[k].length)?'조회 조건에 맞는 내역이 없습니다.':'아직 저장된 내역이 없습니다. 위의 새 내역 등록에서 시작하세요.'}</td></tr>`}</tbody></table></div></div>
  <div class="entry-manager-pagination"><span>${state.page} / ${pages}페이지</span><div><button type="button" class="button secondary small" data-entry-page="${state.page-1}" ${state.page===1||state.busy?'disabled':''}>이전</button><button type="button" class="button secondary small" data-entry-page="${state.page+1}" ${state.page===pages||state.busy?'disabled':''}>다음</button></div></div>
  <div class="entry-save-bar"><div><strong data-entry-draft-count role="status">${count?count+'건 수정 중':'저장할 변경이 없습니다.'}</strong><small>다른 종류·페이지로 이동해도 수정 중인 값은 유지됩니다.</small>
  <p class="entry-manager-error" data-entry-error role="alert">${esc(state.error)}</p><p class="entry-manager-message" role="status">${esc(state.message)}</p></div>
@@ -184,7 +194,9 @@ export function mountEntryManager(root,getData,state,options){
    const definition=spec[field],old=definition[1]==='money'?options.money(draft.base[field]||0):(definition[2]?.find(([v])=>v===String(draft.base[field]))?.[1]??String(draft.base[field]??''))||'없음';
    before.textContent='이전: '+old;
   }else before?.remove();
-  row.querySelector('[data-entry-undo]').hidden=!dirty;row.querySelector('.entry-row-marker').hidden=!dirty;update();
+  row.querySelector('[data-entry-undo]').hidden=!dirty;
+  row.querySelector('[data-entry-save-row]').hidden=!dirty;
+  update();
  };
  const change=event=>{
   if(state.busy)return;const t=event.target;
@@ -212,24 +224,27 @@ export function mountEntryManager(root,getData,state,options){
   const command=b.dataset.entryCommand;
   if(command==='discard'){state.drafts.clear();state.error='';state.message='';draw();return;}
   if(command==='reload'){try{await options.onReload();}catch(error){state.error=error.message;draw();}return;}
-  if(command!=='save'||!state.drafts.size)return;
-  const count=state.drafts.size;state.busy=true;state.error='';state.message='';
+  const rowKey=b.dataset.entrySaveRow;
+  if(command!=='save'&&!rowKey)return;
+  const keys=rowKey?[rowKey].filter(key=>state.drafts.has(key)):[...state.drafts.keys()];
+  if(!keys.length)return;
+  state.busy=true;state.savingKey=rowKey||'';state.error='';state.message='';
   try{
    draw();
-   try{await options.onSave(applyEntryDrafts(getData(),state));}
+   try{await options.onSave(applyEntryDrafts(getData(),state,keys));}
    catch(error){
     if(error.status!==409)throw error;
     await options.onRefresh();
-    await options.onSave(applyEntryDrafts(getData(),state));
+    await options.onSave(applyEntryDrafts(getData(),state,keys));
    }
-   state.drafts.clear();
-   state.message=`${count}건의 변경을 저장했습니다.`;
+   for(const key of keys)state.drafts.delete(key);
+   state.message=`${keys.length}건의 변경을 저장했습니다.`;
    options.onFeedback(state.message);
   }catch(error){
    state.error=error.status===409?'다른 곳에서 내역이 변경됐습니다. 잠시 뒤 내역 저장을 다시 눌러 주세요.':error.message;
    options.onFeedback(state.error);
   }finally{
-   state.busy=false;
+   state.busy=false;state.savingKey='';
    options.onRender();
   }
  };
