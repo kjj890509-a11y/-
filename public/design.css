@@ -31,10 +31,15 @@ button { cursor:pointer; } button:disabled { cursor:wait; opacity:.55; }
 .skip-link:focus { top:16px; }
 .sidebar { width:var(--sidebar-width); padding:30px 16px 24px; background:var(--surface); border-right:1px solid var(--line); box-shadow:none; }
 .brand { font-size:var(--font-xl); color:var(--ink); gap:12px; padding:0 12px; }
-.brand-symbol { width:35px; height:35px; font-size:var(--font-2xl); color:var(--green); }
-.brand-symbol>span { font-size:var(--font-lg); }
 .brand-sub { font-size:var(--font-xs); font-weight:400; letter-spacing:0; color:var(--muted); margin-top:2px; }
 .workspace-label { font-size:var(--font-xs); color:var(--muted); margin:32px 12px 12px; letter-spacing:0; }
+.brand-mark {
+  display: block;
+  width: var(--brand-mark-size, 32px);
+  height: var(--brand-mark-size, 32px);
+  flex: none;
+  object-fit: contain;
+}
 .sidebar nav { display:flex; flex-direction:column; gap:7px; overflow-y:auto; }
 .nav-link { min-height:48px; padding:12px 14px; gap:12px; border-radius:9px; font-size:var(--font-md); font-weight:500; color:var(--text-secondary); }
 .nav-link svg { width:20px; height:20px; stroke-width:1.6; }
@@ -317,8 +322,6 @@ footer,footer .footer-right { font-size:var(--font-xs); color:var(--muted); }foo
 /* Stripe dashboard reference, observed through Mobbin MCP. */
 .sidebar { padding:20px 16px 18px; border-right:1px solid var(--line); }
 .brand { padding:0 8px; gap:10px; font-size:var(--font-lg); }
-.brand-symbol { width:28px; height:28px; border-radius:6px; background:var(--brand-accent); color:var(--brand-ink); font-size:var(--font-xl); display:grid; place-content:center; position:relative; }
-.brand-symbol>span { position:absolute; top:0; right:2px; font-size:var(--font-xs); }
 .brand-sub { font-size:var(--font-xs); margin-top:0; }
 .workspace-label { margin:28px 8px 8px; font-size:var(--font-xs); }
 .sidebar nav { gap:3px; }
@@ -468,8 +471,6 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
 @media(max-width:380px) { .global-search-launch>span { display:none; }.global-search-launch { flex:0 0 36px; }.topbar-right { margin-left:auto; }.home-stat { padding:12px; }.home-stat strong { font-size:var(--font-lg); } }
 
 /* Remaining shared controls use the same Stripe-derived scale. */
-.brand-symbol { line-height:1; letter-spacing:-1px; }
-.brand-symbol>span { color:inherit; }
 .advisor-shortcut { border-radius:5px; min-height:36px; font-weight:550; }
 .workspace-current-stat,.workspace-editbar,.workspace-sources,.widget-edit-actions,.workspace-empty-state,.workspace-form input,.workspace-form select,.widget-library>button,.stats-source-summary span,.stats-retirement-summary,.loan-plan-preview,.advisor-model { border-radius:var(--radius); }
 .workspace-current { padding:20px; }

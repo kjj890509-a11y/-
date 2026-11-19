@@ -50,7 +50,7 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
  const chart=chartPoints.length?renderAmountBars(chartPoints,{formatMoney:money,formatCompact:compact,title:'월말 순자산 전망',minWidth:680,height:232,showHint:false}):
   hideAmounts?'<div class="chart-empty">금액 표시를 켜면 전망을 볼 수 있습니다.</div>':'<div class="chart-empty">잔액을 등록하면 월말 전망이 표시됩니다.</div>';
  const selectedLabels={net:'순자산',deposits:'예금·현금',debt:'남은 부채',cashflow:'수입·지출',stocks:'주식·투자',retirement:'퇴직금·연금',cards:'카드 청구'};
- return `<div class="page-heading overview-heading"><div class="overview-title"><span class="overview-home-icon" aria-hidden="true">${svg('home')}</span><div><h1>자산 한눈에</h1><p class="subtitle">${today.replaceAll('-','.')} 기준</p></div></div><div class="heading-actions"><button class="button primary" data-action="add">${svg('plus')}내역 추가</button></div></div>${demoBanner}
+ return `<div class="page-heading overview-heading"><div class="overview-title"><span class="overview-home-icon" aria-hidden="true"><img class="brand-mark" src="/donmoa-pig.png" width="32" height="32" alt=""></span><div><h1>자산 한눈에</h1><p class="subtitle">${today.replaceAll('-','.')} 기준</p></div></div><div class="heading-actions"><button class="button primary" data-action="add">${svg('plus')}내역 추가</button></div></div>${demoBanner}
  ${hasAssets?'':`<section class="getting-started overview-start"><div><h2>현재 잔액부터 등록해 주세요</h2></div><div><button class="button secondary" data-action="add" data-kind="deposits">예금 등록</button><button class="button secondary" data-action="demo">예시 보기</button></div></section>`}
  <div class="overview-workspace">
   <div class="overview-main">

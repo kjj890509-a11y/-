@@ -47,7 +47,7 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
     font-size: 15px;
     letter-spacing: -.4px;
   }
-  body:not(.mobile-app) .brand-symbol { width: 23px; height: 23px; border-radius: 5px; font-size: 18px; }
+  body:not(.mobile-app) .sidebar .brand-mark { --brand-mark-size: 30px; }
   body:not(.mobile-app) .brand-sub,
   body:not(.mobile-app) .sidebar-entry,
   body:not(.mobile-app) .workspace-label,
@@ -276,7 +276,6 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
   display: inline-grid; place-items: center; flex: none; color: var(--ink);
 }
 .overview-home-icon { width: 36px; height: 36px; border-radius: 5px; background: var(--desk-paper); }
-.overview-home-icon svg { width: 19px; height: 19px; }
 #main .overview-title h1 { font-size: 20px; line-height: 1.35; }
 #main .overview-title .subtitle { margin: 2px 0 0; font-size: 12px; }
 #main .overview-heading .button, #main .overview-heading .coach-launch { min-height: 32px; padding: 5px 10px; font-size: 13px; }

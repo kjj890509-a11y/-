@@ -223,7 +223,7 @@ h1 {  line-height: 1.4; }
 .summary-card:not(.featured) > p { color: var(--muted); }
 .eyebrow, .subtle-tag, .brand-sub, .workspace-label,
 .workspace-label > span, .nav-label, .summary-label > span,
-.date-chip, .brand-symbol > span {
+.date-chip {
   color: var(--muted);
 }
 .eyebrow, .subtle-tag, .brand-sub { letter-spacing: 1px; }
@@ -237,7 +237,7 @@ h1 {  line-height: 1.4; }
 .nav-link .nav-count { color: var(--muted);  }
 .private-badge, .text-button, .signout { color: var(--text-secondary);  }
 .private-badge small { color: var(--muted);  }
-.brand-symbol, .icon-button { color: var(--green); }
+.icon-button { color: var(--green); }
 .avatar { color: var(--green);  }
 .sidebar-bottom { padding-top: 12px; }
 
