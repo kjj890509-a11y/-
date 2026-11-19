@@ -20,7 +20,12 @@ async function start(data=domain.emptyPortfolio(),preferences={version:1,tables:
  for(const dialog of document.querySelectorAll('dialog')){Object.defineProperty(dialog,'open',{configurable:true,get(){return this.hasAttribute('open');}});dialog.showModal=()=>dialog.setAttribute('open','');dialog.close=()=>dialog.removeAttribute('open');}
  class BrowserFormData{constructor(form){this.values=new Map([...form.querySelectorAll('input,select,textarea')].filter(el=>el.name&&!el.disabled).map(el=>[el.name,el.value]));}get(name){return this.values.get(name)??null;}}
  const state={data:domain.validatePortfolio(data),revision:1,writes:0,fail:false,pause:null,prefs:structuredClone(preferences),prefRevision:0,prefWrites:0};
- const sortables=new Map(),loadSortable=async()=>({default:{create(node,config){sortables.set((node.closest('[data-record-layout]')?.dataset.recordLayout||'ledger')+':'+config.handle,{node,config});return{destroy(){},option(){}};}}});
+ const sortables=new Map(),loadSortable=async()=>({default:{create(node,config){
+  const scope=node.closest('[data-record-layout]')?.dataset.recordLayout||'ledger';
+  sortables.set(scope+':'+config.handle,{node,config});
+  let destroyed=false;
+  return {destroy(){if(destroyed)throw new Error('Sortable was destroyed twice');destroyed=true;},option(){}};
+ }}});
  const context=vm.createContext({...domain,...workspace,...navigation,...dashboard,...disclosure,...charts,...loansPage,...statisticsPage,...advisorPage,renderLoanForecastPanel,document,window,
   mountLedger:(root,entries,ledger,options)=>navigation.mountLedger(root,entries,ledger,{...options,loadSortable}),
   mountRecordLayout:(root,layout,options)=>navigation.mountRecordLayout(root,layout,{...options,loadSortable}),mountEntryManager:(root,getData,manager,options)=>navigation.mountEntryManager(root,getData,manager,{...options,loadSortable}),mountCardBilling:(root,getData,billing,options)=>navigation.mountCardBilling(root,getData,billing,{...options,loadSortable}),location:{hash:'#entry'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
@@ -119,6 +124,41 @@ test('entry column headings toggle numeric and category sorting without losing d
  assert.equal(t.document.querySelector('[data-entry-field=balance]').value,'1,000');
  assert.equal(t.state.prefWrites,0);
  assert.equal(t.state.writes,0);
+});
+test('entry category controls stay usable after the fixed expense month picker and during a pending save',async()=>{
+ const t=await start(domain.samplePortfolio());
+ const category=kind=>t.document.querySelector(`[data-entry-category="${kind}"]`);
+ const scope=()=>t.document.querySelector('#entry-manager [data-record-layout]').dataset.recordLayout;
+ const depositButton=category('deposits');
+ t.click('[data-entry-category=fixed]');
+ assert.equal(scope(),'entry-fixed');
+ const monthButton=t.document.querySelector('[data-entry-row] [data-month-trigger]');
+ monthButton.dispatchEvent(new t.Event('click',{bubbles:true}));
+ assert.ok(t.document.querySelector('#moa-month-picker-panel'));
+ t.click('[data-entry-category=deposits]');
+ assert.equal(scope(),'entry-deposits');
+ assert.equal(t.document.querySelector('#moa-month-picker-panel'),null);
+ assert.strictEqual(category('deposits'),depositButton);
+
+ t.click('[data-entry-category=fixed]');
+ const fixed=t.state.data.fixed[0];
+ field(t,'fixed:'+fixed.id,'amount','87000');
+ let finish;
+ t.state.pause=new Promise(resolve=>{finish=resolve;});
+ t.click('[data-entry-command=save]');
+ assert.equal(t.document.querySelector('[data-entry-command=save]').disabled,true);
+ t.click('[data-entry-category=cards]');
+ assert.equal(scope(),'entry-cards');
+ assert.equal(category('cards').getAttribute('aria-pressed'),'true');
+ t.state.pause=null;
+ finish();
+ await tick();
+ assert.equal(scope(),'entry-cards');
+ assert.equal(t.state.writes,1);
+ assert.equal(t.state.data.fixed[0].amount,87000);
+ t.click('[data-entry-category=fixed]');
+ t.click('[data-entry-category=all]');
+ assert.equal(scope(),'entry-all');
 });
 test('entry saves merge unrelated remote changes while preserving drafts for overlapping edits',async()=>{
  const t=await start(domain.samplePortfolio());
