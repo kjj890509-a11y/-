@@ -8,6 +8,7 @@ import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advis
 import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, renderMonthlySpending, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation, createCoachmarkState, mountCoachmarks, renderFinanceRecordIcon} from '/navigation.mjs';
 import {renderDashboard, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
+import {mountDesktopNavigation} from '/navigation.mjs';
 const icons = {
   home:'<path d="m3 10 9-7 9 7M5 9v11h14V9M10 20v-7h4v7"/>',
   portfolio:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M9 5v5"/>',
@@ -104,21 +105,12 @@ async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
 const desktopMenuIcons = {
   overview:'home', entry:'edit', workspace:'overview', assets:'portfolio', records:'journal', spending:'book'
 };
-function desktopNav() {
-  return navigationGroups.map(group => {
-    const items = [group.defaultView, ...group.views.filter(key => key !== group.defaultView)];
-    const links = items.map(key => {
-      const current = key === view;
-      const label = key === 'overview' ? '홈' : navLabels[key];
-      const classes = key === group.defaultView ? 'desk-menu-item nav-link' : 'desk-menu-item';
-      return `<a href="#${key}" class="${classes}${current ? ' active' : ''}" ${current ? 'aria-current="page"' : ''}>${svg(desktopMenuIcons[key] || key)}<span>${label}</span></a>`;
-    }).join('');
-    return `<div class="desk-menu-group">${group.id === 'home' ? '' : `<div class="desk-menu-caption">${group.label}</div>`}${links}</div>`;
-  }).join('');
-}
+let desktopNav;
 function renderNav(){
   const current=groupForView(view);
   if (isMobileViewport(window,location) || window.matchMedia?.('(max-width: 760px)').matches) {
+    desktopNav?.destroy();
+    desktopNav=null;
     $('main-nav').innerHTML = navigationGroups.map(group => {
       const active = group.id === current.id;
       const groupLink = `<a href="#${group.defaultView}" class="nav-link ${active?'active':''}" ${active?'aria-current="page"':''}>${svg(group.icon)}<span>${group.label}</span></a>`;
@@ -127,7 +119,10 @@ function renderNav(){
       return groupLink + `<div class="sidebar-subnav" aria-label="${group.label} 하위 메뉴">${items}</div>`;
     }).join('');
   } else {
-    $('main-nav').innerHTML = desktopNav();
+    desktopNav??=mountDesktopNavigation($('main-nav'),navigationGroups,{
+      labels:navLabels,icon:key=>svg(desktopMenuIcons[key]||key),storage:localStorage,onFeedback:toast
+    });
+    desktopNav.setActive(view);
   }
   $('breadcrumb').textContent=current.label;
   $('privacy-toggle').innerHTML=svg(hidden?'eyeoff':'eye');$('privacy-toggle').setAttribute('aria-label',hidden?'금액 표시하기':'금액 숨기기');$('privacy-toggle').title=hidden?'금액 표시하기':'금액 숨기기';

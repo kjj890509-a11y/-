@@ -64,10 +64,30 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
     overflow: auto;
     scrollbar-width: thin;
   }
-  .desk-menu-caption { padding: 4px 9px 2px; color: var(--muted); font-size: 12px; }
+  .desk-menu-heading, .desk-menu-row { display: flex; align-items: center; gap: 2px; }
+  .desk-menu-toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 4px;
+    flex: 1; min-width: 0; min-height: 28px; padding: 3px 6px; border: 0; border-radius: 5px;
+    background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 650; text-align: left;
+  }
+  .desk-menu-toggle svg { width: 12px; height: 12px; flex: none; }
+  .desk-menu-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+  .desk-menu-group[data-current-group] .desk-menu-toggle[aria-expanded="false"] { background: var(--desk-panel); color: var(--ink); }
+  :is(.desk-group-handle, .desk-item-handle) {
+    display: grid; place-items: center; flex: 0 0 22px; width: 22px; min-height: 28px;
+    padding: 0; border: 0; border-radius: 5px; background: transparent;
+    color: var(--muted); opacity: .68; cursor: grab; touch-action: none;
+  }
+  :is(.desk-group-handle, .desk-item-handle):active { cursor: grabbing; }
+  :is(.desk-group-handle, .desk-item-handle):is(:hover, :focus-visible) { opacity: 1; }
+  :is(.desk-menu-toggle, .desk-group-handle, .desk-item-handle):hover { background: var(--desk-panel); }
+  .desk-menu-items { padding-left: 4px; }
+  .desk-menu-items[hidden] { display: none; }
+  .desk-sorting-items .desk-menu-items:not([hidden]) { min-height: 28px; }
+  .desk-menu-ghost { border-radius: 5px; background: var(--desk-panel-active); opacity: .45; }
   .desk-menu-item {
-    display: flex; align-items: center; gap: 9px;
-    min-height: 28px; padding: 3px 9px; margin: 0;
+    display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0;
+    min-height: 28px; padding: 3px 6px; margin: 0;
     font-size: 13px; line-height: 1.45; color: var(--text-secondary);
     font-weight: 500; border-radius: 5px; text-decoration: none;
   }
