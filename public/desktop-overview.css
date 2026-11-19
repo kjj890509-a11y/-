@@ -118,6 +118,7 @@ body:not(.mobile-app) #main .page-content :is(
   background: var(--desk-paper);
 }
 body:not(.mobile-app) #main .page-content :is(
+  .page-metrics:not(.home-stats) > .page-metric-card,
   .workspace-grid > .workspace-widget,
   .loan-account-list > .loan-card,
   .asset-groups > .asset-group,
@@ -154,7 +155,8 @@ body:not(.mobile-app) #main .workspace-widget .widget-edit-actions .button.secon
 body:not(.mobile-app) #main .page-content .workspace-grid > .workspace-widget.widget-chosen {
   background: var(--desk-panel-active);
 }
-body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card {
+body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card,
+body:not(.mobile-app) #main .page-content .workspace-current-grid > .page-metric-card.gross {
   background-color: color-mix(in srgb, var(--brand-accent) 18%, var(--desk-paper));
 }
 body:not(.mobile-app) #main .page-content .loan-accounts .loan-card {
