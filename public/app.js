@@ -75,11 +75,16 @@ function confirmAction(title,body,label='삭제하기'){
     $('confirm-ok').onclick=()=>end(true);$('confirm-cancel').onclick=()=>end(false);$('confirm-dialog').oncancel=e=>{e.preventDefault();end(false);};
   });
 }
+async function fetchPortfolio(){
+ const response=await fetch('/api/portfolio',{cache:'no-store'});
+ const result=await response.json();
+ if(!response.ok)throw new Error(result.error||'내역을 불러오지 못했습니다.');
+ return result;
+}
 async function loadData(){
   loading=true;status('불러오는 중');
   try{
-    const res=await fetch('/api/portfolio');const data=await res.json();
-    if(!res.ok)throw new Error(data.error||'내역을 불러오지 못했습니다.');
+    const data=await fetchPortfolio();
     portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
   }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button></div>`;renderNav();}
 }
@@ -90,7 +95,7 @@ async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
   saving=true;status('저장하는 중');
   try{
     const res=await fetch('/api/portfolio',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(dashboardOnly?{dashboard:next.dashboard,revision}:{data:next,revision})});
-    const data=await res.json();if(!res.ok)throw new Error(data.error||'저장하지 못했습니다.');
+    const data=await res.json();if(!res.ok)throw Object.assign(new Error(data.error||'저장하지 못했습니다.'),{status:res.status});
     portfolio=validatePortfolio(data.data);revision=data.revision;status('서버 저장됨');if(renderAfter)render();
   }catch(error){status('저장 실패',true);throw error;}finally{saving=false;}
 }
@@ -516,8 +521,15 @@ function saveRecordLayout(scope,layout){return saveRecordPreferences(scope,ledge
 function mountLoanLayout(){const root=document.querySelector('[data-record-layout="loan-cards"]');if(!root)return;const state=recordLayoutFor('loan-cards');recordCleanups.push(mountRecordLayout(root,state,{allKeys:()=>orderLayoutRows(portfolio.loans,state,row=>'loans:'+row.id).map(row=>'loans:'+row.id),onChange:render,onSave:()=>saveRecordLayout('loan-cards',state),onFeedback:toast}));}
 function mountEntryWorkspace(){
  if(view!=='entry')return;
- recordCleanups.push(mountEntryManager($('entry-manager'),()=>portfolio,entryManagerState,{
-  money,hidden,layoutFor:recordLayoutFor,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:()=>{if(view==='entry')render();},onReload:loadData,onFeedback:toast,
+ const manager=entryManagerState;
+ recordCleanups.push(mountEntryManager($('entry-manager'),()=>portfolio,manager,{
+  money,hidden,layoutFor:recordLayoutFor,onLayoutSave:saveRecordLayout,
+  onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast,
+  onRefresh:async()=>{
+   const latest=await fetchPortfolio();
+   if(manager!==entryManagerState||saving)throw new Error('내역이 변경됐습니다. 잠시 뒤 다시 저장해 주세요.');
+   if(latest.revision>revision){portfolio=validatePortfolio(latest.data);revision=latest.revision;}
+  },
   onDetail:openEntryManagerDetail
  }));
 }
@@ -838,7 +850,7 @@ function setView(){const hash=location.hash.slice(1),[route,recordId]=hash.split
 function canRefreshPortfolio(){return !loading&&!saving&&!demo&&!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!workspaceState.editing&&!advisorState?.busy&&!document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]');}
 const refreshPortfolio=createPortfolioSync({
  getRevision:()=>revision,canRefresh:canRefreshPortfolio,
- fetchPortfolio:async()=>{const res=await fetch('/api/portfolio',{cache:'no-store'}),data=await res.json();if(!res.ok)throw new Error(data.error||'최신 내역에 연결하지 못했습니다.');return data;},
+ fetchPortfolio,
  apply:result=>{portfolio=validatePortfolio(result.data);revision=result.revision;render();status('최신 내역 반영됨');},
  onError:()=>status('동기화 연결 확인',true)
 });

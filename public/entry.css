@@ -17,3 +17,23 @@
 button.entry-all-records{width:100%;text-align:left;border:0;background:transparent;cursor:pointer}
 
 .entry-missing-drafts{border:1px solid var(--line);border-radius:5px;padding:4px 12px;margin:12px 0}.entry-missing-drafts p{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:var(--font-xs);color:var(--muted)}.entry-missing-drafts button{font-size:var(--font-xs);white-space:nowrap}
+
+.entry-column-sort {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+}
+.entry-column-sort:hover:not(:disabled) { background: var(--soft-surface); }
+.entry-number-heading .entry-column-sort { justify-content: flex-end; }
+.entry-column-sort::after { content: "↕" / ""; color: var(--muted); }
+.entry-edit-table [aria-sort="ascending"] .entry-column-sort::after { content: "↑" / ""; color: var(--ink); }
+.entry-edit-table [aria-sort="descending"] .entry-column-sort::after { content: "↓" / ""; color: var(--ink); }

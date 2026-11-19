@@ -71,10 +71,25 @@ function filteredRows(data,state){
  const query=state.query.trim().normalize('NFKC').toLocaleLowerCase('ko-KR');
  const rows=order.flatMap(kind=>(data[kind]||[]).map(row=>({kind,row,key:keyFor(kind,row.id)}))).filter(item=>
   (state.category==='all'||state.category===item.kind)&&(!state.changedOnly||state.drafts.has(item.key))&&(!query||[item.row.name,item.row.institution,item.row.note,LABELS[item.kind]].join(' ').normalize('NFKC').toLocaleLowerCase('ko-KR').includes(query)));
- if(state.sort==='name')rows.sort((a,b)=>a.row.name.localeCompare(b.row.name,'ko'));
  if(state.sort==='manual')return orderLayoutRows(rows,state.activeLayout,item=>item.key);
- if(['amount-desc','amount-asc'].includes(state.sort))rows.sort((a,b)=>(a.row[amountKeys[a.kind]]-b.row[amountKeys[b.kind]])*(state.sort==='amount-desc'?-1:1));
- return rows;
+ const [column,direction]=state.sort.split(':');
+ if(!direction)return rows;
+ const value=item=>{
+  if(column==='kind')return LABELS[item.kind];
+  const field=column==='primary'?amountKeys[item.kind]:column;
+  const draft=state.drafts.get(item.key);
+  let current=item.row[field];
+  if(draft&&Object.hasOwn(draft.changes,field)){
+   try{current=normalize(field,draft.changes[field]);}catch{current='';}
+  }
+  return spec[field][2]?.find(([key])=>key===String(current))?.[1]??current??'';
+ };
+ return rows.map(item=>({item,value:value(item)})).sort((a,b)=>{
+  if(a.value==='')return b.value===''?0:1;
+  if(b.value==='')return -1;
+  const difference=typeof a.value==='number'?a.value-b.value:String(a.value).localeCompare(String(b.value),'ko-KR',{numeric:true});
+  return direction==='desc'?-difference:difference;
+ }).map(({item})=>item);
 }
 const amountLabel={cashflow:'금액',fixed:'매월 지출액',deposits:'현재 잔액',stocks:'현재 평가액',retirement:'현재 금액',loans:'대출 잔액',cards:'결제 금액'};
 function cell(item,column,state,{money,hidden}){
@@ -93,25 +108,39 @@ function cell(item,column,state,{money,hidden}){
 }
 export function renderEntryManager(data,state,options){
  const scope=layoutScope(state.category),layout=options.layoutFor?options.layoutFor(scope):(state.layouts[scope]||=freshRecordLayout());state.activeLayout=layout;if(layout.rowOrder.length&&!state.appliedOrder[scope]){state.sort='manual';state.appliedOrder[scope]=true;}if(state.layoutCategory!==state.category){state.layoutCategory=state.category;if(layout.rowOrder.length)state.sort='manual';}
+ const fields=columns[state.category];
+ const keys=state.category==='all'?['kind',...fields]:fields;
+ let [sortColumn,sortDirection]=state.sort.split(':');
+ if(sortDirection&&!keys.includes(sortColumn)){state.sort='default';sortColumn='';sortDirection='';}
+ const amountColumn=state.category==='all'?'primary':amountKeys[state.category];
+ const columnLabel=key=>key==='kind'?'종류':key==='primary'?'금액 · 원':spec[key][0]+(spec[key][1]==='money'?' · 원':'');
+ const sorts=[['manual','직접 정한 순서'],['default','기본순'],['name:asc','이름순'],[amountColumn+':desc','금액 큰순'],[amountColumn+':asc','금액 작은순']];
+ if(!sorts.some(([value])=>value===state.sort))sorts.push([state.sort,columnLabel(sortColumn)+(sortDirection==='asc'?' 오름차순':' 내림차순')]);
  const rows=filteredRows(data,state),count=state.drafts.size,pages=Math.max(1,Math.ceil(rows.length/state.pageSize));state.page=Math.max(1,Math.min(state.page,pages));
- const visible=rows.slice((state.page-1)*state.pageSize,state.page*state.pageSize),keys=columns[state.category]||columns.all;
+ const visible=rows.slice((state.page-1)*state.pageSize,state.page*state.pageSize);
+ const heading=key=>{
+  const direction=key===sortColumn?sortDirection:'';
+  const numeric=['money','number'].includes(spec[key]?.[1])||key==='primary';
+  return `<th scope="col" data-layout-column="${key}"${numeric?' class="entry-number-heading"':''}${direction?` aria-sort="${direction==='asc'?'ascending':'descending'}"`:''}><button type="button" class="entry-column-sort" data-entry-sort-column="${key}" ${state.busy?'disabled':''}>${columnLabel(key)}</button></th>`;
+ };
  const missing=[...state.drafts.values()].filter(draft=>!data[draft.kind].some(row=>row.id===draft.id));
  const busy=state.busy?'disabled':'';
  return `<div class="entry-manager-head"><div><h2>기존 내역 수정</h2><p>수정한 내역은 변경 저장으로 반영합니다.</p></div><button type="button" class="text-button" data-entry-command="reload" ${busy}>최신 내역 불러오기</button></div>
  <div class="entry-kind-filters" role="group" aria-label="수정할 내역 종류">${['all',...order].map(kind=>`<button type="button" data-entry-category="${kind}" aria-pressed="${state.category===kind}" ${busy}>${kind==='all'?'전체':LABELS[kind]}<span>${kind==='all'?order.reduce((n,k)=>n+data[k].length,0):data[kind].length}</span></button>`).join('')}</div>
- <div class="entry-manager-tools"><label class="entry-search"><span class="sr-only">이름·기관·메모 검색</span><input type="search" maxlength="200" data-entry-query placeholder="이름·기관·메모 검색" value="${esc(state.query)}" ${busy}></label><label class="entry-changed-filter"><input type="checkbox" data-entry-changed-only ${state.changedOnly?'checked':''} ${busy}>변경된 내역만</label><label class="entry-sort">정렬<select data-entry-sort ${busy}>${[['manual','직접 정한 순서'],['default','기본순'],['name','이름순'],['amount-desc','금액 큰순'],['amount-asc','금액 작은순']].map(([v,l])=>`<option value="${v}" ${state.sort===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
+ <div class="entry-manager-tools"><label class="entry-search"><span class="sr-only">이름·기관·메모 검색</span><input type="search" maxlength="200" data-entry-query placeholder="이름·기관·메모 검색" value="${esc(state.query)}" ${busy}></label><label class="entry-changed-filter"><input type="checkbox" data-entry-changed-only ${state.changedOnly?'checked':''} ${busy}>변경된 내역만</label><label class="entry-sort">정렬<select data-entry-sort ${busy}>${sorts.map(([v,l])=>`<option value="${v}" ${state.sort===v?'selected':''}>${l}</option>`).join('')}</select></label></div>
  <p class="entry-result-count">${rows.length}건 조회${options.hidden?' · 금액 표시를 켜면 금액 셀을 수정할 수 있습니다.':''}${state.category==='loans'?' · 원금·이자와 상환 방식은 상세 수정에서 확인하세요. 다음 납부일과 매월 납부일은 별도입니다.':''}</p>
- ${missing.length?`<div class="entry-missing-drafts">${missing.map(draft=>`<p><span>${esc(draft.base.name)} · 원본이 삭제되어 저장할 수 없습니다.</span><button type="button" class="text-button" data-entry-undo="${esc(keyFor(draft.kind,draft.id))}" ${busy}>이 변경 취소</button></p>`).join('')}</div>`:''}<div data-record-layout="${scope}">${layoutToolbar()}<div class="entry-edit-scroll"><table class="entry-edit-table"><caption class="sr-only">기존 내역 일괄 수정. Tab으로 다음 셀로 이동합니다. 변경 저장 전에는 서버에 반영되지 않습니다.</caption><thead><tr><th class="record-drag-cell"><span class="sr-only">행 이동</span></th>${state.category==='all'?'<th data-layout-column="kind">종류</th>':''}${keys.map(k=>`<th data-layout-column="${k}" ${['money','number'].includes(spec[k]?.[1])||k==='primary'?'class="entry-number-heading"':''}>${k==='primary'?'금액 · 원':spec[k][0]+(spec[k][1]==='money'?' · 원':'')}</th>`).join('')}<th>관리</th></tr></thead><tbody>${visible.map(item=>`<tr data-layout-row="${esc(item.key)}" data-entry-row="${esc(item.key)}" class="${state.drafts.has(item.key)?'has-changes':''}"><td class="record-drag-cell">${layoutRowHandle(item.row.name)}</td>${state.category==='all'?`<td data-layout-column="kind" class="entry-kind-label">${esc(LABELS[item.kind])}</td>`:''}${keys.map(k=>cell(item,k,state,options)).join('')}<td class="entry-row-actions"><button type="button" class="entry-recent-edit" data-entry-detail="${esc(item.key)}" ${busy}>상세 수정</button><button type="button" class="text-button" data-entry-undo="${esc(item.key)}" ${state.drafts.has(item.key)?'':'hidden'} ${busy}>되돌리기</button><span class="entry-row-marker" ${state.drafts.has(item.key)?'':'hidden'}>수정 중</span></td></tr>`).join('')||`<tr><td colspan="${keys.length+(state.category==='all'?3:2)}" class="entry-manager-empty">${order.some(k=>data[k].length)?'조회 조건에 맞는 내역이 없습니다.':'아직 저장된 내역이 없습니다. 위의 새 내역 등록에서 시작하세요.'}</td></tr>`}</tbody></table></div></div>
+ ${missing.length?`<div class="entry-missing-drafts">${missing.map(draft=>`<p><span>${esc(draft.base.name)} · 원본이 삭제되어 저장할 수 없습니다.</span><button type="button" class="text-button" data-entry-undo="${esc(keyFor(draft.kind,draft.id))}" ${busy}>이 변경 취소</button></p>`).join('')}</div>`:''}<div data-record-layout="${scope}">${layoutToolbar()}<div class="entry-edit-scroll"><table class="entry-edit-table"><caption class="sr-only">기존 내역 일괄 수정. Tab으로 다음 셀로 이동합니다. 변경 저장 전에는 서버에 반영되지 않습니다.</caption><thead><tr><th class="record-drag-cell"><span class="sr-only">행 이동</span></th>${keys.map(heading).join('')}<th>관리</th></tr></thead><tbody>${visible.map(item=>`<tr data-layout-row="${esc(item.key)}" data-entry-row="${esc(item.key)}" class="${state.drafts.has(item.key)?'has-changes':''}"><td class="record-drag-cell">${layoutRowHandle(item.row.name)}</td>${state.category==='all'?`<td data-layout-column="kind" class="entry-kind-label">${esc(LABELS[item.kind])}</td>`:''}${fields.map(k=>cell(item,k,state,options)).join('')}<td class="entry-row-actions"><button type="button" class="entry-recent-edit" data-entry-detail="${esc(item.key)}" ${busy}>상세 수정</button><button type="button" class="text-button" data-entry-undo="${esc(item.key)}" ${state.drafts.has(item.key)?'':'hidden'} ${busy}>되돌리기</button><span class="entry-row-marker" ${state.drafts.has(item.key)?'':'hidden'}>수정 중</span></td></tr>`).join('')||`<tr><td colspan="${keys.length+2}" class="entry-manager-empty">${order.some(k=>data[k].length)?'조회 조건에 맞는 내역이 없습니다.':'아직 저장된 내역이 없습니다. 위의 새 내역 등록에서 시작하세요.'}</td></tr>`}</tbody></table></div></div>
  <div class="entry-manager-pagination"><span>${state.page} / ${pages}페이지</span><div><button type="button" class="button secondary small" data-entry-page="${state.page-1}" ${state.page===1||state.busy?'disabled':''}>이전</button><button type="button" class="button secondary small" data-entry-page="${state.page+1}" ${state.page===pages||state.busy?'disabled':''}>다음</button></div></div>
- <div class="entry-save-bar"><div><strong data-entry-draft-count role="status">${count?count+'건 수정 중':'저장할 변경이 없습니다.'}</strong><small>다른 종류·페이지로 이동해도 수정 중인 값은 유지됩니다.</small></div><div><button type="button" class="button secondary" data-entry-command="discard" ${!count||state.busy?'disabled':''}>변경 취소</button><button type="button" class="button primary" data-entry-command="save" ${!count||state.busy?'disabled':''}>${state.busy?'저장 중…':'변경 '+count+'건 저장'}</button></div></div>
- <p class="entry-manager-error" data-entry-error role="alert">${esc(state.error)}</p><p class="entry-manager-message" role="status">${esc(state.message)}</p>`;
+ <div class="entry-save-bar"><div><strong data-entry-draft-count role="status">${count?count+'건 수정 중':'저장할 변경이 없습니다.'}</strong><small>다른 종류·페이지로 이동해도 수정 중인 값은 유지됩니다.</small>
+ <p class="entry-manager-error" data-entry-error role="alert">${esc(state.error)}</p><p class="entry-manager-message" role="status">${esc(state.message)}</p></div>
+ <div><button type="button" class="button secondary" data-entry-command="discard" ${!count||state.busy?'disabled':''}>변경 취소</button><button type="button" class="button primary" data-entry-command="save" ${!count||state.busy?'disabled':''}>${state.busy?'저장 중…':'내역 '+count+'건 저장'}</button></div></div>`;
 }
 export function mountEntryManager(root,getData,state,options){
- let layoutCleanup;const bindLayout=()=>{layoutCleanup?.();const scope=layoutScope(state.category),layout=state.activeLayout;layoutCleanup=mountRecordLayout(root.querySelector('[data-record-layout]'),layout,{allKeys:()=>orderLayoutRows(filteredRows(getData(),{...state,query:'',changedOnly:false,sort:'manual'}),layout,item=>item.key).map(item=>item.key),onChange:type=>{if(type==='rows')state.sort='manual';draw();},onSave:()=>options.onLayoutSave?options.onLayoutSave(scope,layout):Promise.reject(new Error('배치 저장에 연결하지 못했습니다.')),onFeedback:options.onFeedback,loadSortable:options.loadSortable,disabled:state.busy});};
+ let layoutCleanup;const bindLayout=()=>{layoutCleanup?.();const scope=layoutScope(state.category),layout=state.activeLayout;layoutCleanup=mountRecordLayout(root.querySelector('[data-record-layout]'),layout,{allKeys:()=>orderLayoutRows(filteredRows(getData(),{...state,query:'',changedOnly:false,sort:'manual'}),layout,item=>item.key).map(item=>item.key),onChange:type=>{if(type==='rows')state.sort='manual';draw();},onSave:()=>options.onLayoutSave?options.onLayoutSave(scope,layout):Promise.reject(new Error('배치 저장에 연결하지 못했습니다.')),onFeedback:options.onFeedback,loadSortable:options.loadSortable,disabled:state.busy,saveOnlyWhenDirty:true});};
  const draw=()=>{layoutCleanup?.();root.innerHTML=renderEntryManager(getData(),state,options);bindLayout();};
  const update=()=>{
   const count=state.drafts.size;root.querySelector('[data-entry-draft-count]').textContent=count?count+'건 수정 중':'저장할 변경이 없습니다.';
-  const save=root.querySelector('[data-entry-command="save"]');save.textContent='변경 '+count+'건 저장';save.disabled=!count||state.busy;root.querySelector('[data-entry-command="discard"]').disabled=!count||state.busy;root.querySelector('[data-entry-error]').textContent=state.error;root.querySelector('.entry-manager-message').textContent=state.message;
+  const save=root.querySelector('[data-entry-command="save"]');save.textContent='내역 '+count+'건 저장';save.disabled=!count||state.busy;root.querySelector('[data-entry-command="discard"]').disabled=!count||state.busy;root.querySelector('[data-entry-error]').textContent=state.error;root.querySelector('.entry-manager-message').textContent=state.message;
  };
  const input=event=>{
   if(state.busy)return;const target=event.target;
@@ -137,6 +166,14 @@ export function mountEntryManager(root,getData,state,options){
  const click=async event=>{
   const b=event.target.closest('button');if(!b||b.disabled||state.busy)return;
   if(b.dataset.entryCategory){state.category=b.dataset.entryCategory;state.page=1;draw();root.querySelector(`[data-entry-category="${state.category}"]`)?.focus();return;}
+  if(b.dataset.entrySortColumn){
+   const column=b.dataset.entrySortColumn;
+   state.sort=column+(state.sort===column+':asc'?':desc':':asc');
+   state.page=1;
+   draw();
+   root.querySelector(`[data-entry-sort-column="${column}"]`)?.focus();
+   return;
+  }
   if(b.dataset.entryPage){state.page=Number(b.dataset.entryPage);draw();return;}
   if(b.dataset.entryUndo){state.drafts.delete(b.dataset.entryUndo);state.error='';state.message='';draw();return;}
   if(b.dataset.entryDetail){const [kind,id]=b.dataset.entryDetail.split(':');if(options.hidden){options.onFeedback('금액 표시를 켠 뒤 상세 수정해 주세요.');return;}try{options.onDetail(kind,id,entryDraftRow(state,getData(),kind,id));}catch(error){state.error=error.message;update();}return;}
@@ -145,7 +182,23 @@ export function mountEntryManager(root,getData,state,options){
   if(command==='reload'){try{await options.onReload();}catch(error){state.error=error.message;draw();}return;}
   if(command!=='save'||!state.drafts.size)return;
   const count=state.drafts.size;state.busy=true;state.error='';state.message='';draw();
-  try{const next=applyEntryDrafts(getData(),state);await options.onSave(next);state.drafts.clear();state.message=`${count}건의 변경을 저장했습니다.`;options.onFeedback(state.message);}catch(error){state.error=error.message;}finally{state.busy=false;options.onRender();}
+  try{
+   try{await options.onSave(applyEntryDrafts(getData(),state));}
+   catch(error){
+    if(error.status!==409)throw error;
+    await options.onRefresh();
+    await options.onSave(applyEntryDrafts(getData(),state));
+   }
+   state.drafts.clear();
+   state.message=`${count}건의 변경을 저장했습니다.`;
+   options.onFeedback(state.message);
+  }catch(error){
+   state.error=error.status===409?'다른 곳에서 내역이 변경됐습니다. 잠시 뒤 내역 저장을 다시 눌러 주세요.':error.message;
+   options.onFeedback(state.error);
+  }finally{
+   state.busy=false;
+   options.onRender();
+  }
  };
  for(const [type,fn]of Object.entries({input,change,click}))root.addEventListener(type,fn);
  bindLayout();return ()=>{layoutCleanup?.();for(const [type,fn]of Object.entries({input,change,click}))root.removeEventListener(type,fn);};

@@ -26,7 +26,7 @@ async function start(data=domain.emptyPortfolio(),preferences={version:1,tables:
   mountRecordLayout:(root,layout,options)=>navigation.mountRecordLayout(root,layout,{...options,loadSortable}),mountEntryManager:(root,getData,manager,options)=>navigation.mountEntryManager(root,getData,manager,{...options,loadSortable}),mountCardBilling:(root,getData,billing,options)=>navigation.mountCardBilling(root,getData,billing,{...options,loadSortable}),location:{hash:'#entry'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
   if(path==='/api/preferences'){if(init?.method==='PUT'){const body=JSON.parse(init.body);state.prefs=navigation.validateLedgerPreferences(body.data);state.prefRevision++;state.prefWrites++;}return {ok:true,json:async()=>({data:state.prefs,revision:state.prefRevision})};}
   assert.equal(path,'/api/portfolio');
-  if(init?.method==='PUT'){state.writes++;if(state.pause)await state.pause;if(state.fail)return {ok:false,json:async()=>({error:'동시에 수정됐습니다. 다시 확인해 주세요.'})};const body=JSON.parse(init.body);assert.equal(body.revision,state.revision);state.data=domain.validatePortfolio(body.data);state.revision++;}
+  if(init?.method==='PUT'){state.writes++;if(state.pause)await state.pause;if(state.fail)return {ok:false,json:async()=>({error:'동시에 수정됐습니다. 다시 확인해 주세요.'})};const body=JSON.parse(init.body);if(body.revision!==state.revision)return {ok:false,status:409,json:async()=>({error:'다른 기기에서 내역이 변경되었습니다.'})};state.data=domain.validatePortfolio(body.data);state.revision++;}
   return {ok:true,json:async()=>({data:state.data,revision:state.revision})};
  }});
  vm.runInContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,''),context);await tick();
@@ -90,6 +90,66 @@ test('bulk draft changes survive searching, pagination and route changes; revert
  const search=t.document.querySelector('[data-entry-query]');search.value='계좌 0';search.dispatchEvent(new t.Event('input',{bubbles:true}));assert.equal(t.document.querySelectorAll('[data-entry-row]').length,1);assert.equal(t.document.querySelector('[data-entry-field=balance]').value,'500');
  t.context.location.hash='#overview';t.window.dispatchEvent(new t.Event('hashchange'));t.context.location.hash='#entry';t.window.dispatchEvent(new t.Event('hashchange'));assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/2건/);
  field(t,'deposits:cash-0','balance','100');assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/1건/);t.click('[data-entry-command=discard]');assert.equal(t.document.querySelector('[data-entry-command=save]').disabled,true);assert.equal(t.state.writes,0);
+});
+test('entry column headings toggle numeric and category sorting without losing drafts or saving layout',async()=>{
+ const portfolio=domain.emptyPortfolio();
+ portfolio.deposits=[{id:'cash',name:'입출금',balance:120000,rate:0}];
+ portfolio.stocks=[{id:'stock',name:'주식 계좌',valuation:9000,cost:8000}];
+ portfolio.fixed=[{id:'fixed',name:'정기 지출',amount:50000,day:19,startMonth:domain.todayKST().slice(0,7),paymentSource:'account'}];
+ const t=await start(portfolio);
+ const rows=()=>[...t.document.querySelectorAll('[data-entry-row]')].map(row=>row.dataset.entryRow);
+ const direction=key=>t.document.querySelector(`th[data-layout-column="${key}"]`).getAttribute('aria-sort');
+ field(t,'deposits:cash','balance','1,000');
+ assert.ok(t.document.querySelector('[data-layout-save]').disabled);
+ t.click('[data-entry-sort-column=primary]');
+ assert.deepEqual(rows(),['deposits:cash','stocks:stock','fixed:fixed']);
+ assert.equal(direction('primary'),'ascending');
+ t.click('[data-entry-sort-column=primary]');
+ assert.deepEqual(rows(),['fixed:fixed','stocks:stock','deposits:cash']);
+ assert.equal(direction('primary'),'descending');
+ t.click('[data-entry-sort-column=kind]');
+ const categories=rows();
+ assert.equal(direction('kind'),'ascending');
+ assert.equal(direction('primary'),null);
+ t.click('[data-entry-sort-column=kind]');
+ assert.deepEqual(rows(),categories.reverse());
+ t.click('[data-entry-category=deposits]');
+ t.click('[data-entry-sort-column=balance]');
+ assert.equal(direction('balance'),'ascending');
+ assert.equal(t.document.querySelector('[data-entry-field=balance]').value,'1,000');
+ assert.equal(t.state.prefWrites,0);
+ assert.equal(t.state.writes,0);
+});
+test('entry saves merge unrelated remote changes while preserving drafts for overlapping edits',async()=>{
+ const t=await start(domain.samplePortfolio());
+ const [cash,secondCash]=t.state.data.deposits;
+ const stock=t.state.data.stocks[0];
+ field(t,'deposits:'+cash.id,'balance','245,800');
+ field(t,'deposits:'+secondCash.id,'balance','72500420');
+ field(t,'stocks:'+stock.id,'valuation','7014532');
+ t.state.data.deposits[0].note='다른 탭에서 변경';
+ t.state.revision++;
+ t.click('[data-entry-command=save]');
+ await tick();
+ assert.equal(t.state.writes,2);
+ assert.equal(t.state.data.deposits[0].balance,245800);
+ assert.equal(t.state.data.deposits[0].note,'다른 탭에서 변경');
+ assert.equal(t.state.data.deposits[1].balance,72500420);
+ assert.equal(t.state.data.stocks[0].valuation,7014532);
+ assert.match(t.document.querySelector('.entry-save-bar .entry-manager-message').textContent,/3건/);
+
+ field(t,'deposits:'+cash.id,'balance','1000');
+ field(t,'stocks:'+stock.id,'valuation','2500');
+ t.state.data.deposits[0].balance=2000;
+ t.state.revision++;
+ t.click('[data-entry-command=save]');
+ await tick();
+ assert.equal(t.state.writes,3);
+ assert.equal(t.state.data.deposits[0].balance,2000);
+ assert.equal(t.state.data.stocks[0].valuation,7014532);
+ assert.match(t.document.querySelector('.entry-save-bar [data-entry-error]').textContent,/같은 값이 바뀌었습니다/);
+ assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/2건/);
+ assert.equal(t.document.querySelector(`[data-entry-key="deposits:${cash.id}"][data-entry-field=balance]`).value,'1000');
 });
 const cardsRoute=t=>{t.context.location.hash='#cards';t.window.dispatchEvent(new t.Event('hashchange'));};
 const billInput=(t,id,name,value)=>{const el=t.document.querySelector(`[data-card-account="${id}"][data-card-bill-field="${name}"]`);assert.ok(el);if(el.tagName==='SELECT')for(const option of el.querySelectorAll('option'))option.toggleAttribute('selected',option.value===String(value));else el.value=String(value);el.dispatchEvent(new t.Event('input',{bubbles:true}));};

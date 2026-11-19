@@ -2,8 +2,8 @@ import {mergeLayoutOrder} from './record-layout-model.mjs';
 export {recordLayoutSpecs,entryLayoutColumns,layoutScope,freshRecordLayout,orderLayoutRows} from './record-layout-model.mjs';
 export const layoutDots='<span class="drag-nine-dots" aria-hidden="true">'+Array.from({length:9},()=>'<i></i>').join('')+'</span>';
 export const layoutRowHandle=label=>`<button type="button" class="record-row-handle" aria-label="${String(label).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')} 순서 이동. 위아래 방향키 지원" title="드래그로 이동 · 위아래 방향키 지원">${layoutDots}</button>`;
-export const layoutToolbar=()=>'<div class="record-layout-toolbar"><span data-layout-message role="status"></span><button type="button" class="button secondary small" data-layout-save>배치 저장</button></div>';
-export function mountRecordLayout(root,state,{allKeys,onChange,onSave,onFeedback=()=>{},loadSortable=()=>import('/sortable.mjs'),disabled=false}){
+export const layoutToolbar=()=>'<div class="record-layout-toolbar"><span data-layout-message role="status"></span><button type="button" class="button secondary small" data-layout-save>행·열 배치 저장</button></div>';
+export function mountRecordLayout(root,state,{allKeys,onChange,onSave,onFeedback=()=>{},loadSortable=()=>import('/sortable.mjs'),disabled=false,saveOnlyWhenDirty=false}){
  let active=true,sortables=[],saving=false;const rows=()=>[...root.querySelectorAll('[data-layout-row]')],visible=rows().map(row=>row.dataset.layoutRow);
  const message=root.querySelector('[data-layout-message]'),save=root.querySelector('[data-layout-save]');
  const applyColumns=()=>{
@@ -12,14 +12,25 @@ export function mountRecordLayout(root,state,{allKeys,onChange,onSave,onFeedback
  };
  applyColumns();
  for(const th of root.querySelectorAll('thead th[data-layout-column]')){
-  const label=th.textContent.trim(),content=root.ownerDocument.createElement('div');content.className='record-layout-heading';content.innerHTML=`<button type="button" class="record-column-handle" aria-label="${label.replaceAll('&','&amp;').replaceAll('"','&quot;')} 열 이동. 좌우 방향키 지원">${layoutDots}</button><span></span>`;content.lastElementChild.textContent=label;th.replaceChildren(content);
+  const label=th.textContent.trim(),content=root.ownerDocument.createElement('div');
+  content.className='record-layout-heading';
+  content.innerHTML=`<button type="button" class="record-column-handle" aria-label="${label.replaceAll('&','&amp;').replaceAll('"','&quot;')} 열 이동. 좌우 방향키 지원">${layoutDots}</button>`;
+  if(th.childElementCount)content.append(...th.childNodes);
+  else{
+   const text=root.ownerDocument.createElement('span');
+   text.textContent=label;
+   content.append(text);
+  }
+  th.replaceChildren(content);
  }
  for(const handle of root.querySelectorAll('.record-row-handle,.record-column-handle'))handle.disabled=disabled;
- if(save)save.disabled=disabled;
+ const saveUnavailable=()=>disabled||(saveOnlyWhenDirty&&!state.rowOrderDirty);
+ const saveLabel=save?.textContent;
+ if(save)save.disabled=saveUnavailable();
  const fail=error=>{if(message)message.textContent=error;onFeedback(error);};
  const reorder=(keys,focusKey)=>{try{state.rowOrder=mergeLayoutOrder(allKeys(),rows().map(row=>row.dataset.layoutRow),keys);state.rowOrderDirty=true;onChange('rows');if(focusKey)(root.ownerDocument.querySelector(`[data-record-layout="${root.dataset.recordLayout}"]`)||root).querySelector(`[data-layout-row="${focusKey}"] .record-row-handle`)?.focus();}catch(error){fail(error.message);}};
  const columns=focusKey=>{state.columns=[...root.querySelectorAll('thead th[data-layout-column]')].map(el=>el.dataset.layoutColumn);state.rowOrderDirty=true;onChange('columns');if(focusKey)(root.ownerDocument.querySelector(`[data-record-layout="${root.dataset.recordLayout}"]`)||root).querySelector(`th[data-layout-column="${focusKey}"] .record-column-handle`)?.focus();};
- const click=async event=>{if(!event.target.closest('[data-layout-save]')||saving||disabled)return;saving=true;save.disabled=true;for(const sortable of sortables)sortable.option?.('disabled',true);save.textContent='저장 중…';try{await onSave(state);state.rowOrderDirty=false;if(message)message.textContent='행·열 배치를 저장했습니다.';}catch(error){fail(error.message);}finally{saving=false;if(active){save.disabled=false;for(const sortable of sortables)sortable.option?.('disabled',false);save.textContent='배치 저장';}}};
+ const click=async event=>{if(!event.target.closest('[data-layout-save]')||saving||saveUnavailable())return;saving=true;save.disabled=true;for(const sortable of sortables)sortable.option?.('disabled',true);save.textContent='저장 중…';try{await onSave(state);state.rowOrderDirty=false;if(message)message.textContent='행·열 배치를 저장했습니다.';}catch(error){fail(error.message);}finally{saving=false;if(active){save.disabled=saveUnavailable();for(const sortable of sortables)sortable.option?.('disabled',false);save.textContent=saveLabel;}}};
  const keydown=event=>{
   const rowHandle=event.target.closest('.record-row-handle'),columnHandle=event.target.closest('.record-column-handle');if(disabled||saving)return;
   if(rowHandle&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const keys=rows().map(row=>row.dataset.layoutRow),id=rowHandle.closest('[data-layout-row]').dataset.layoutRow,index=keys.indexOf(id),next=index+(event.key==='ArrowUp'?-1:1);if(next<0||next>=keys.length)return;[keys[index],keys[next]]=[keys[next],keys[index]];reorder(keys,id);return;}
