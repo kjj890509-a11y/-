@@ -73,6 +73,43 @@ test('existing records across categories are edited together with one atomic wri
  t.click('[data-mode=new]');t.click('[data-mode=manage]');t.click('[data-entry-category=deposits]');assert.equal(t.document.querySelector('[data-entry-field=balance]').value,'2,345,678');
  t.click('[data-entry-command=save]');await tick();await tick();assert.equal(t.state.writes,1);assert.equal(t.state.data.deposits[0].balance,2345678);assert.equal(t.state.data.cards[0].amount,654321);assert.equal(t.state.data.cards[0].paid,true);assert.deepEqual(t.state.data.loans,before.loans);assert.equal(t.document.querySelector('[data-entry-command=save]').disabled,true);
 });
+test('saving one edited row retains other drafts and can retry after a failed write',async()=>{
+ const t=await start(domain.samplePortfolio());
+ const [cash,second]=t.state.data.deposits;
+ const firstKey='deposits:'+cash.id,secondKey='deposits:'+second.id;
+ const saveRow=key=>`[data-entry-save-row="${key}"]`;
+ t.click('[data-entry-category=deposits]');
+ assert.equal(t.document.querySelector(saveRow(firstKey)).hidden,true);
+ field(t,firstKey,'balance','123,400');
+ field(t,secondKey,'balance','-20');
+ assert.equal(t.document.querySelector(saveRow(firstKey)).hidden,false);
+
+ t.state.fail=true;
+ t.click(saveRow(firstKey));
+ await tick();
+ assert.equal(t.state.data.deposits[0].balance,cash.balance);
+ assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/2건/);
+ assert.match(t.document.querySelector('[data-entry-error]').textContent,/동시에/);
+
+ t.state.fail=false;
+ t.state.data.deposits[0].note='다른 탭의 메모';
+ t.state.revision++;
+ t.click(saveRow(firstKey));
+ await tick();
+ assert.equal(t.state.writes,3);
+ assert.equal(t.state.data.deposits[0].balance,123400);
+ assert.equal(t.state.data.deposits[0].note,'다른 탭의 메모');
+ assert.equal(t.state.data.deposits[1].balance,second.balance);
+ assert.equal(t.document.querySelector(saveRow(firstKey)).hidden,true);
+ assert.equal(t.document.querySelector(saveRow(secondKey)).hidden,false);
+ assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/1건/);
+ assert.equal(t.document.querySelector(`[data-entry-key="${secondKey}"][data-entry-field=balance]`).value,'-20');
+ field(t,secondKey,'balance','94,000');
+ t.click('[data-entry-command=save]');
+ await tick();
+ assert.equal(t.state.data.deposits[1].balance,94000);
+ assert.equal(t.document.querySelector('[data-entry-command=save]').disabled,true);
+});
 test('invalid bulk changes and failed writes retain every draft without partially saving other rows',async()=>{
  const t=await start(domain.samplePortfolio()),p=t.state.data,deposit=p.deposits[0],card=p.cards[0];
  field(t,'deposits:'+deposit.id,'balance','900');field(t,'cards:'+card.id,'amount','-7');t.click('[data-entry-command=save]');await tick();assert.equal(t.state.writes,0);assert.match(t.document.querySelector('[data-entry-error]').textContent,/카드|금액/);assert.match(t.document.querySelector('[data-entry-draft-count]').textContent,/2건/);
