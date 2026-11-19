@@ -3,6 +3,7 @@ body:not(.mobile-app) {
   --desk-paper: var(--canvas);
   --desk-panel: #f3f3f3;
   --desk-panel-active: #e9e9e9;
+  --desk-choice-selected: #464646;
   --desk-highlight: #fff4c9;
   --card-shadow: none;
   background: var(--desk-paper);
@@ -131,7 +132,7 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
 body:not(.mobile-app) #main .page-content :is(
   .panel:not(.page-metrics), .table-panel, .page-metric-card, .summary-card, .stat-card,
   .disclosure-card, .loan-card,
-  .entry-tile, .entry-edit-scroll, .entry-save-bar, .ledger-view-pair, .card-bill-bulk,
+  .entry-tile, .entry-edit-scroll, .entry-save-bar, .card-bill-bulk,
   .outlook-strip, .attention-strip, .payday-spotlight, .forecast-banner
 ) {
   border: 0;
@@ -260,16 +261,90 @@ body:not(.mobile-app) #main .page-content .entry-tile-icon {
 body:not(.mobile-app) #main .table-scroll tbody tr:nth-child(even) td {
   background: transparent;
 }
-body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spending-modes) {
+/* Use the same button shapes and selection states throughout desktop filters and tabs. */
+body:not(.mobile-app) #main :is(
+  .section-tabs, .ledger-views, .ledger-statuses, .entry-mode-tabs, .entry-kind-filters,
+  .ui-steps, .workspace-period-controls, .segmented, .cf-view-switch, .cf-categories,
+  .rank-controls, .spending-modes
+) {
+  flex-wrap: wrap;
+  gap: 8px;
   border: 0;
-  background: var(--canvas);
+  background: transparent;
+  overflow: visible;
 }
-body:not(.mobile-app) #main .page-content :is(.ledger-chip, .rank-controls button, .cf-categories button) {
+body:not(.mobile-app) #main :is(.segmented, .cf-view-switch, .spending-modes, .section-tabs) {
+  padding: 0;
+}
+body:not(.mobile-app) #main :is(
+  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
+  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
+  .cf-categories > button, .rank-controls > button, .spending-modes > button
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 9px 16px;
   border: 0;
-  background: var(--canvas);
+  border-radius: 11px;
+  background: var(--desk-panel);
+  color: var(--ink);
+  box-shadow: none;
+  font-size: var(--font-sm);
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-decoration: none;
+  white-space: normal;
 }
-body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spending-modes, .rank-controls, .cf-categories) button[aria-pressed="true"],
-body:not(.mobile-app) #main .page-content .ledger-chip.active,
+body:not(.mobile-app) #main :is(
+  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
+  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
+  .cf-categories > button, .rank-controls > button, .spending-modes > button
+):hover:where(:not(:disabled)) {
+  background: var(--desk-panel-active);
+}
+body:not(.mobile-app) #main :is(
+  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
+  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
+  .cf-categories > button, .rank-controls > button, .spending-modes > button
+):is([aria-pressed="true"], [aria-current="page"], [aria-current="step"], .active) {
+  background: var(--desk-choice-selected);
+  color: #fff;
+  box-shadow: none;
+}
+body:not(.mobile-app) #main .ledger-view-pair {
+  align-items: center;
+  max-width: 100%;
+  border: 0;
+  border-radius: 11px;
+  background: var(--desk-panel);
+  overflow: visible;
+}
+body:not(.mobile-app) #main .ledger-view-pair > .ledger-view { flex-shrink: 1; }
+body:not(.mobile-app) #main .ledger-view-pair > .ledger-view-delete {
+  flex: 0 0 32px;
+  margin-inline: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+body:not(.mobile-app) #main .ledger-view-pair > .ledger-view-delete:is(:hover, :focus-visible) {
+  background: var(--expense-soft);
+}
+body:not(.mobile-app) #main :is(.entry-category-count, .entry-mode-tabs span) {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
 body:not(.mobile-app) #main .page-content .cf-day.is-selected {
   border: 0;
   box-shadow: none;
@@ -340,7 +415,6 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 .overview-forecast .amount-bar-point:last-child { --amount-bar-color: #454545; }
 .overview-forecast .amount-bar-point:is(:hover,:focus-visible) { --amount-bar-color: var(--ink); }
 .overview-chart-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.overview-chart-actions .segmented button { min-height: 26px; padding: 2px 7px; font-size: 12px; }
 .overview-forecast .amount-bars { margin: 6px 0 0; }
 .overview-forecast .financial-chart-scroll svg { max-height: 350px; }
 .overview-forecast .chart-empty {
