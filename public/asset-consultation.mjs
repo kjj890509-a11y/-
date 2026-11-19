@@ -19,7 +19,7 @@ export function renderAssetConsultation(state, {demo = false} = {}) {
     <p>${esc(message.answer)}</p>
     ${message.checks?.length ? `<details><summary>확인할 내용</summary>
      <ul>${message.checks.map(check => `<li>${esc(check)}</li>`).join('')}</ul></details>` : ''}
-    <small>${esc(message.asOf)} 기준</small>
+    <small>생성형 AI 답변 · ${esc(message.asOf)} 기준</small>
    </div>
   </article>`).join('')}
  </div>` : '';
