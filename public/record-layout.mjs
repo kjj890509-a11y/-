@@ -43,5 +43,11 @@ export function mountRecordLayout(root,state,{allKeys,onChange,onSave,onFeedback
   if(body)sortables.push(Sortable.create(body,{filter:'.record-row-handle:disabled',handle:'.record-row-handle',draggable:'[data-layout-row]',animation:150,delay:130,delayOnTouchOnly:true,touchStartThreshold:4,ghostClass:'ledger-row-ghost',onEnd:()=>{if(active&&!saving)reorder(rows().map(row=>row.dataset.layoutRow));}}));
   const head=root.querySelector('thead tr');if(head)sortables.push(Sortable.create(head,{handle:'.record-column-handle',draggable:'th[data-layout-column]',animation:150,onEnd:()=>{if(active&&!saving)columns();}}));
  }).catch(()=>{if(active)fail('드래그 연결 실패 · 점 9개에서 방향키로 이동할 수 있습니다.');});
- return ()=>{active=false;for(const sortable of sortables)sortable.destroy();root.removeEventListener('click',click);root.removeEventListener('keydown',keydown);};
+ return ()=>{
+  if(!active)return;
+  active=false;
+  for(const sortable of sortables)sortable.destroy();
+  root.removeEventListener('click',click);
+  root.removeEventListener('keydown',keydown);
+ };
 }

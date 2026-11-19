@@ -181,11 +181,11 @@ body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spen
   border: 0;
   background: var(--canvas);
 }
-body:not(.mobile-app) #main .page-content :is(.ledger-chip, .entry-kind-filters button, .rank-controls button, .cf-categories button) {
+body:not(.mobile-app) #main .page-content :is(.ledger-chip, .rank-controls button, .cf-categories button) {
   border: 0;
   background: var(--canvas);
 }
-body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spending-modes, .entry-kind-filters, .rank-controls, .cf-categories) button[aria-pressed="true"],
+body:not(.mobile-app) #main .page-content :is(.segmented, .cf-view-switch, .spending-modes, .rank-controls, .cf-categories) button[aria-pressed="true"],
 body:not(.mobile-app) #main .page-content .ledger-chip.active,
 body:not(.mobile-app) #main .page-content .cf-day.is-selected {
   border: 0;
