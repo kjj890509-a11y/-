@@ -21,7 +21,9 @@ async function start(data=domain.emptyPortfolio(),preferences={version:1,tables:
  class BrowserFormData{constructor(form){this.values=new Map([...form.querySelectorAll('input,select,textarea')].filter(el=>el.name&&!el.disabled).map(el=>[el.name,el.value]));}get(name){return this.values.get(name)??null;}}
  const state={data:domain.validatePortfolio(data),revision:1,writes:0,fail:false,pause:null,prefs:structuredClone(preferences),prefRevision:0,prefWrites:0};
  const sortables=new Map(),loadSortable=async()=>({default:{create(node,config){sortables.set((node.closest('[data-record-layout]')?.dataset.recordLayout||'ledger')+':'+config.handle,{node,config});return{destroy(){},option(){}};}}});
- const context=vm.createContext({...domain,...workspace,...navigation,...dashboard,...disclosure,...charts,...loansPage,...statisticsPage,...advisorPage,renderLoanForecastPanel,document,window,mountRecordLayout:(root,layout,options)=>navigation.mountRecordLayout(root,layout,{...options,loadSortable}),mountEntryManager:(root,getData,manager,options)=>navigation.mountEntryManager(root,getData,manager,{...options,loadSortable}),mountCardBilling:(root,getData,billing,options)=>navigation.mountCardBilling(root,getData,billing,{...options,loadSortable}),location:{hash:'#entry'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
+ const context=vm.createContext({...domain,...workspace,...navigation,...dashboard,...disclosure,...charts,...loansPage,...statisticsPage,...advisorPage,renderLoanForecastPanel,document,window,
+  mountLedger:(root,entries,ledger,options)=>navigation.mountLedger(root,entries,ledger,{...options,loadSortable}),
+  mountRecordLayout:(root,layout,options)=>navigation.mountRecordLayout(root,layout,{...options,loadSortable}),mountEntryManager:(root,getData,manager,options)=>navigation.mountEntryManager(root,getData,manager,{...options,loadSortable}),mountCardBilling:(root,getData,billing,options)=>navigation.mountCardBilling(root,getData,billing,{...options,loadSortable}),location:{hash:'#entry'},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
   if(path==='/api/preferences'){if(init?.method==='PUT'){const body=JSON.parse(init.body);state.prefs=navigation.validateLedgerPreferences(body.data);state.prefRevision++;state.prefWrites++;}return {ok:true,json:async()=>({data:state.prefs,revision:state.prefRevision})};}
   assert.equal(path,'/api/portfolio');
   if(init?.method==='PUT'){state.writes++;if(state.pause)await state.pause;if(state.fail)return {ok:false,json:async()=>({error:'동시에 수정됐습니다. 다시 확인해 주세요.'})};const body=JSON.parse(init.body);assert.equal(body.revision,state.revision);state.data=domain.validatePortfolio(body.data);state.revision++;}
@@ -153,6 +155,52 @@ test('unified editing changes expense payment source and exposes the selector af
 test('planned expense duplicate exclusion is separate from forecast inclusion and can be edited again',async()=>{
  const p=domain.emptyPortfolio();p.cashflow=[{id:'expense',name:'예정 카드 지출',type:'expense',amount:60000,date:domain.shiftMonth(domain.todayKST().slice(0,7),1)+'-10',repeat:'once',paymentSource:'card',note:''}];const t=await start(p);t.context.location.hash='#planned';t.window.dispatchEvent(new t.Event('hashchange'));assert.match(t.document.querySelector('#main').textContent,/카드 청구액에 포함 · 중복 제외/);const button=t.document.querySelector('[data-action=toggle-planned]');assert.doesNotMatch(button.textContent,/카드 청구/);assert.match(button.textContent,/예상 반영/);t.click('[data-action=toggle-planned]');await tick();await tick();assert.equal(t.state.data.cashflow[0].paymentSource,'card');assert.equal(t.state.data.cashflow[0].includeInForecast,false);
  t.click('[data-ledger-action=edit][data-id="cashflow:expense"]');assert.equal(t.document.querySelector('#field-paymentSource').value,'card');assert.equal(t.document.querySelector('#field-paymentSource').closest('.field').hidden,false);t.fill({paymentSource:'account'});await t.submit();assert.equal(t.state.data.cashflow[0].paymentSource,'account');assert.equal(t.state.data.cashflow[0].includeInForecast,false);
+});
+test('planned forecast switch shows saving, reflects both saved states and keeps its state on a failed save',async()=>{
+ const portfolio=domain.emptyPortfolio();
+ const future=domain.shiftMonth(domain.todayKST().slice(0,7),1)+'-10';
+ portfolio.cashflow=[{id:'bonus',name:'예정 상여금',type:'other_income',amount:200000,date:future,repeat:'once',note:''}];
+ const t=await start(portfolio);
+ t.context.location.hash='#planned';
+ t.window.dispatchEvent(new t.Event('hashchange'));
+ const selector='[data-action="toggle-planned"]';
+ const control=()=>t.document.querySelector(selector);
+ const incomeSummary=()=>t.document.querySelector('.planning-metrics .page-metric-card strong').textContent;
+ assert.equal(control().getAttribute('role'),'switch');
+ assert.equal(control().getAttribute('aria-checked'),'true');
+ assert.match(control().textContent,/예상 반영/);
+ assert.equal(incomeSummary(),'200,000원');
+
+ let resume;
+ t.state.pause=new Promise(resolve=>{resume=resolve;});
+ t.click(selector);
+ assert.equal(control().getAttribute('aria-busy'),'true');
+ assert.match(control().textContent,/저장 중/);
+ t.click(selector);
+ assert.equal(t.state.writes,1);
+ t.state.pause=null;
+ resume();
+ await tick();
+ assert.equal(control().getAttribute('aria-checked'),'false');
+ assert.match(control().textContent,/예상 제외/);
+ assert.equal(incomeSummary(),'0원');
+ assert.match(t.document.querySelector('#toast').textContent,/예정 상여금 · 예상 제외/);
+
+ t.state.fail=true;
+ t.click(selector);
+ await tick();
+ assert.equal(control().hasAttribute('aria-busy'),false);
+ assert.equal(control().getAttribute('aria-checked'),'false');
+ assert.match(control().textContent,/예상 제외/);
+ assert.match(t.document.querySelector('#toast').textContent,/동시에 수정/);
+
+ t.state.fail=false;
+ t.click(selector);
+ await tick();
+ assert.equal(control().getAttribute('aria-checked'),'true');
+ assert.match(control().textContent,/예상 반영/);
+ assert.equal(incomeSummary(),'200,000원');
+ assert.match(t.document.querySelector('#toast').textContent,/예정 상여금 · 예상 반영/);
 });
 test('fixed expense form selects year and month directly, limits the end month and saves unchanged YYYY-MM values',async()=>{
  const t=await start();t.click('[data-mode=new]');t.click('[data-entry-type=fixed]');t.fill({name:'달력으로 등록',amount:'65000',day:10,paymentSource:'card'});const startInput=t.document.querySelector('#field-startMonth');assert.equal(startInput.type,'hidden');assert.match(t.document.querySelector('#field-startMonth-button').textContent,/년.*월/);t.click('#field-startMonth-button');assert.equal(t.document.querySelectorAll('[data-month-option]').length,12);const year=t.document.querySelector('[data-month-year]');year.value='2030';year.dispatchEvent(new t.Event('input',{bubbles:true}));t.click('[data-month-option="2030-04"]');assert.equal(startInput.value,'2030-04');assert.equal(t.state.writes,0);
