@@ -2,6 +2,7 @@ import {contextTip} from './context-tips.mjs';
 import {totals, todayKST, paymentDate, forecastMonths, snapshotTotals, budgetPlan, paydayForecasts, validateDashboard} from './domain.mjs';
 import {buildStatistics, statisticsKinds, statisticsMetrics, statisticsBases, statisticsOptions, statisticsPeriod, statisticsSeries, metricsForKind} from './statistics.mjs';
 import {renderTrendChart} from './chart.mjs';
+import {renderMonthPicker} from './month-picker.mjs';
 
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const option=(value,label,current)=>`<option value="${esc(value)}" ${value===current?'selected':''}>${esc(label)}</option>`;
@@ -12,9 +13,10 @@ const common={type:'analysis',title:'내 통계',kind:'all',metric:'expense',ban
 export const widgetTemplates=[
  {key:'cashflow',name:'수입과 지출',description:'같은 기간의 수입, 지출·상환액과 차액',config:{...common,title:'수입과 지출'}},
  {key:'loans',name:'대출 원금·이자',description:'은행이나 대출을 골라 상환액을 비교',config:{...common,title:'대출 원금·이자',kind:'loans',metric:'loanPayment'}},
- {key:'expenses',name:'지출 항목별 합계',description:'도치·보험·카드 등 항목별 지출',config:{...common,title:'지출 항목별 합계',kind:'expense',display:'breakdown'}},
+ {key:'expenses',name:'지출 항목별 합계',description:'생활비·보험·카드 등 항목별 지출',config:{...common,title:'지출 항목별 합계',kind:'expense',display:'breakdown'}},
  {key:'pension',name:'회사 퇴직연금 납입',description:'예금 입출금과 구분한 회사 납입 일정',config:{...common,title:'회사 퇴직연금 납입',kind:'retirement',metric:'retirementContribution',basis:'scheduled'}},
  {key:'custom',name:'맞춤 통계',description:'기간·은행·항목·금액 종류를 직접 선택',config:{...common}},
+ {key:'income',name:'수입 항목별 합계',description:'월급·상여금·부업 등 출처별 수입',config:{...common,title:'수입 항목별 합계',kind:'income',metric:'income',display:'breakdown'}},
  {key:'composition',name:'보유 자산 구성',description:'현재 주식·예금·퇴직연금의 구성',config:{...common,type:'composition',title:'보유 자산 구성'}},
  {key:'forecast',name:'앞으로의 예금 잔액',description:'향후 12개월의 입출금 반영 잔액',config:{...common,type:'forecast',title:'앞으로의 예금 잔액'}},
  {key:'history',name:'기록한 순자산',description:'저장된 기준일의 실제 자산 기록',config:{...common,type:'history',title:'기록한 순자산'}},
@@ -57,7 +59,7 @@ function widgetContent(data,widget,period,{formatMoney,formatCompact,today}){
   const scope=[statisticsKinds[widget.kind],widget.bank,widget.item?(selectedItem?.name||'삭제된 항목'):null,widget.query?`검색: ${widget.query}`:null].filter(Boolean).map(esc).join(' · ');
   const value=s[widget.metric],groups=result.groups.filter(row=>row[widget.metric]>0).sort((a,b)=>b[widget.metric]-a[widget.metric]);
   return `<div class="widget-filter-label">${scope}</div><div class="widget-total"><span>${esc(statisticsMetrics[widget.metric])}</span><strong>${result.rows.length?money(value):'내역 없음'}</strong></div>${widget.kind==='all'?facts([['수입',s.income],['지출·상환',s.expense],['차액',s.income-s.expense]],money):widget.kind==='loans'?facts([['상환 원금',s.principal],['이자',s.interest]],money):widget.kind==='retirement'?'<p class="widget-context">회사 납입 일정 · 예금 잔액과 별도</p>':''}
-  ${!result.rows.length?'<p class="workspace-empty">선택한 기간·조건에 등록된 내역이 없습니다. 과거 대출은 상환 기록을 추가해 주세요.</p>':widget.display==='breakdown'?bars(groups.slice(0,6).map(row=>({label:row.name,value:row[widget.metric]})),money)+(groups.length>6?`<details class="workspace-sources"><summary>나머지 ${groups.length-6}개 항목</summary>${bars(groups.slice(6).map(row=>({label:row.name,value:row[widget.metric]})),money)}</details>`:''):chart(statisticsSeries(result,widget.metric),widget.title,statisticsMetrics[widget.metric])}
+  ${!result.rows.length?`<p class="workspace-empty">선택한 기간·조건에 등록된 내역이 없습니다.${widget.kind==='loans'?' 과거 대출은 상환 기록을 추가해 주세요.':''}</p>`:widget.display==='breakdown'?bars(groups.slice(0,6).map(row=>({label:row.name,value:row[widget.metric]})),money)+(groups.length>6?`<details class="workspace-sources"><summary>나머지 ${groups.length-6}개 항목</summary>${bars(groups.slice(6).map(row=>({label:row.name,value:row[widget.metric]})),money)}</details>`:''):chart(statisticsSeries(result,widget.metric),widget.title,statisticsMetrics[widget.metric])}
   <span class="widget-basis">${esc(statisticsBases[widget.basis])} · ${result.rows.length}건</span>${sourceDetails(result,money)}`;
  }
  if(widget.type==='composition')return `<div class="widget-total"><span>총자산 · 부채 차감 전</span><strong>${money(t.gross)}</strong></div>${bars([['주식',t.stock],['예금',t.deposits],['퇴직연금·퇴직금',t.retirement]].map(([label,value])=>({label,value})),money)}${facts([['주식 평가손익',t.profit],['대출 잔액',t.loans],['미결제 카드',t.cards]],money)}`;
@@ -95,10 +97,34 @@ function renderDialogs(data,state,config){
  const items=statisticsOptions(data,w.kind,w.bank);
  return dialogShell('workspace-card','통계 카드 설정',`<form id="workspace-card-form" class="workspace-form"><label>카드 이름<input name="title" value="${esc(w.title)}" maxlength="80" required></label><div class="workspace-form-grid"><label>카드 너비<select name="width">${option('standard','기본',w.width)}${option('wide','넓게',w.width)}</select></label>${w.type==='analysis'?`<label>표시 방식<select name="display">${option('trend','기간별 그래프',w.display)}${option('breakdown','항목별 합계',w.display)}</select></label><label>조회 항목<select name="kind">${Object.entries(statisticsKinds).map(([v,n])=>option(v,n,w.kind)).join('')}</select></label><label>표시할 금액<select name="metric">${Object.entries(metricsForKind(w.kind)).map(([v,n])=>option(v,n,w.metric)).join('')}</select></label><label class="field-wide">집계 기준<select name="basis">${Object.entries(statisticsBases).map(([v,n])=>option(v,n,w.basis)).join('')}</select></label><label>대출 은행<select name="bank" ${!['loans','all'].includes(w.kind)?'disabled':''}>${option('','모든 은행',w.bank)}${banks.map(bank=>option(bank,bank,w.bank)).join('')}</select></label><label>특정 항목<select name="item">${option('','모든 항목',w.item)}${items.map(item=>option(item.key,item.name+(item.institution?' · '+item.institution:''),w.item)).join('')}${w.item&&!items.some(item=>item.key===w.item)?option(w.item,'삭제된 항목 · 다시 선택해 주세요',w.item):''}</select></label><label class="field-wide">이름·메모 검색<input name="query" value="${esc(w.query)}" maxlength="100" placeholder="예: 도치, 보험료"></label>`:''}</div><p data-workspace-error role="alert"></p><div class="dialog-actions">${button('close-dialog','취소')}<button type="submit" class="button primary">카드 적용</button></div></form>`);
 }
-export function renderWorkspace(data,state,{formatMoney,formatCompact,today=todayKST()}){
+export function renderWorkspace(data,state,{formatMoney,formatCompact,today=todayKST(),month=today.slice(0,7)}){
  const config=dashboardConfig(data,state,today),t=totals(data),money=value=>esc(formatMoney(value));
+ const plan=budgetPlan(data,month);
+ const assetSources=`<div class="workspace-asset-sources">
+  <a href="#stocks"><span>주식·투자</span><b>${money(t.stock)}</b></a>
+  <a href="#retirement"><span>퇴직금·연금</span><b>${money(t.retirement)}</b></a>
+ </div>`;
+ const monthlyCards=[
+  ['월 수입',plan.income,[['월급',plan.salary],['기타 수입',plan.otherIncome]]],
+  ['월 지출·상환',plan.expense,[
+   [plan.actualApplied?'실제 생활비':'생활비 계획',plan.livingExpense],
+   ['대출 상환 계획',plan.loanDue],['카드 청구',plan.cardBills]
+  ]],
+  ['수입·지출 차액',plan.balance,[]]
+ ];
  return `<div class="workspace-home"><div class="page-heading"><div><h1>맞춤 대시보드</h1></div><div class="heading-actions">${button('edit',state.editing?'편집 중':'화면 편집',state.editing?'disabled':'')}<button class="button primary" data-action="add">내역 추가</button></div></div>
- <section class="workspace-current" aria-label="등록한 현재 자산"><div class="workspace-section-heading"><h2>현재 자산</h2><span>조회일 ${today.replaceAll('-','.')} ${info('현재 자산','직접 입력한 잔액 기준입니다. 순자산은 주식·예금·퇴직연금에서 대출과 미결제 카드대금을 뺀 금액입니다. 미래 입출금 일정은 포함하지 않습니다.')}</span></div><div class="workspace-current-grid">${[['순자산',t.net,'gross'],['총자산',t.gross,''],['총부채',t.debt,''],['예금 잔액',t.deposits,'']].map(([label,value,cls])=>`<div class="workspace-current-stat ${cls}"><span>${label}</span><strong>${money(value)}</strong></div>`).join('')}</div><div class="workspace-quicklinks"><a href="#history">자산 기록 ↗</a><a href="#forecast">월별 전망 ↗</a><a href="#payday">급여일 전망 ↗</a><a href="#budget">월 예산 ↗</a></div></section>
+ <section class="workspace-current" aria-label="등록한 현재 자산">
+  <div class="workspace-section-heading"><h2>현재 자산</h2><span>조회일 ${today.replaceAll('-','.')} ${info('현재 자산','직접 입력한 잔액 기준입니다. 순자산은 주식·예금·퇴직연금에서 대출과 미결제 카드대금을 뺀 금액입니다. 미래 입출금 일정은 포함하지 않습니다.')}</span></div>
+  <div class="workspace-current-grid">${[['순자산',t.net,'gross'],['총자산',t.gross,'',assetSources],['총부채',t.debt,''],['예금 잔액',t.deposits,'']].map(([label,value,cls,extra=''])=>`<div class="workspace-current-stat ${cls}"><span>${label}</span><strong>${money(value)}</strong>${extra}</div>`).join('')}</div>
+  <div class="workspace-quicklinks"><a href="#history">자산 기록 ↗</a><a href="#forecast">월별 전망 ↗</a><a href="#payday">급여일 전망 ↗</a></div>
+ </section>
+ <section class="workspace-month" aria-labelledby="workspace-month-title">
+  <div class="workspace-section-heading">
+   <h2 id="workspace-month-title">월 수입·지출 ${info('월 수입·지출','선택한 월의 예산에 반영된 금액입니다. 가계부 반영을 켠 달은 생활비 계획 대신 실제 생활비를 사용합니다. 카드 청구에 포함된 지출은 한 번만 집계합니다.')}</h2>
+   <div class="heading-actions">${renderMonthPicker({id:'workspace-month',value:month,label:'수입·지출 조회 월',required:true})}<a class="button secondary" href="#budget">월 예산</a></div>
+  </div>
+  <div class="planning-metrics workspace-month-grid">${monthlyCards.map(([label,value,parts])=>`<div class="metric-box"><span>${label}</span><strong>${money(value)}</strong>${parts.length?facts(parts,money):''}</div>`).join('')}</div>
+ </section>
  <div class="workspace-section-heading workspace-analysis-heading"><div><h2>내 통계</h2><span>보고 싶은 항목과 기간을 골라 비교하세요.</span></div><div class="heading-actions">${button('add','통계 카드 추가')}<a class="button secondary" href="#statistics">상세 통계 ↗</a></div></div>
  <div class="workspace-toolbar"><div class="workspace-period-controls">${button('month','이번 달',`aria-pressed="${config.period.preset==='month'}"`)}${button('year','올해',`aria-pressed="${config.period.preset==='year'}"`)}${button('period','기간 선택',`aria-haspopup="dialog"`)}</div><strong>${config.period.start.replaceAll('-','.')} – ${config.period.end.replaceAll('-','.')}</strong>${info('통계 기간','기간 통계 카드에 공통 적용됩니다. 현재 자산과 미래 예측 카드에는 각각의 기준일이 표시됩니다. 화면 편집 후 저장하면 기간 설정도 계정에 저장됩니다.')}</div>
  ${state.editing?`<div class="workspace-editbar"><p id="workspace-edit-help">⠿를 드래그해 순서를 바꾸세요. 방향키나 앞·뒤 버튼으로도 이동할 수 있어요.</p><div>${button('reset','기본 구성')}${button('cancel','취소',state.saving?'disabled':'')}<button type="button" class="button primary" data-board-action="save" ${state.saving?'disabled':''}>${state.saving?'저장 중…':'화면 저장'}</button></div></div>`:''}

@@ -265,7 +265,7 @@ function openRecordDetail(scope,entry){
  dialog.innerHTML=`<div class="dialog-heading"><div><small>${escapeHTML(ledgerLabels[entry.kind])}</small><h2 id="record-detail-title">${escapeHTML(entry.row.name)}</h2></div><button class="icon-button" data-close="record-detail" aria-label="상세 닫기">✕</button></div><dl class="record-detail-fields">${ledgerColumns[entry.kind].map(([key,label])=>`<div><dt>${escapeHTML(label)}</dt><dd>${ledgerCell(entry.kind,entry,key)}</dd></div>`).join('')}</dl>${entry.row.note?`<p>${escapeHTML(entry.row.note)}</p>`:''}<div class="dialog-actions"><button class="button primary" data-detail-edit>내역 수정</button></div>`;
  dialog.querySelector('[data-detail-edit]').onclick=()=>{dialog.close();openEditor(entry.kind,entry.row.id);};document.body.append(dialog);dialog.showModal();
 }
-function workspacePage(){return demoBanner()+renderWorkspace(portfolio,workspaceState,{formatMoney:money,formatCompact:compact});}
+function workspacePage(){return demoBanner()+renderWorkspace(portfolio,workspaceState,{formatMoney:money,formatCompact:compact,month});}
 function assetsPage(){return renderAssets(portfolio,{money,svg,demoBanner:demoBanner()});}
 
 function budgetPage({embedded=false}={}){
@@ -887,8 +887,9 @@ document.addEventListener('keydown',e=>{
  e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
 });
 document.addEventListener('change',e=>{
- if(e.target.id==='spending-month'&&validMonth(e.target.value)&&e.target.value<=todayKST().slice(0,7)){
-  month=e.target.value;render();$('spending-month-button')?.focus();return;
+ const monthPickerId=e.target.id;
+ if((monthPickerId==='workspace-month'||monthPickerId==='spending-month'&&e.target.value<=todayKST().slice(0,7))&&validMonth(e.target.value)){
+  month=e.target.value;render();$(monthPickerId+'-button')?.focus();return;
  }
  if(e.target.id==='field-type')syncExpensePaymentSource();if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{

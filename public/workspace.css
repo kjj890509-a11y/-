@@ -12,6 +12,19 @@
 .workspace-current-stat > span { display: block;  margin-bottom: 8px; }
 .workspace-current-stat strong { display: block;  font-weight: 650; letter-spacing: -.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.4; }
 .workspace-current-stat.gross { color: var(--text-on-dark); background: var(--green); }
+.workspace-asset-sources { margin-top: 12px; }
+.workspace-asset-sources a,
+.workspace-month-grid .workspace-facts > div {
+ display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+ font-size: var(--font-xs); line-height: 1.55; color: var(--text-secondary);
+}
+.workspace-asset-sources a + a { margin-top: 5px; }
+.workspace-asset-sources a:hover { text-decoration: underline; }
+.workspace-asset-sources b,
+.workspace-month-grid .workspace-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.workspace-month > .workspace-section-heading { flex-wrap: wrap; margin-bottom: 12px; }
+.workspace-month .heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.workspace-month-grid .workspace-facts { grid-template-columns: minmax(0, 1fr); gap: 5px; margin: 12px 0 0; }
 .workspace-quicklinks { display: flex; flex-wrap: wrap; gap: 12px 24px;  }
 .workspace-quicklinks a { min-height: 32px; display: inline-flex; align-items: center; font-weight: 550; color: var(--green); }
 .workspace-analysis-heading { margin-top: 36px; }
