@@ -221,7 +221,18 @@ function ledgerCell(scope,entry,key){
  if(scope==='cashflow'&&key==='paymentSource')return entry.row.type==='expense'?`<span class="status-pill">${isCardIncludedExpense(entry.row)?'카드 청구액에 포함 · 중복 제외':'계좌 결제 · 별도 지출'}</span>`:'—';
  if(scope==='planned'){
   if(key==='name')return `<strong>${escapeHTML(entry.row.name)}</strong><small>${escapeHTML(entry.row.note||'')}</small>`;
-  if(key==='date')return entry.date;if(key==='amount')return money(entry.amount);if(key==='type')return entry.row.type==='expense'?'예정 지출':'추가 수입';return `${isCardIncludedExpense(entry.row)?'<span class="status-pill">카드 청구액에 포함 · 중복 제외</span> ':''}<button class="status-pill" data-action="toggle-planned" data-id="${escapeHTML(entry.row.id)}">${entry.row.includeInForecast===false?'예상 제외':'예상 반영'} ↻</button>`;
+  if(key==='date')return entry.date;
+  if(key==='amount')return money(entry.amount);
+  if(key==='type')return entry.row.type==='expense'?'예정 지출':'추가 수입';
+  const included=entry.row.includeInForecast!==false;
+  return `<div class="forecast-toggle-cell">
+    ${isCardIncludedExpense(entry.row)?'<span class="status-pill">카드 청구액에 포함 · 중복 제외</span>':''}
+    <button type="button" class="forecast-toggle" role="switch" aria-label="${escapeHTML(entry.row.name)} 예상 반영" aria-checked="${included}"
+      data-action="toggle-planned" data-id="${escapeHTML(entry.row.id)}">
+      <span class="forecast-toggle-track" aria-hidden="true"></span>
+      <span class="forecast-toggle-label">${statusLabels[included?'included':'excluded']}</span>
+    </button>
+  </div>`;
  }
  return ledgerCells(entry)[ledgerColumns[scope].findIndex(([k])=>k===key)]||'—';
 }
@@ -725,7 +736,33 @@ document.addEventListener('click',async e=>{
  if(action==='add-loan-payment'||action==='edit-loan-payment')openLoanPaymentEditor(id);
  if(action==='delete-loan-payment'&&await confirmAction('상환 기록을 삭제할까요?','이 기록을 통계에서 삭제합니다. 현재 대출잔액은 바뀌지 않습니다.')){const next=structuredClone(portfolio);next.loanPayments=(next.loanPayments||[]).filter(row=>row.id!==id);try{await persist(next);toast('상환 기록을 삭제했어요.');}catch(error){toast(error.message);}}
  if(action==='add-planned'||action==='edit-planned')openScheduledEditor(id,button.dataset.type||'other_income');
- if(action==='toggle-planned'){const next=structuredClone(portfolio),item=next.cashflow.find(row=>row.id===id);if(item){item.includeInForecast=item.includeInForecast===false;try{await persist(next);toast(item.includeInForecast?'예상 계산에 포함했어요.':'예상 계산에서 제외했어요.');}catch(error){toast(error.message);}}}
+ if(action==='toggle-planned'){
+  if(button.getAttribute('aria-busy')==='true')return;
+  const next=structuredClone(portfolio);
+  const item=next.cashflow.find(row=>row.id===id);
+  if(!item)return;
+  item.includeInForecast=item.includeInForecast===false;
+  const label=button.querySelector('.forecast-toggle-label');
+  const previousLabel=label.textContent;
+  button.setAttribute('aria-busy','true');
+  button.setAttribute('aria-disabled','true');
+  label.textContent='저장 중…';
+  try{
+   await persist(next,false,{renderAfter:false});
+   const restoreFocus=document.activeElement===button;
+   render();
+   if(restoreFocus)[...document.querySelectorAll('[data-action="toggle-planned"]')].find(control=>control.dataset.id===id)?.focus({preventScroll:true});
+   const newState=statusLabels[item.includeInForecast?'included':'excluded'];
+   toast(`${item.name} · ${newState} 상태로 저장했어요.`);
+  }catch(error){
+   toast(error.message);
+  }finally{
+   button.removeAttribute('aria-busy');
+   button.removeAttribute('aria-disabled');
+   label.textContent=previousLabel;
+  }
+  return;
+ }
  if(action==='pin-statistics'){
   const config=structuredClone(dashboardConfig(portfolio,workspaceState));if(config.widgets.length>=16){toast('통계 카드는 최대 16개까지 추가할 수 있어요.');return;}
   const f=statisticsFilters;config.period={preset:'custom',start:f.start,end:f.end};config.widgets.push({...widgetTemplates[0].config,id:crypto.randomUUID(),title:(f.bank||f.query||'선택한 통계')+' · '+f.start.slice(0,7),kind:f.kind,metric:$('stats-metric')?.value||f.metric,basis:f.basis||'all',bank:f.bank,item:f.item,query:f.query});

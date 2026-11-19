@@ -120,6 +120,53 @@ body:not(.mobile-app) #main .page-content :is(
 body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card {
   background-color: color-mix(in srgb, var(--brand-accent) 18%, var(--desk-paper));
 }
+.forecast-toggle-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+.forecast-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  min-width: 107px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #f0f1f3;
+  color: #464c56;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.forecast-toggle[aria-checked="true"] {
+  background: #e5f5eb;
+  color: #18583b;
+}
+.forecast-toggle-track {
+  display: flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #626975;
+}
+.forecast-toggle-track::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+}
+.forecast-toggle[aria-checked="true"] .forecast-toggle-track {
+  justify-content: flex-end;
+  background: #18764b;
+}
+.forecast-toggle:hover:not([aria-busy="true"]) { filter: brightness(.96); }
+.forecast-toggle[aria-busy="true"] { cursor: progress; }
 body:not(.mobile-app) #main .page-content .entry-tile-icon {
   border: 0;
   box-shadow: none;
