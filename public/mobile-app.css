@@ -166,6 +166,9 @@ body.mobile-app{--canvas:#f7f8fa;--m-caption:12px;--m-body:14px;--m-label:13px;-
 .mobile-app .m-menu-header h1 span{font-weight:400;color:#bbb}
 .mobile-app .m-menu-group{margin:16px var(--m-gutter);padding:18px 0 4px;background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-radius);overflow:hidden;box-shadow:var(--m-shadow)}
 .mobile-app .m-menu-group>h2{font-size:var(--m-label);color:var(--m-muted);padding:0 var(--m-inner) 10px;font-weight:500}
+.mobile-app .m-workspace-month > .m-month { margin: 0 var(--m-inner) 10px; }
+.mobile-app .m-workspace-breakdown > summary { padding: 12px var(--m-inner); font-size: var(--m-label); cursor: pointer; }
+.mobile-app .m-workspace-month .m-facts dd { font-variant-numeric: tabular-nums; }
 .mobile-app .m-menu-group>.m-row{min-height:64px;padding:14px var(--m-inner)}
 .mobile-app .m-menu-group>.m-row strong{font-weight:500;font-size:var(--m-body)}
 .mobile-app .m-menu-header h1{flex:1}

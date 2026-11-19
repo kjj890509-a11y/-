@@ -201,7 +201,28 @@ function spending(data,{money,month}){
  ${row({name:'월 예산 보기',href:'#budget'})}`;
 }
 function history(data,{money}){return `${header('자산 기록',{right:action('snapshot-form',icon('plus'),'aria-label="자산 기록 추가"','m-icon')})}<div class="m-history-list">${[...(data.snapshots||[])].sort((a,b)=>b.month.localeCompare(a.month)).map(r=>row({name:r.month,sub:r.asOf,amount:money(snapshotTotals(r).net),attrs:`data-action="snapshot-form" data-month="${r.month}"`})).join('')||empty('저장한 자산 기록이 없습니다.',action('snapshot-form','현재 자산 기록','','m-primary'))}</div>`;}
-function overviewDetails(data,{money}){const t=totals(data);return `${header('맞춤 대시보드')}<section class="m-budget-hero"><span>순자산</span><strong>${money(t.net)}</strong></section><dl class="m-facts">${pair('총자산',money(t.gross))}<div><dt>총부채${contextTip('총부채','남은 대출 원금과 미결제 카드 청구액의 합계입니다.')}</dt><dd>${money(t.debt)}</dd></div></dl><div class="m-workspace-list">${[['deposits',t.deposits],['stocks',t.stock],['retirement',t.retirement],['loans',t.loans],['cards',t.cards]].map(([k,v])=>row({name:titles[k],amount:money(v),href:route(k)})).join('')}${row({name:'월말 자산 전망',href:'#forecast'})}${row({name:'급여일 자산 전망',href:'#payday'})}</div>`;}
+function overviewDetails(data,{money,month}){
+ const t=totals(data),plan=budgetPlan(data,month);
+ return `${header('맞춤 대시보드')}
+  <section class="m-budget-hero"><span>순자산</span><strong>${money(t.net)}</strong></section>
+  <dl class="m-facts">${pair('총자산',money(t.gross))}<div><dt>총부채${contextTip('총부채','남은 대출 원금과 미결제 카드 청구액의 합계입니다.')}</dt><dd>${money(t.debt)}</dd></div></dl>
+  <div class="m-workspace-list">${[['deposits',t.deposits],['stocks',t.stock],['retirement',t.retirement],['loans',t.loans],['cards',t.cards]].map(([k,v])=>row({name:titles[k],amount:money(v),href:route(k)})).join('')}
+   ${row({name:'월말 자산 전망',href:'#forecast'})}${row({name:'급여일 자산 전망',href:'#payday'})}
+  </div>
+  <section class="m-menu-group m-workspace-month" aria-labelledby="m-workspace-month-title">
+   <h2 id="m-workspace-month-title">월 수입·지출</h2>
+   ${monthControl(month,{pickerId:'workspace-month',max:'2199-12'})}
+   ${details([['월 수입',money(plan.income)],['월 지출·상환',money(plan.expense)],['수입·지출 차액',money(plan.balance)]])}
+   <details class="m-workspace-breakdown"><summary>수입·지출 구성</summary>
+    ${details([
+     ['월급',money(plan.salary)],['기타 수입',money(plan.otherIncome)],
+     [plan.actualApplied?'실제 생활비':'생활비 계획',money(plan.livingExpense)],
+     ['대출 상환 계획',money(plan.loanDue)],['카드 청구',money(plan.cardBills)]
+    ])}
+   </details>
+   ${row({name:'월 예산 보기',href:'#budget'})}
+  </section>`;
+}
 function statistics(data,options){const {money,month}=options,f=monthlyFlow(data,month),loans=loanSchedule(data,month,1)[0];return `${header('기간별 분석')}${monthControl(month)}<section class="m-menu-group"><h2>등록된 월 수입·지출</h2>${details([['월급',money(f.salary)],['기타 수입',money(f.otherIncome)],...(f.actualApplied?[['가계부 생활비',money(f.livingExpense)]]:[['정기 지출 · 계좌',money(f.fixedCash)],['기타 지출',money(f.otherExpense)]]),['대출·카드 납부',money(f.payments)],['수입·지출 차액',money(f.balance)]])}</section><section class="m-menu-group"><h2>대출 예상</h2>${details([['상환 원금',money(loans.principal)],['납부 이자',money(loans.interest)]])}</section>${note('등록 일정과 현재 대출 조건을 기준으로 계산한 금액입니다.',true)}`;}
 function mobileAdvisor(state,options){
  const comparing=state.advisorMode==='repayment';

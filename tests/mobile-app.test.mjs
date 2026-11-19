@@ -34,6 +34,43 @@ async function app(data=domain.emptyPortfolio(),route='overview',{configured=fal
  const focus=async()=>{window.dispatchEvent(new Event('focus'));await tick();await tick();};
  return{document,window,Event,context,state,visit,click,change,fill,submit,focus};
 }
+test('mobile and desktop workspace show the same selected month and avoid double counting paid card bills',async()=>{
+ const data=domain.emptyPortfolio();
+ data.cashflow=[
+  {id:'salary',type:'salary',name:'급여',amount:3000000,date:'2026-11-25',repeat:'monthly'},
+  {id:'bonus',type:'other_income',name:'상여',amount:200000,date:'2026-11-26',repeat:'once'},
+  {id:'covered',type:'expense',name:'카드로 낸 생활비',amount:50000,date:'2026-11-10',repeat:'once',paymentSource:'card'}
+ ];
+ data.fixed=[{id:'rent',name:'월 정기비용',amount:700000,day:1,startMonth:'2026-11',paymentSource:'account'}];
+ data.actualSpending=[{month:'2026-11',amount:600000,applied:true}];
+ data.loans=[{id:'loan',name:'대출',balance:1000000,principal:50000,interest:10000,rate:12,day:21,method:'원금균등'}];
+ data.cards=[
+  {id:'paid',name:'카드 A',amount:120000,dueDate:'2026-11-14',paid:true},
+  {id:'pending',name:'카드 B',amount:80000,dueDate:'2026-11-28',paid:false}
+ ];
+ data.stocks=[{id:'stock',name:'투자',valuation:430000,cost:400000}];
+ data.retirement=[{id:'pension',name:'퇴직연금',amount:2340000,asOf:'2026-11-01'}];
+ const t=await app(data,'workspace');
+ const doc=t.document;
+ t.change('#workspace-month','2026-11');
+ assert.deepEqual([...doc.querySelectorAll('.m-workspace-month > .m-facts dd')].map(el=>el.textContent),
+  ['3,200,000원','860,000원','2,340,000원']);
+ assert.deepEqual([...doc.querySelectorAll('.m-workspace-breakdown dd')].map(el=>el.textContent),
+  ['3,000,000원','200,000원','600,000원','60,000원','200,000원']);
+ assert.match(doc.querySelector('.m-workspace-breakdown').textContent,/실제 생활비/);
+ t.context.location.search='?display=desktop';
+ await t.visit('workspace');
+ assert.deepEqual([...doc.querySelectorAll('.workspace-month-grid .page-metric-card > strong')].map(el=>el.textContent),
+  ['3,200,000원','860,000원','2,340,000원']);
+ assert.match(doc.querySelector('.workspace-asset-sources a[href="#stocks"]').textContent,/430,000원/);
+ assert.match(doc.querySelector('.workspace-asset-sources a[href="#retirement"]').textContent,/2,340,000원/);
+ t.change('#workspace-month','2026-12');
+ assert.deepEqual([...doc.querySelectorAll('.workspace-month-grid .page-metric-card > strong')].map(el=>el.textContent),
+  ['3,000,000원','760,000원','2,240,000원']);
+ doc.getElementById('privacy-toggle').onclick();
+ assert.ok([...doc.querySelectorAll('.workspace-month-grid .page-metric-card > strong')].every(el=>el.textContent==='••••••'));
+ assert.equal(t.state.writes,0);
+});
 test('mobile renders every route, real empty states and the reference navigation without modifying records',async()=>{
  for(const source of [domain.samplePortfolio(),domain.emptyPortfolio()]){const before=structuredClone(source),t=await app(source);for(const view of [...Object.keys(navigation.viewLabels),'menu']){await t.visit(view);assert.ok(t.document.querySelector('[data-mobile-app]'),view);assert.equal(t.document.querySelectorAll('.m-tabbar>a').length,5,view);assert.equal(t.document.querySelectorAll('.m-tabbar [aria-current=page]').length,1,view);assert.doesNotMatch(t.document.querySelector('#main').textContent,/NaN|undefined|Infinity/,view);assert.equal(t.document.querySelector('[data-page-shell]'),null,view);}assert.equal(t.state.writes,0);assert.deepEqual(source,before);}
 });

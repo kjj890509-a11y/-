@@ -242,12 +242,18 @@ export function monthlyFlow(data,month) {
   const records=cashflowForMonth(data,month);
   const sum=type=>records.filter(row=>row.type===type&&!isCardIncludedExpense(row)).reduce((n,row)=>n+row.amount,0);
   const salary=sum('salary'),otherIncome=sum('other_income'),otherExpense=sum('expense');
-  const payments=eventsForMonth(data,month).filter(row=>['loans','cards'].includes(row.type)&&!row.paid).reduce((n,row)=>n+row.amount,0);
+  let loanDue=0,cardDue=0;
+  for (const event of eventsForMonth(data,month)) {
+    if (event.paid) continue;
+    if (event.type==='loans') loanDue+=event.amount;
+    if (event.type==='cards') cardDue+=event.amount;
+  }
+  const payments=loanDue+cardDue;
   const fixed=fixedForMonth(data,month),fixedCash=fixed.filter(row=>row.paymentSource==='account').reduce((n,row)=>n+row.amount,0),fixedCard=fixed.filter(row=>row.paymentSource==='card').reduce((n,row)=>n+row.amount,0);
   const actual=actualSpendingForMonth(data,month),actualApplied=actual?.applied===true;
   const livingExpense=actualApplied?actual.amount:otherExpense+fixedCash;
   const income=salary+otherIncome,expense=payments+livingExpense;
-  return {salary,otherIncome,otherExpense,fixedCash,fixedCard,fixedTotal:fixedCash+fixedCard,payments,livingExpense,actualApplied,income,expense,balance:income-expense};
+  return {salary,otherIncome,otherExpense,fixedCash,fixedCard,fixedTotal:fixedCash+fixedCard,payments,loanDue,cardDue,livingExpense,actualApplied,income,expense,balance:income-expense};
 }
 export function fixedForMonth(data,month) {
  return (data.fixed||[]).filter(row=>row.startMonth<=month&&(!row.endMonth||row.endMonth>=month)).map(row=>({...row,occursOn:paymentDate(month,row.day)})).sort((a,b)=>a.occursOn.localeCompare(b.occursOn));
@@ -379,7 +385,7 @@ export function budgetPlan(data,month) {
   const flow=monthlyFlow(data,month);
   const paidCards=data.cards.filter(row=>row.paid&&row.dueDate.startsWith(month)).reduce((n,row)=>n+row.amount,0);
   const expense=flow.expense+paidCards,budget=(data.budgets||[]).find(row=>row.month===month);
-  return {...flow,expense,balance:flow.income-expense,limit:budget?.expenseLimit??null,target:budget?.savingsTarget??null,remaining:budget?budget.expenseLimit-expense:null};
+  return {...flow,expense,cardBills:flow.cardDue+paidCards,balance:flow.income-expense,limit:budget?.expenseLimit??null,target:budget?.savingsTarget??null,remaining:budget?budget.expenseLimit-expense:null};
 }
 export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  if(!validDate(startDate)||!Array.isArray(targetDates)||targetDates.some(date=>!validDate(date)||date<startDate))throw new Error('예상 기준일과 조회 날짜를 확인해 주세요.');
