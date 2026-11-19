@@ -1,4 +1,5 @@
 // Original local SVG artwork. Colors stay inside the icon, never on financial surfaces.
+const displayProviderLogos=true;
 const keys=['deposits','stocks','retirement','loans','cards','forecast','advisor','cashflow','schedule','budget','entry','history','housing','lease'];
 const aliases={assets:'deposits',overview:'deposits',workspace:'deposits',payday:'forecast',fixed:'schedule',planned:'schedule',records:'entry',statistics:'stocks'};
 export function financeIconKey(kind){return keys.includes(kind)?kind:Object.hasOwn(aliases,kind)?aliases[kind]:'deposits';}
@@ -53,6 +54,7 @@ function renderIcon(kind,brand=''){
  return `<img class="finance-icon${brand?' finance-brand':''}" src="${source}" width="40" height="40" alt="" aria-hidden="true" decoding="async" draggable="false">`;
 }
 export function renderFinanceIcon(kind,issuer=''){
+ if(!displayProviderLogos&&issuer)return renderMonogram(normalize(issuer)||'금');
  return renderIcon(kind,financeBrandKey(kind,issuer));
 }
 
@@ -70,7 +72,7 @@ function renderLoanRecordIcon(record){
  const brand=record.institution?.trim()
   ?financeBrandKey('loans',record.institution)
   :product?.brand||financeBrandKey('loans',record.name);
- if(brand){
+ if(brand&&displayProviderLogos){
   if(product?.brand===brand&&product.badge){
    return `<span class="finance-icon loan-brand-icon" aria-hidden="true">
     <img class="finance-brand" src="/finance-brand-${brand}.png" width="40" height="40" alt="" decoding="async" draggable="false">
@@ -96,7 +98,7 @@ export function renderFinanceRecordIcon(kind,record,issuer=record.institution||r
   if(/주식|증권|^etf$/.test(name))return renderIcon('stocks');
  }
  const brand=matchBrand(banks,record.institution)||matchBrand(banks,record.name,false);
- if(brand)return renderIcon(kind,brand);
+ if(brand&&displayProviderLogos)return renderIcon(kind,brand);
  if(!name||/^(예금|현금|적금|주식|연금|퇴직금|퇴직연금)$/.test(name))return renderIcon(kind);
  return renderMonogram(name);
 }

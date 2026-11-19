@@ -19,7 +19,7 @@ import {handleAdvisor} from '../server/advisor.mjs';
 
 const options={monthlyExtra:200000,lumpSum:1000000,reserve:5000000,months:12};
 const fakeKey='sk-test-fixture-'+ 'x'.repeat(32);
-const advice={recommendation:'balance',summary:'상환 순서를 비교했습니다.',reasons:['월별 예금 잔액을 함께 확인하세요.'],checks:['중도상환수수료를 확인하세요.']};
+const advice={summary:'상환 순서를 비교했습니다.',reasons:['월별 예금 잔액을 함께 확인하세요.'],checks:['중도상환수수료를 확인하세요.']};
 function data(){return domain.validatePortfolio(domain.samplePortfolio('2026-11-16'));}
 function environment(){
  const db=new DatabaseSync(':memory:');for(const file of ['0000_assets.sql','0001_advisor_usage.sql'])db.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));
@@ -27,7 +27,7 @@ function environment(){
  return {db,env:{OPENAI_API_KEY:fakeKey,DB:{prepare(sql){return {bind(...args){return {async first(){return db.prepare(sql).get(...args)||null;},async run(){return db.prepare(sql).run(...args);}};}};}}}};
 }
 function request(patch={},user='owner',origin='https://moa.test'){
- return new Request('https://moa.test/api/advisor',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,...(user?{'oai-authenticated-user-id':user}:{})},body:JSON.stringify({question:'상환 계획을 비교해 주세요.',options,revision:1,...patch})});
+ return new Request('https://moa.test/api/advisor',{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,...(user?{'oai-authenticated-user-id':user}:{})},body:JSON.stringify({question:'상환 계획을 비교해 주세요.',options,revision:1,dataSharingAccepted:true,...patch})});
 }
 test('the baseline scenario matches monthly forecasts and interest savings explain the net-worth change',()=>{
  const portfolio=data(),before=structuredClone(portfolio);
@@ -84,6 +84,7 @@ test('AI rejects anonymous, cross-site, stale and invalid requests before contac
  const {env}=environment();let calls=0;const dependencies={fetchImpl:async()=>{calls++;throw new Error('must not run');}};
  assert.equal((await handleAdvisor(request({},''),env,dependencies)).status,401);
  assert.equal((await handleAdvisor(request({},'owner','https://other.test'),env,dependencies)).status,403);
+ assert.equal((await handleAdvisor(request({dataSharingAccepted:false}),env,dependencies)).status,400);
  assert.equal((await handleAdvisor(request({revision:0}),env,dependencies)).status,409);
  assert.equal((await handleAdvisor(request({apiKey:''}),env,dependencies)).status,400);
  assert.equal((await handleAdvisor(request({},'other-owner'),env,dependencies)).status,400);
@@ -96,7 +97,7 @@ test('provider authentication and quota errors do not echo key material',async()
   const message=await response.text();assert.ok(!message.includes(fakeKey));assert.match(message,status===401?/운영자/:status===403?/모델/:/요청/);
  }
 });
-test('an incomplete AI response cannot be treated as a completed recommendation',async()=>{
+test('an incomplete AI response cannot be treated as a completed comparison',async()=>{
  const {env}=environment();
  const response=await handleAdvisor(request(),env,{fetchImpl:async()=>new Response(JSON.stringify({status:'incomplete',output_text:JSON.stringify(advice)}),{status:200})});
  assert.equal(response.status,502);assert.match((await response.json()).error,/끝까지/);
@@ -112,9 +113,11 @@ test('the advisor page keeps key material out of rendered HTML and hides advice 
 test('customers request AI advice without a key or model field and retain comparison controls',async()=>{
  const {document,window,Event}=parseHTML(readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));
  window.scrollTo=()=>{};const storageWrites=[];let requests=0;
+ const confirmation=document.getElementById('confirm-dialog');
+ confirmation.showModal=()=>{confirmation.open=true;};confirmation.close=()=>{confirmation.open=false;};
  const context=vm.createContext({...loansPage,...workspace,...navigation,...dashboard,...disclosure,...domain,...charts,...statsPage,...advisorPage,renderLoanForecastPanel,document,window,location:{hash:'#advisor'},localStorage:{getItem:()=>null,setItem:(...args)=>storageWrites.push(args)},Intl,structuredClone,crypto,setTimeout,clearTimeout,fetch:async(path,init)=>{
   if(path==='/api/advisor'&&!init)return {ok:true,json:async()=>({configured:true,model:'gpt-6.1-terra',reasoning:'xhigh'})};
-  if(path==='/api/advisor'){requests++;const body=JSON.parse(init.body);assert.equal(Object.hasOwn(body,'apiKey'),false);assert.equal(Object.hasOwn(body,'model'),false);assert.equal(body.options.monthlyExtra,500);return {ok:true,json:async()=>({advice,revision:1})};}
+  if(path==='/api/advisor'){requests++;const body=JSON.parse(init.body);assert.equal(Object.hasOwn(body,'apiKey'),false);assert.equal(Object.hasOwn(body,'model'),false);assert.equal(body.options.monthlyExtra,500);assert.equal(body.dataSharingAccepted,true);return {ok:true,json:async()=>({advice,revision:1})};}
   return {ok:true,json:async()=>({data:data(),revision:1})};
  }});
  vm.runInContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,''),context);await new Promise(setImmediate);
@@ -136,12 +139,21 @@ test('customers request AI advice without a key or model field and retain compar
  document.querySelector('[name="question"]').value='지금 추가로 상환하면 얼마나 유리한가요?';
  stage(1);assert.equal(document.querySelector('[name="monthlyExtra"]').value,'500');
  stage(3);assert.match(document.querySelector('[name="question"]').value,/추가로 상환/);
- document.querySelector('[data-advisor-consult]').dispatchEvent(new Event('click',{bubbles:true}));await new Promise(setImmediate);
+ const consult=()=>document.querySelector('[data-advisor-consult]').dispatchEvent(new Event('click',{bubbles:true}));
+ consult();
+ assert.equal(requests,0);
+ assert.match(document.querySelector('#confirm-body').textContent,/OpenAI/);
+ document.querySelector('#confirm-cancel').onclick();
+ await new Promise(setImmediate);
+ assert.equal(requests,0);
+ consult();
+ document.querySelector('#confirm-ok').onclick();
+ await new Promise(setImmediate);
  assert.equal(requests,1);assert.match(document.querySelector('.advisor-answer').textContent,/상환 순서/);
  assert.deepEqual(visibleStep(),['3']);
  document.querySelector('[data-ui-stage="2"].stage-next').dispatchEvent(new Event('click',{bubbles:true}));
  assert.deepEqual(visibleStep(),['2']);
- assert.equal(document.querySelector('.advisor-strategies .primary').textContent,'적은 잔액 우선');
+ assert.equal(document.querySelector('.advisor-strategies .primary').textContent,'높은 금리 우선');
  assert.equal(document.querySelector('.stats-trend .forecast-key').textContent,'기존 계획');
  // Only page-guide completion flags may persist; AI inputs, replies and credentials stay out of storage.
  for(const [key,value]of storageWrites){assert.equal(key,'moa-page-coachmarks-v1');assert.deepEqual(JSON.parse(value),['desktop:advisor']);}

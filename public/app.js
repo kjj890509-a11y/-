@@ -68,8 +68,10 @@ const status = (label,error=false) => {document.querySelector('[data-mobile-sync
 let toastTimer;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4200);}
 function openDialog(id){closeMonthPicker(document);const dialog=$(id);if(id==='editor')dialog.classList.toggle('history-editor',Boolean(dialog.querySelector('#plan-asOf')));enhanceEditorHelp(dialog);dialog.showModal();}
-function confirmAction(title,body,label='삭제하기'){
-  $('confirm-title').textContent=title;$('confirm-body').textContent=body;$('confirm-ok').textContent=label;openDialog('confirm-dialog');
+function confirmAction(title,body,label='삭제하기',buttonStyle='danger'){
+  const button=$('confirm-ok');
+  $('confirm-title').textContent=title;$('confirm-body').textContent=body;
+  button.textContent=label;button.className='button '+buttonStyle;openDialog('confirm-dialog');
   return new Promise(resolve=>{
     const end=value=>{ $('confirm-dialog').close();$('confirm-ok').onclick=null;$('confirm-cancel').onclick=null;$('confirm-dialog').oncancel=null;resolve(value);};
     $('confirm-ok').onclick=()=>end(true);$('confirm-cancel').onclick=()=>end(false);$('confirm-dialog').oncancel=e=>{e.preventDefault();end(false);};
@@ -86,7 +88,7 @@ async function loadData(){
   try{
     const data=await fetchPortfolio();
     portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
-  }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button></div>`;renderNav();}
+  }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">MY ASSET NOTE</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button><p><a href="/privacy.html">데이터 처리 안내</a></p></div>`;renderNav();}
 }
 async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
   if(saving)throw new Error('저장 중입니다. 잠시만 기다려 주세요.');
@@ -379,18 +381,27 @@ async function checkAdvisorService(){
  if(view==='advisor'||view==='overview'&&isMobileViewport(window,location))render();
 }
 async function requestAdvisor(next){
- if(advisorState?.busy)return;
+ if(advisorState?.busy||$('confirm-dialog').open)return;
  if(demo){toast('예시 모드를 종료한 뒤 실제 자산으로 상담해 주세요.');return;}
+ if(!await confirmAdvisorTransfer('repayment'))return;
  advisorState={...next,busy:true,advice:null,error:''};render();
  try{
-  const response=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:next.question,options:next.options,revision})});
+  const response=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:next.question,options:next.options,revision,dataSharingAccepted:true})});
   const result=await response.json();
   if(!response.ok)throw new Error(result.error||'AI 상담을 완료하지 못했습니다.');
   if(result.revision!==revision)throw new Error('상담 중 자산이 변경됐습니다. 현재 조건으로 다시 상담해 주세요.');
-  if(!['rate','balance'].includes(result.advice?.recommendation))throw new Error('상담 결과를 확인하지 못했습니다.');
-  advisorState={...advisorState,busy:false,advice:result.advice,strategy:result.advice.recommendation};toast('AI 추천 상환안을 반영했어요.');
+  if(typeof result.advice?.summary!=='string'||!Array.isArray(result.advice?.reasons)||!Array.isArray(result.advice?.checks))throw new Error('상담 결과를 확인하지 못했습니다.');
+  advisorState={...advisorState,busy:false,advice:result.advice};
  }catch(error){advisorState={...advisorState,busy:false,error:error.message||'AI 상담 연결을 확인해 주세요.'};}
  if(view==='advisor')render();
+}
+function confirmAdvisorTransfer(mode){
+ const fields=mode==='assets'
+  ?'질문, 최근 대화, 수입·지출과 자산·부채 요약, 월말·급여일 전망'
+  :'질문, 예금·대출 요약, 금리와 상환 조건, 상환 비교 결과';
+ return confirmAction('OpenAI로 상담 정보를 보낼까요?',
+  fields+'을(를) OpenAI에 보냅니다. 답변은 생성형 AI가 작성합니다. API 오남용 감시 목적으로 전송 내용이 통상 최대 30일 보관될 수 있습니다. 질문에 카드번호, 계좌번호, 주민등록번호, 비밀번호를 입력하지 마세요.',
+  '동의하고 보내기','primary');
 }
 function openLoanPaymentEditor(id){
  if(saving){toast('저장 중입니다. 잠시만 기다려 주세요.');return;}
@@ -625,11 +636,12 @@ function renderMobile(){
  mountPageCoachmarks(root,true);
 }
 async function requestAssetAdvisor(question){
- if(advisorState?.busy||advisorState?.service!=='ready'||demo)return;
+ if(advisorState?.busy||advisorState?.service!=='ready'||demo||$('confirm-dialog').open)return;
+ if(!await confirmAdvisorTransfer('assets'))return;
  advisorState.assetQuestion=question;advisorState.assetError='';advisorState.busy=true;render();
  const history=(advisorState.assetMessages||[]).slice(-2).flatMap(m=>[{role:'user',text:m.question.slice(0,2000)},{role:'assistant',text:m.answer.slice(0,2000)}]);
  try{
-  const res=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'assets',question,history,revision})}),result=await res.json();
+  const res=await fetch('/api/advisor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'assets',question,history,revision,dataSharingAccepted:true})}),result=await res.json();
   if(!res.ok)throw new Error(result.error||'AI 상담을 완료하지 못했습니다.');
   if(result.revision!==revision)throw new Error('상담 중 자산이 변경됐습니다. 현재 조건으로 다시 질문해 주세요.');
   if(typeof result.advice?.answer!=='string'||typeof result.advice?.summary!=='string'||!Array.isArray(result.advice?.checks))throw new Error('AI 답변을 확인하지 못했습니다.');
@@ -889,6 +901,28 @@ $('privacy-toggle').onclick=()=>{hidden=!hidden;localStorage.setItem('moa-hide-a
 $('data-settings').onclick=()=>openDialog('settings-dialog');
 $('mobile-settings').onclick=()=>openDialog('settings-dialog');
 $('open-demo').onclick=startDemo;
+$('erase-data').onclick=async()=>{
+ if(demo||loading||saving||advisorState?.busy||recordWorkspace.saving){
+  toast('예시 모드나 저장·상담을 마친 뒤 다시 시도해 주세요.');
+  return;
+ }
+ $('settings-dialog').close();
+ const accepted=await confirmAction('모아에 저장된 내역을 모두 지울까요?',
+  '현재 로그인한 계정의 자산·가계부 내역, 보기 설정, 상담 사용기록이 삭제됩니다. 지운 내역은 앱에서 복구할 수 없습니다. 필요한 내역은 먼저 백업해 주세요.',
+  '내 데이터 지우기');
+ if(!accepted)return;
+ saving=true;
+ status('내역 지우는 중');
+ try{
+  const response=await fetch('/api/portfolio',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'erase-my-data'})});
+  const result=await response.json();
+  if(!response.ok||result.erased!==true)throw new Error(result.error||'내역을 지우지 못했습니다.');
+  entryManagerState=createEntryManagerState();
+  cardBillingState=createCardBillingState();
+  location.reload();
+ }catch(error){status('삭제 실패',true);toast(error.message);}
+ finally{saving=false;}
+};
 $('export-data').onclick=()=>{
  if(demo){toast('예시 모드를 종료한 뒤 실제 내역을 백업해 주세요.');return;}
  const file=new Blob([JSON.stringify(portfolio,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=`moa-assets-${todayKST()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('백업 파일을 내려받았어요.');

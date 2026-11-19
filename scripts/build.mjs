@@ -3,14 +3,23 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const memberPreview=await readFile(path.join(root,'.openai/member-preview'),'utf8')
+ .then(value=>value.trim()==='true',error=>{if(error.code==='ENOENT')return false;throw error;});
 const assets={};
 for(const filename of await readdir(path.join(root,'public'))){
  if(filename.startsWith('finance-brand-')&&filename.endsWith('.png')){
+   if(memberPreview)continue;
    assets['/'+filename]={body:await readFile(path.join(root,'public',filename),'base64'),type:'image/png',encoding:'base64'};
    continue;
  }
  const mime={html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',mjs:'text/javascript; charset=utf-8',svg:'image/svg+xml'}[filename.split('.').at(-1)];
  if(mime)assets['/'+filename]={body:await readFile(path.join(root,'public',filename),'utf8'),type:mime};
+}
+if(memberPreview){
+ assets['/finance-icons.mjs'].body=assets['/finance-icons.mjs'].body.replace(
+  'const displayProviderLogos=true;', 'const displayProviderLogos=false;');
+ assets['/index.html'].body=assets['/index.html'].body.replace(
+  '<title>모아 — 나의 자산관리</title>', '<title>모아 · 회원용 테스트</title>');
 }
 // A new stylesheet gets a new URL even when an existing tab has cached the previous release.
 const indexPage = assets['/index.html'];

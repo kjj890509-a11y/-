@@ -1,5 +1,27 @@
 import {validatePortfolio, emptyPortfolio, recordCurrentSnapshot} from '../public/domain.mjs';
 const responseJSON = (data, status = 200) => new Response(JSON.stringify(data), {status, headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+
+async function eraseAccountData(request, env, userId) {
+  const body = await request.json().catch(() => null);
+  if (body?.confirmation !== 'erase-my-data') {
+    return responseJSON({error:'데이터 삭제를 다시 확인해 주세요.'},400);
+  }
+  // Retain only empty records and advance revisions. An open tab cannot
+  // restore erased financial data by saving its old revision.
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO portfolios (user_id, data, revision, updated_at)
+      VALUES (?, ?, 1, ?)
+      ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, revision = portfolios.revision + 1, updated_at = excluded.updated_at`)
+      .bind(userId, JSON.stringify(emptyPortfolio()), new Date().toISOString()),
+    env.DB.prepare(`INSERT INTO view_preferences (user_id, data, revision)
+      VALUES (?, ?, 1)
+      ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, revision = view_preferences.revision + 1`)
+      .bind(userId, JSON.stringify({version:1,tables:{}})),
+    env.DB.prepare('DELETE FROM advisor_usage WHERE actor = ?').bind('user:'+userId)
+  ]);
+  return responseJSON({erased:true});
+}
+
 export async function handleApi(request, env) {
   if (new URL(request.url).pathname !== '/api/portfolio') return responseJSON({error:'요청한 경로가 없습니다.'},404);
   const userId = request.headers.get('oai-authenticated-user-id');
@@ -12,9 +34,10 @@ export async function handleApi(request, env) {
       const row = await env.DB.prepare('SELECT data, revision, updated_at FROM portfolios WHERE user_id = ?').bind(userId).first();
       return responseJSON(row ? {data:JSON.parse(row.data),revision:row.revision,updatedAt:row.updated_at} : {data:emptyPortfolio(),revision:0,updatedAt:null});
     }
-    if (request.method !== 'PUT') return new Response(null,{status:405,headers:{Allow:'GET, PUT'}});
+    if (!['PUT','DELETE'].includes(request.method)) return new Response(null,{status:405,headers:{Allow:'GET, PUT, DELETE'}});
     if (request.headers.get('Origin') !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site') return responseJSON({error:'요청 출처를 확인할 수 없습니다.'},403);
     if (!request.headers.get('Content-Type')?.startsWith('application/json')) return responseJSON({error:'JSON 형식이 필요합니다.'},415);
+    if (request.method === 'DELETE') return await eraseAccountData(request,env,userId);
     const raw = await request.text();
     if (raw.length > 2_000_000) return responseJSON({error:'백업 파일 크기가 너무 큽니다.'},413);
     let body;

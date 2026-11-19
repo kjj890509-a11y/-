@@ -111,9 +111,9 @@ test('future date selection changes summary and composition from the same foreca
  await t.visit('payday');assert.ok(t.document.querySelector('[data-action=mobile-forecast-date]'));assert.match(t.document.querySelector('.m-forecast-summary').textContent,/급여 입금 후/);assert.equal(t.state.writes,0);
 });
 test('general asset consultation works without loans, sends only question/history/revision and masks prior answers',async()=>{
- const data=domain.emptyPortfolio();data.deposits=[{id:'account',name:'내 계좌',balance:1000000,rate:0}];const t=await app(data,'advisor',{configured:true});const form=t.document.querySelector('#asset-advisor-form');assert.equal(form.querySelector('button').disabled,false);t.change('#asset-advisor-question','다음 달 자산을 알려 주세요.');form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));await tick();await tick();
- assert.equal(t.state.advisorCalls.length,1);const sent=t.state.advisorCalls[0];assert.equal(sent.mode,'assets');assert.equal(sent.revision,1);assert.equal(sent.question,'다음 달 자산을 알려 주세요.');assert.equal(sent.data,undefined);assert.equal(sent.apiKey,undefined);assert.match(t.document.querySelector('.m-consult-answer').textContent,/급여일과 월말/);
- const next=t.document.querySelector('#asset-advisor-form');t.change('#asset-advisor-question','그럼 급여일에는요?');next.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));await tick();await tick();assert.equal(t.state.advisorCalls[1].history.length,2);assert.equal(t.state.writes,0);
+ const data=domain.emptyPortfolio();data.deposits=[{id:'account',name:'내 계좌',balance:1000000,rate:0}];const t=await app(data,'advisor',{configured:true});const form=t.document.querySelector('#asset-advisor-form');assert.equal(form.querySelector('button').disabled,false);t.change('#asset-advisor-question','다음 달 자산을 알려 주세요.');form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));assert.equal(t.state.advisorCalls.length,0);t.document.getElementById('confirm-ok').onclick();await tick();await tick();
+ assert.equal(t.state.advisorCalls.length,1);const sent=t.state.advisorCalls[0];assert.equal(sent.mode,'assets');assert.equal(sent.revision,1);assert.equal(sent.dataSharingAccepted,true);assert.equal(sent.question,'다음 달 자산을 알려 주세요.');assert.equal(sent.data,undefined);assert.equal(sent.apiKey,undefined);assert.match(t.document.querySelector('.m-consult-answer').textContent,/급여일과 월말/);
+ const next=t.document.querySelector('#asset-advisor-form');t.change('#asset-advisor-question','그럼 급여일에는요?');next.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));t.document.getElementById('confirm-ok').onclick();await tick();await tick();assert.equal(t.state.advisorCalls[1].history.length,2);assert.equal(t.state.writes,0);
  t.document.querySelector('#privacy-toggle').onclick();assert.equal(t.document.querySelector('.m-consult-answer'),null);assert.equal(t.document.querySelector('#asset-advisor-form'),null);
 });
 test('white home groups assets, expands the remaining rows and edits the existing account without writing display preferences',async()=>{
@@ -205,7 +205,7 @@ test('mobile category summaries show different financial facts and loan and card
 });
 test('records saved in the same asset category show distinct purpose and name icons',async()=>{
  const data=domain.emptyPortfolio();
- const names=['예금','주택','연금','전세금','로켓존','생활비'];
+ const names=['예금','주택 청약','퇴직연금','임차보증금','여행 준비','생활비'];
  data.deposits=names.map((name,index)=>({
   id:'account-'+index,name,balance:1000*(index+1),rate:0,maturity:'',
   institution:index===5?'신한은행':''
@@ -215,7 +215,7 @@ test('records saved in the same asset category show distinct purpose and name ic
   icon.getAttribute('src')||icon.textContent.trim());
  const expected=[
   '/finance-icon-deposits.svg','/finance-icon-housing.svg','/finance-icon-retirement.svg',
-  '/finance-icon-lease.svg','로','/finance-brand-shinhan-bank.png'
+  '/finance-icon-lease.svg','여','/finance-brand-shinhan-bank.png'
  ];
  assert.deepEqual(rowIcons('.m-account-list .finance-icon'),expected);
  t.click('[data-asset-manage=deposits]');
@@ -230,7 +230,7 @@ test('records saved in the same asset category show distinct purpose and name ic
 });
 test('loan icons distinguish product names with missing issuers and preserve explicit issuers',async()=>{
  const data=domain.emptyPortfolio();
- const names=['전세대출','bnk모바일','IBK사잇돌','I빅론','I-one 직장인스마트론','디올저축','상환용 대출','IBK사잇돌'];
+ const names=['임차보증금 대출','BNK 모바일 테스트','IBK 사잇돌 예시','i 빅론 예시','i-ONE 직장인스마트론 예시','연습용 신용대출','상환용 대출','IBK 사잇돌 예시'];
  data.loans=names.map((name,index)=>({
   id:'loan-'+index,name,balance:1000*(index+1),principal:100,interest:10,
   rate:4,day:20,method:'원금균등',
@@ -244,7 +244,7 @@ test('loan icons distinguish product names with missing issuers and preserve exp
  const expected=[
   '/finance-icon-lease.svg','/finance-brand-bnk-group.png',
   '/finance-brand-ibk-savings.png 사','/finance-brand-ibk-savings.png 빅',
-  '/finance-brand-ibk-bank.png','디','/finance-brand-daol-savings.png','/finance-brand-shinhan-bank.png'
+  '/finance-brand-ibk-bank.png','연','/finance-brand-daol-savings.png','/finance-brand-shinhan-bank.png'
  ];
  assert.deepEqual(signatures('.m-account-list'),expected);
  t.click('[data-asset-manage=loans]');
