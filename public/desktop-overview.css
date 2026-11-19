@@ -106,7 +106,7 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
   #main[data-view="overview"] + footer { display: none; }
 }
 
-/* Keep data panels white. Only the compact home cards use the panel tint. */
+/* Keep data panels white and apply tints at individual summaries. */
 body:not(.mobile-app) #main .page-content :is(
   .panel:not(.page-metrics), .table-panel, .page-metric-card, .summary-card, .stat-card,
   .workspace-widget:not(.widget-chosen), .disclosure-card, .loan-card,
@@ -116,6 +116,9 @@ body:not(.mobile-app) #main .page-content :is(
   border: 0;
   box-shadow: none;
   background: var(--desk-paper);
+}
+body:not(.mobile-app) #main[data-view="planned"] .page-content > .planning-metrics > .page-metric-card {
+  background-color: color-mix(in srgb, var(--brand-accent) 18%, var(--desk-paper));
 }
 body:not(.mobile-app) #main .page-content .entry-tile-icon {
   border: 0;
