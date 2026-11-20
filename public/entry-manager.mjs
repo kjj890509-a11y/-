@@ -6,7 +6,7 @@ const order=['cashflow','fixed','deposits','stocks','retirement','loans','cards'
 const won=new Intl.NumberFormat('ko-KR');
 const amountKeys={cashflow:'amount',fixed:'amount',deposits:'balance',stocks:'valuation',retirement:'amount',loans:'balance',cards:'amount'};
 const spec={
- name:['이름','text'],institution:['금융기관·회사','text'],note:['메모','text'],balance:['현재 잔액','money'],valuation:['현재 평가액','money'],cost:['총매입금액','money'],amount:['금액','money'],rate:['연 이율 · %','number'],maturity:['만기일','date'],monthlyContribution:['회사 월 납입액','money'],contributionDate:['첫 납입 예정일','date'],asOf:['금액 기준일','date'],remainingMonths:['남은 납부 횟수','number'],nextPaymentDate:['다음 납부일','date'],day:['매월 납부일','number'],dueDate:['결제일','date'],date:['일자·반복 시작일','date'],startMonth:['시작월','month'],endMonth:['종료월','month'],
+ name:['이름','text'],institution:['금융기관·회사','text'],note:['메모','text'],balance:['현재 잔액','money'],valuation:['현재 평가액','money'],cost:['총매입금액','money'],amount:['금액','money'],rate:['연 이율 · %','number'],maturity:['만기일','date'],monthlyContribution:['기본 월 납입액','money'],contributionDate:['첫 납입 예정일','date'],asOf:['금액 기준일','date'],remainingMonths:['남은 납부 횟수','number'],nextPaymentDate:['다음 납부일','date'],day:['매월 납부일','number'],dueDate:['결제일','date'],date:['일자·반복 시작일','date'],startMonth:['시작월','month'],endMonth:['종료월','month'],
  type:['수입·지출 구분','select',Object.entries(FLOW_LABELS)],repeat:['반복','select',[['once','한 번'],['monthly','매월']]],paid:['결제 상태','boolean',[['false','결제 예정'],['true','결제 완료']]],includeInForecast:['예상 반영','boolean',[['true','포함'],['false','제외']]],paymentSource:['결제 방식','select',[['account','계좌 결제'],['card','카드 청구액에 포함 · 중복 제외']]]
 };
 const columns={
@@ -24,7 +24,7 @@ const normalize=(key,value)=>{
  if(type==='boolean'){if(!['true','false',true,false].includes(value))throw new Error('선택 값을 확인해 주세요.');return value===true||value==='true';}
  return String(value??'').trim();
 };
-const equal=(a,b)=>Object.is(a,b);
+const equal=(a,b)=>Object.is(a,b)||Array.isArray(a)&&Array.isArray(b)&&JSON.stringify(a)===JSON.stringify(b);
 function changedValue(key,value,base){try{return !equal(normalize(key,value),base??'');}catch{return true;}}
 export function stageEntryField(state,data,kind,id,key,value){
  if(!KINDS.includes(kind)||!spec[key]||!(columns[kind].includes(key)||columns.all.includes(key)))throw new Error('수정할 항목을 확인해 주세요.');
