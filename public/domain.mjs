@@ -109,8 +109,21 @@ export function validatePortfolio(input) {
         if (!validDate(row.asOf)) throw new Error('퇴직연금·퇴직금 기준일을 입력해 주세요.');
         result.asOf = row.asOf;
         const date=row.contributionDate??'';
-        if(typeof date!=='string'||(date&&!validDate(date))||(result.monthlyContribution>0&&!validDate(date)))throw new Error('회사 월 납입액의 첫 납입 예정일을 입력해 주세요.');
+        const endMonth=row.contributionEndMonth??'',changes=row.contributionChanges??[];
+        if(!Array.isArray(changes)||changes.length>24)throw new Error('월 납입액 변경은 최대 24건까지 등록할 수 있습니다.');
+        if(typeof date!=='string'||(date&&!validDate(date))||(!date&&(result.monthlyContribution>0||endMonth||changes.length)))throw new Error('첫 납입 예정일을 입력해 주세요.');
         result.contributionDate=date;
+        const start=date.slice(0,7);
+        if(endMonth!==''&&(!validMonth(endMonth)||endMonth<start))throw new Error('마지막 납입월은 첫 납입월과 같거나 그 이후여야 합니다.');
+        result.contributionEndMonth=endMonth;
+        const months=new Set();
+        result.contributionChanges=changes.map(change=>{
+          if(!change||!validMonth(change.month)||change.month<start||endMonth&&change.month>endMonth)throw new Error('변경 적용월은 첫 납입월과 마지막 납입월 사이에서 선택해 주세요.');
+          if(months.has(change.month))throw new Error('같은 달의 월 납입액 변경은 한 번만 등록할 수 있습니다.');
+          if(!Number.isSafeInteger(change.amount)||change.amount<0||change.amount>1_000_000_000_000_000)throw new Error('변경할 월 납입액을 0 이상의 정수(원)로 입력해 주세요.');
+          months.add(change.month);
+          return {month:change.month,amount:change.amount};
+        }).sort((a,b)=>a.month.localeCompare(b.month));
       }
       if (kind === 'deposits') {
         if (row.maturity && !validDate(row.maturity)) throw new Error('만기일을 확인해 주세요.');
@@ -232,8 +245,26 @@ export function cashflowForMonth(data,month,includeExcluded=false) {
 export function scheduledCashflows(data,date=todayKST(),range='upcoming') {
  return (data.cashflow||[]).filter(row=>row.repeat==='once'&&['other_income','expense'].includes(row.type)).filter(row=>range==='all'||(range==='past'?row.date<=date:row.date>date)).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name));
 }
+function retirementContributionForMonth(row,month) {
+ if(!validDate(row.contributionDate)||month<row.contributionDate.slice(0,7)||row.contributionEndMonth&&month>row.contributionEndMonth)return null;
+ let amount=row.monthlyContribution||0,appliedMonth='';
+ for(const change of row.contributionChanges||[]){
+  if(change.month>month||change.month<appliedMonth)continue;
+  appliedMonth=change.month;amount=change.amount;
+ }
+ return amount>0?{id:row.id,name:row.name,amount,date:paymentDate(month,Number(row.contributionDate.slice(8)))}:null;
+}
 export function retirementContributionsForMonth(data,month) {
- return (data.retirement||[]).filter(row=>(row.monthlyContribution||0)>0&&validDate(row.contributionDate)&&row.contributionDate.slice(0,7)<=month).map(row=>({id:row.id,name:row.name,amount:row.monthlyContribution,date:paymentDate(month,Number(row.contributionDate.slice(8)))}));
+ return (data.retirement||[]).map(row=>retirementContributionForMonth(row,month)).filter(Boolean);
+}
+export function nextRetirementContribution(row,today=todayKST()) {
+ if(!validDate(row.contributionDate))return null;
+ let month=[today.slice(0,7),row.contributionDate.slice(0,7)].sort().at(-1);
+ if(paymentDate(month,Number(row.contributionDate.slice(8)))<=today)month=shiftMonth(month,1);
+ const next=retirementContributionForMonth(row,month);
+ if(next)return next;
+ const resume=(row.contributionChanges||[]).filter(change=>change.amount>0&&change.month>month).sort((a,b)=>a.month.localeCompare(b.month))[0];
+ return resume?retirementContributionForMonth(row,resume.month):null;
 }
 export function actualSpendingForMonth(data,month) {
   return (data.actualSpending||[]).find(row=>row.month===month);

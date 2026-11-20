@@ -1,5 +1,5 @@
 import {createWorkspaceState,renderWorkspace,mountWorkspace,unmountWorkspace,defaultDashboard,dashboardConfig,widgetTemplates} from '/workspace.mjs';
-import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense} from '/domain.mjs';
+import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, nextRetirementContribution, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense} from '/domain.mjs';
 import {renderTrendChart, mountTrendCharts} from '/chart.mjs';
 import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
@@ -417,16 +417,16 @@ function openLoanPaymentEditor(id){
 }
 
 const descriptions={fixed:'월세·보험료·통신비처럼 매월 나가는 금액을 관리하세요.',cashflow:'내 월급과 기타 수입·지출을 기록하고 매달 남는 금액을 확인하세요.',stocks:'증권사별 잔고와 평가손익을 한곳에서 확인하세요.',loans:'잔액부터 이율, 매월 갚는 원금과 이자까지 꼼꼼하게.',retirement:'오늘의 노력이 쌓인, 내일의 든든한 자산.',deposits:'생활비 통장부터 정기예금까지, 내 돈이 모인 곳.',cards:'카드사별 카드 청구액을 미리 확인하고 준비하세요.'};
-function categoryMetrics(kind){const t=totals(portfolio);const sum=(key)=>portfolio[kind].reduce((n,r)=>n+(r[key]||0),0);
+function categoryMetrics(kind){const t=totals(portfolio);
  if(kind==='cashflow'){const f=monthlyFlow(portfolio,month);return metric('월급',money(f.salary))+metric('기타 수입',money(f.otherIncome))+metric('기타 지출',money(f.otherExpense));}
  if(kind==='stocks')return metric('총평가액',money(t.stock))+metric('총매입금액',money(t.cost))+metric('평가손익',money(t.profit),t.profitRate==null?'매입금액 입력 후 수익률을 계산해요':`수익률 ${percent(t.profitRate)}`,t.profit>=0?'positive':'negative');
  if(kind==='loans'){const weighted=t.loans?portfolio.loans.reduce((n,r)=>n+r.balance*r.rate,0)/t.loans:0;const asOf=todayKST(),annual=loanSchedule(portfolio,asOf.slice(0,7),12,asOf).reduce((n,r)=>n+r.interest,0);return metric('현재 납부 이자 합계',money(t.monthlyInterest),`향후 12개월 예상 이자 ${money(annual)}`)+metric('대출 잔액',money(t.loans))+metric('월 원금 + 이자',money(t.monthlyPrincipal+t.monthlyInterest),`원금 ${money(t.monthlyPrincipal)} · 이자 ${money(t.monthlyInterest)}`)+metric('잔액 가중평균 연 이율',`${weighted.toFixed(2)}%`,'대출잔액 기준 가중 평균','',true);}
  if(kind==='fixed'){const f=monthlyFlow(portfolio,month);return metric('월 고정지출 합계',money(f.fixedTotal),'선택한 월에 적용되는 전체 항목','',true)+metric('계좌 결제',money(f.fixedCash),'지출 계획·자산 전망에 반영','',true)+metric('카드 청구액에 포함',money(f.fixedCard),'카드대금과 중복 합산하지 않아요','',true);}
- if(kind==='retirement'){const projected=forecastMonths(portfolio,todayKST(),12).at(-1);return metric('현재 퇴직연금·퇴직금',money(t.retirement),`등록 ${portfolio.retirement.length}건 · 최근 기준일 ${portfolio.retirement.map(r=>r.asOf).sort().at(-1)?.replaceAll('-','.')||'—'}`)+metric('회사 월 납입액',money(sum('monthlyContribution')),'회사에서 퇴직연금 계좌로 납입하는 금액','',true)+metric('12개월 예상 금액',money(projected.retirement),projected.month+' 월말 · 운용 수익률 변동 미반영');}
+ if(kind==='retirement'){const today=todayKST(),projected=forecastMonths(portfolio,today,12).at(-1);const nextTotal=portfolio.retirement.reduce((sum,row)=>sum+(nextRetirementContribution(row,today)?.amount||0),0);return metric('현재 퇴직연금·퇴직금',money(t.retirement),`등록 ${portfolio.retirement.length}건 · 최근 기준일 ${portfolio.retirement.map(r=>r.asOf).sort().at(-1)?.replaceAll('-','.')||'—'}`)+metric('다음 납입 예정액',money(nextTotal),'항목별 다음 납입 예정액 합계','',true)+metric('12개월 예상 금액',money(projected.retirement),projected.month+' 월말 · 운용 수익률 변동 미반영');}
  if(kind==='deposits')return metric('전체 예금 잔액',money(t.deposits))+metric('등록 계좌',`${portfolio.deposits.length}개`)+metric('연 예상 이자 · 세전',money(Math.round(portfolio.deposits.reduce((n,r)=>n+r.balance*r.rate/100,0))),'잔액 × 연 이율의 단순 추정치','',true);
  const due=portfolio.cards.filter(r=>!r.paid);return metric('미결제 합계',money(t.cards))+metric('이번 달 미결제',money(due.filter(r=>r.dueDate.startsWith(todayKST().slice(0,7))).reduce((n,r)=>n+r.amount,0)))+metric('가장 가까운 결제일',due.filter(r=>r.dueDate>=todayKST()).map(r=>r.dueDate).sort()[0]?.replaceAll('-','.')||'—',`결제일 경과 ${due.filter(r=>r.dueDate<todayKST()).length}건`);
 }
-const tableHeaders={fixed:['고정지출명','금액','납부일','적용 기간','결제 방식',''],cashflow:['항목명','구분','금액','일자 · 시작일','반복',''],stocks:['계좌 · 종목명','총매입금액','총평가액','평가손익',''],loans:['대출명','대출 잔액','적용 연 이율','월 원금','이번 납부 이자','이번 상환액','상환일',''],retirement:['퇴직연금·퇴직금 이름','금융기관 · 회사','현재 금액','회사 월 납입액','기준일',''],deposits:['예금명','금융기관','잔액','연 이율','만기일',''],cards:['카드사 · 카드명','카드 청구액','결제일','상태','']};
+const tableHeaders={fixed:['고정지출명','금액','납부일','적용 기간','결제 방식',''],cashflow:['항목명','구분','금액','일자 · 시작일','반복',''],stocks:['계좌 · 종목명','총매입금액','총평가액','평가손익',''],loans:['대출명','대출 잔액','적용 연 이율','월 원금','이번 납부 이자','이번 상환액','상환일',''],retirement:['퇴직연금·퇴직금 이름','금융기관 · 회사','현재 금액','기본 월 납입액','기준일',''],deposits:['예금명','금융기관','잔액','연 이율','만기일',''],cards:['카드사 · 카드명','카드 청구액','결제일','상태','']};
 function rowHTML(kind,r){
  const nameText=`<strong class="name">${escapeHTML(r.name)}</strong><small>${escapeHTML(r.institution||r.note||'')}</small>`;
  const issuer=kind==='loans'?r.institution||r.name:kind==='cards'?portfolio.cardAccounts?.find(card=>card.id===r.cardAccountId)?.name||r.name:'';
@@ -437,7 +437,13 @@ function rowHTML(kind,r){
  let cells='';
  if(kind==='stocks'){const profit=r.valuation-r.cost;cells=name+num(money(r.cost))+num(money(r.valuation))+num(`${money(profit)}<small>${r.cost?percent(profit/r.cost*100):'—'}</small>`,profit>=0?'positive':'negative');}
  if(kind==='loans')cells=name+num(money(r.balance))+num(`${r.rate}%`)+num(money(Math.min(r.balance,r.principal)))+num(`${money(interestForLoan(r))}<small>${r.interestMode==='estimate'?'잔액·이율 자동 추정':'이번 납부액 직접 입력'}</small>`)+num(money(Math.min(r.balance,r.principal)+interestForLoan(r)))+`<td>매월 ${r.day}일<small>${escapeHTML(r.method)}</small></td>`;
- if(kind==='retirement')cells=name+`<td>${escapeHTML(r.institution||'—')}</td>`+num(money(r.amount))+num(`${money(r.monthlyContribution||0)}<small>${r.monthlyContribution?'매월 '+Number(r.contributionDate.slice(8))+'일 · '+r.contributionDate.slice(0,7)+'부터':'미설정'}</small>`)+`<td>${r.asOf.replaceAll('-','.')}</td>`;
+ if(kind==='retirement'){
+  const next=nextRetirementContribution(r),details=[];
+  if(r.contributionDate)details.push('매월 '+Number(r.contributionDate.slice(8))+'일 · '+r.contributionDate.slice(0,7)+'부터');
+  if(r.contributionEndMonth)details.push('마지막 '+r.contributionEndMonth);
+  if(r.contributionChanges?.length)details.push(next?'다음 '+next.date+' · '+money(next.amount):'남은 납입 일정 없음');
+  cells=name+`<td>${escapeHTML(r.institution||'—')}</td>`+num(money(r.amount))+num(`${money(r.monthlyContribution||0)}${details.map(line=>`<small>${line}</small>`).join('')}`)+`<td>${r.asOf.replaceAll('-','.')}</td>`;
+ }
  if(kind==='deposits')cells=name+`<td>${escapeHTML(r.institution||'—')}</td>`+num(money(r.balance))+num(`${r.rate}%`)+`<td>${r.maturity?r.maturity.replaceAll('-','.'): '만기 없음'}</td>`;
  if(kind==='fixed')cells=name+num(money(r.amount))+`<td>매월 ${r.day}일</td><td>${r.startMonth}<small>${r.endMonth?r.endMonth+'까지':'종료월 없음'}</small></td><td><span class="status-pill">${r.paymentSource==='card'?'카드 청구액에 포함 · 중복 제외':'계좌 결제'}</span></td>`;
  if(kind==='cashflow')cells=name+`<td><span class="status-pill ${r.type!=='expense'?'paid':''}">${FLOW_LABELS[r.type]}</span></td>`+num(`${r.type==='expense'?'−':'+'} ${money(r.amount)}`,r.type!=='expense'?'income-color':'')+`<td>${(r.occursOn||r.date).replaceAll('-','.')}<small>${r.repeat==='monthly'?'시작 '+r.date.replaceAll('-','.'):'해당 날짜 1회'}</small></td><td>${r.repeat==='monthly'?'매월 반복':'1회'}${r.includeInForecast===false?'<small>예상 계산 제외</small>':''}${isCardIncludedExpense(r)?'<small>카드 청구액에 포함 · 중복 제외</small>':''}</td>`;
@@ -471,9 +477,33 @@ function syncLoanPlan(){
 }
 function syncRetirementContribution(){
  if(editorKind!=='retirement'||!$('field-monthlyContribution')||!$('field-contributionDate'))return;
- const enabled=Number($('field-monthlyContribution').value.replaceAll(',',''))>0,input=$('field-contributionDate');
+ const enabled=Number($('field-monthlyContribution').value.replaceAll(',',''))>0
+  ||Boolean($('field-contributionEndMonth').value)||Boolean($('retirement-changes').children.length);
+ const input=$('field-contributionDate');
  input.closest('.field').hidden=!enabled;input.required=enabled;
  const label=input.closest('.field').querySelector('label small');if(label)label.textContent=enabled?'필수':'선택';
+ $('retirement-change-add').disabled=$('retirement-changes').children.length>=24;
+}
+function retirementChangeFields({month='',amount=''}={}){
+ const id='retirement-change-'+crypto.randomUUID();
+ return `<div class="retirement-change-row" data-retirement-change>
+  <div class="field"><label for="${id}-month-button">변경 적용월</label>${renderMonthPicker({id:id+'-month',value:month,label:'변경 적용월',required:true})}</div>
+  <div class="field"><label for="${id}-amount">변경 후 월 납입액</label><div class="input-wrap"><input id="${id}-amount" type="text" data-contribution-amount inputmode="numeric" maxlength="21" value="${escapeHTML(typeof amount==='number'?wonFormat.format(amount):amount)}" required><span>원</span></div></div>
+  <button type="button" class="button secondary small" data-action="retirement-change-remove">삭제</button>
+ </div>`;
+}
+function readRetirementChanges(){
+ return [...$('retirement-changes').children].map(row=>({
+  month:row.querySelector('[data-month-value]').value,
+  amount:row.querySelector('[data-contribution-amount]').value
+ }));
+}
+function retirementPlanFields(changes){
+ return `<fieldset class="retirement-plan full-width"><legend>월 납입액 변경</legend>
+  <p class="field-hint">연봉 인상 등으로 금액이 바뀌면 적용월과 변경 후 월 납입액을 입력하세요. 그 달부터 새 금액을 반영합니다.</p>
+  <div id="retirement-changes">${(changes||[]).map(row=>retirementChangeFields(row)).join('')}</div>
+  <button type="button" class="button secondary small" id="retirement-change-add" data-action="retirement-change-add">＋ 납입액 변경 추가</button>
+ </fieldset>`;
 }
 function loanForecastPanel(){
  return renderLoanForecastPanel(portfolio,{formatMoney:money,loanId:loanForecastId,period:loanForecastPeriod});
@@ -658,7 +688,7 @@ const fields={
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['paymentSource','결제 방식','paymentSource',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
  stocks:[['name','계좌 · 종목명','text',true,'예: 국내주식 계좌 / 삼성전자'],['institution','증권사','text',false,'예: 미래에셋증권'],['cost','총매입금액','money',true,'0'],['valuation','총평가액','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
  loans:[['name','대출명','text',true,'예: 주택담보대출'],['institution','금융기관','text',false,'예: 신한은행'],['balance','현재 대출 잔액','money',true,'0'],['rate','적용 연 이율','rate',true,'예: 4.2'],['calculationMode','상환 계산 기준','calculationMode',true,''],['method','상환 방식','select',true,''],['remainingMonths','남은 납부 횟수 · 거치 포함','months',true,'예: 36'],['graceMonths','그중 이자만 내는 거치 횟수','grace',true,'0'],['nextPaymentDate','다음 납부 예정일','date',true,''],['day','이후 매월 납부일','day',true,'예: 25'],['principal','매월 상환 원금','money',true,'0'],['interestMode','현재 이자 입력 방식','interestMode',true,''],['interest','이번 납부 이자','money',true,'0'],['note','메모','textarea',false,'선택 입력']],
- retirement:[['name','퇴직금·연금 이름','text',true,'예: 퇴직연금 DC / 예상 퇴직금'],['institution','금융기관 · 회사','text',false,'예: 삼성생명'],['amount','현재 금액','money',true,'0'],['monthlyContribution','회사 월 납입액','money',true,'0'],['contributionDate','첫 납입 예정일','date',false,''],['asOf','금액 기준일','date',true,''],['note','메모','textarea',false,'세전/세후 여부 등을 기록하세요']],
+ retirement:[['name','퇴직금·연금 이름','text',true,'예: 퇴직연금 DC / 예상 퇴직금'],['institution','금융기관 · 회사','text',false,'예: 삼성생명'],['amount','현재 금액','money',true,'0'],['monthlyContribution','기본 회사 월 납입액','money',true,'0'],['contributionDate','첫 납입 예정일','date',false,''],['contributionEndMonth','마지막 납입월','month',false,''],['asOf','금액 기준일','date',true,''],['note','메모','textarea',false,'세전/세후 여부 등을 기록하세요']],
  deposits:[['name','계좌명','text',true,'예: 생활비 통장 / 정기예금'],['institution','금융기관','text',false,'예: 토스뱅크'],['balance','현재 잔액','money',true,'0'],['rate','연 이율','rate',true,'0'],['maturity','만기일','date',false,''],['note','메모','textarea',false,'선택 입력']],
  cards:[['name','카드사 · 카드명','text',true,'예: 현대카드 M'],['amount','결제예정액','money',true,'0'],['dueDate','결제일','date',true,''],['paid','결제 상태','paid',false,''],['note','메모','textarea',false,'선택 입력']]
 };
@@ -680,11 +710,11 @@ function openEditor(kind,id,rowOverride){
   else if(type==='flowType'||type==='repeat'){const options=type==='flowType'?Object.entries(FLOW_LABELS):[['once','해당 날짜 1회'],['monthly','매월 반복']];input=`<select id="field-${key}" name="${key}" required>${options.map(([v,label])=>`<option value="${v}" ${value===v?'selected':''}>${label}</option>`).join('')}</select>`;}
   else if(type==='select')input=`<select id="field-${key}" name="${key}" required>${['원금균등','원리금균등','만기일시','기타'].map(v=>`<option value="${v}" ${value===v?'selected':''}>${v==='원금균등'?'원금균등분할 · 원금 일정, 이자 감소':v==='원리금균등'?'원리금균등 · 총 납부액 일정':v==='만기일시'?'만기일시 · 마지막에 원금 상환':v}</option>`).join('')}</select>`;
   else if(type==='paid')input=`<select id="field-${key}" name="${key}"><option value="false">결제 예정</option><option value="true" ${value===true?'selected':''}>결제 완료</option></select>`;
-  else if(type==='month')input=renderMonthPicker({id:'field-'+key,name:key,value,label,required,rangeStartId:key==='endMonth'?'field-startMonth':'',emptyLabel:key==='endMonth'?'종료월 없음':'월 선택',clearLabel:key==='endMonth'?'종료월 없음':'선택 지우기'});
+  else if(type==='month')input=renderMonthPicker({id:'field-'+key,name:key,value,label,required,rangeStartId:key==='endMonth'?'field-startMonth':'',emptyLabel:key==='endMonth'?'종료월 없음':key==='contributionEndMonth'?'마지막 납입월 없음':'월 선택',clearLabel:['endMonth','contributionEndMonth'].includes(key)?'종료월 없음':'선택 지우기'});
   else if(type==='textarea')input=`<textarea id="field-${key}" name="${key}" maxlength="500" placeholder="${placeholder}" rows="2">${escapeHTML(value)}</textarea>`;
   else input=`<div class="input-wrap"><input id="field-${key}" name="${key}" type="${type==='money'?'text':['rate','day','months','grace'].includes(type)?'number':type}" ${required?'required':''} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='rate'?'min="0" max="100" step="0.001"':type==='day'?'min="1" max="31" step="1"':type==='months'?'min="1" max="600" step="1"':type==='grace'?'min="0" max="599" step="1"':type==='text'?'maxlength="100"':''} value="${escapeHTML(type==='money'?wonFormat.format(value):value)}" placeholder="${placeholder}">${type==='money'?'<span>원</span>':type==='rate'?'<span>%</span>':type==='day'?'<span>일</span>':''}</div>`;
-  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}${type==='month'?'-button':''}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${['cashflow','fixed'].includes(kind)&&key==='paymentSource'?'<p class="field-hint">카드 청구액에 이미 들어 있는 지출은 중복 제외를 선택하세요. 내역은 유지하고 추가로 차감하지 않습니다. 실제 카드 청구액은 카드 청구에서 별도로 입력하세요.</p>':''}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':''}</div>`;
- }).join('')+`<p class="form-notice full-width" ${demo?'':'data-form-help'}>${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
+  return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}${type==='month'?'-button':''}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${['cashflow','fixed'].includes(kind)&&key==='paymentSource'?'<p class="field-hint">카드 청구액에 이미 들어 있는 지출은 중복 제외를 선택하세요. 내역은 유지하고 추가로 차감하지 않습니다. 실제 카드 청구액은 카드 청구에서 별도로 입력하세요.</p>':''}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':key==='contributionEndMonth'?'<p class="field-hint">이 달까지 납입하고 다음 달부터 멈춥니다.</p>':''}</div>`;
+ }).join('')+(kind==='retirement'?retirementPlanFields(row.contributionChanges):'')+`<p class="form-notice full-width" ${demo?'':'data-form-help'}>${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
  if(kind==='loans'){const preview=document.createElement('section');preview.id='loan-plan-preview';preview.className='loan-plan-preview full-width';preview.setAttribute('aria-live','polite');$('form-fields').insertBefore(preview,$('form-fields').querySelector('.form-notice'));syncLoanPlan();}else syncRetirementContribution();
  syncExpensePaymentSource();
  $('record-form').onsubmit=submitRecord;
@@ -699,6 +729,7 @@ function showAddMenu(){
 function rememberEntryDraft(){
  if(!entryEditing)return;
  entryDrafts[entryActiveType]=Object.fromEntries(fields[editorKind].map(([key])=>[key,$('field-'+key)?.value??'']));
+ if(editorKind==='retirement')entryDrafts[entryActiveType].contributionChanges=readRetirementChanges();
 }
 function syncExpensePaymentSource(){
  const field=$('field-paymentSource');if(editorKind!=='cashflow'||!field)return;const expense=$('field-type')?.value==='expense';field.closest('.field').hidden=!expense;field.disabled=!expense;if(!expense)setEntryField('paymentSource','account');
@@ -713,7 +744,7 @@ function startEntryEditor(type,{capture=true,message=''}={}){
  const preset=entryPresets.find(p=>p.id===type);if(!preset)return;
  if(capture&&entryEditing&&$('editor').open)rememberEntryDraft();
  entryEditing=false;if($('editor').open)$('editor').close();
- entryActiveType=type;month=todayKST().slice(0,7);openEditor(preset.kind);entryEditing=true;
+ entryActiveType=type;month=todayKST().slice(0,7);openEditor(preset.kind,null,preset.kind==='retirement'?{contributionChanges:entryDrafts[type]?.contributionChanges}:undefined);entryEditing=true;
  $('editor-title').textContent=preset.label+' 등록';
  if(preset.kind==='cashflow')$('field-type').closest('.field').hidden=true;
  const defaults={...preset.defaults};if(preset.future)defaults.date=shiftCalendarDay(todayKST(),1);
@@ -731,6 +762,10 @@ async function submitRecord(e){
  const fromEntry=entryEditing,entryType=entryActiveType,recordKind=editorKind,keepEntering=fromEntry&&Boolean($('entry-continue')?.checked);
  const values=new FormData(e.target),record={id:editingId||crypto.randomUUID()};
  for(const [key,,type]of fields[recordKind]){const v=values.get(key);record[key]=type==='money'?Number(String(v).replaceAll(',','')):['rate','day','months','grace'].includes(type)?Number(v):(type==='paid'||type==='forecastFlag')?v==='true':String(v||'').trim();}
+ if(recordKind==='retirement')record.contributionChanges=readRetirementChanges().map(({month,amount})=>{
+  const raw=amount.trim().replaceAll(',','');
+  return {month,amount:/^\d+$/.test(raw)?Number(raw):NaN};
+ });
  if(recordKind==='cashflow'&&record.type!=='expense')record.paymentSource='account';
  if(recordKind==='cards'&&!editingId&&values.get('mobileCardAccountId')){const account=portfolio.cardAccounts.find(r=>r.id===values.get('mobileCardAccountId'));if(!account){$('form-error').textContent='카드 정보를 다시 확인해 주세요.';return;}record.cardAccountId=account.id;record.billingMonth=String(values.get('mobileBillingMonth'));}
  if(recordKind==='cards'&&editingId){const existing=portfolio.cards.find(row=>row.id===editingId);if(existing?.cardAccountId)record.cardAccountId=existing.cardAccountId;if(existing?.billingMonth)record.billingMonth=existing.billingMonth;}
@@ -791,6 +826,16 @@ document.addEventListener('click',async e=>{
  const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='editor')entryDetailEditing=false;if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='retirement-change-add'){
+  const list=$('retirement-changes');if(!list||saving||list.children.length>=24)return;
+  list.insertAdjacentHTML('beforeend',retirementChangeFields());
+  syncRetirementContribution();list.lastElementChild.querySelector('[data-month-trigger]').focus();return;
+ }
+ if(action==='retirement-change-remove'){
+  if(saving)return;
+  closeMonthPicker(document);button.closest('[data-retirement-change]')?.remove();
+  syncRetirementContribution();$('retirement-change-add').focus();return;
+ }
  if(action==='expense-confirmations'){showExpenseConfirmations();return;}
  if(action==='expense-confirmation-open'){openExpenseConfirmation(button.dataset.expenseKey);return;}
  if(action==='card-accounts'){showCardAccounts();return;}
@@ -889,7 +934,7 @@ document.addEventListener('change',e=>{
  }
  if(e.target.id==='field-type')syncExpensePaymentSource();if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
- if(e.target.id==='field-monthlyContribution')syncRetirementContribution();
+ if(['field-monthlyContribution','field-contributionEndMonth'].includes(e.target.id))syncRetirementContribution();
  if(['field-balance','field-rate','field-remainingMonths','field-graceMonths','field-principal','field-day'].includes(e.target.id))syncLoanPlan();
  if((e.target.id==='record-search'&&!e.target.hasAttribute('data-ledger-field'))||e.target.id==='loan-card-search'){query=e.target.value;const kind=view==='overview'?(homeSelection==='debt'?'loans':homeSelection):view;const rows=filteredRecords(kind);if(kind==='loans'&&$('loan-list')){rememberDisclosure($('main'));$('loan-list').innerHTML=renderLoanCards(rows,{formatMoney:money,layout:recordLayoutFor('loan-cards')})||'<div class="empty-inline loan-search-empty">검색 결과가 없습니다.</div>';$('loans-count').textContent=rows.length+'건';enhanceDisclosure($('main'),{view});return;}if(!$('records-body'))return;$('records-body').innerHTML=rows.map(r=>rowHTML(kind,r)).join('')||`<tr><td colspan="${tableHeaders[kind].length}" class="empty-inline">검색 결과가 없습니다.</td></tr>`;}
  if(e.target.matches('#record-form input[inputmode="numeric"]:not([data-month-year])')){const raw=e.target.value.replaceAll(',','');if(/^\d*$/.test(raw))e.target.value=raw?wonFormat.format(Number(raw)):'';}

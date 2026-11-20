@@ -335,17 +335,37 @@ test('company contributions grow retirement on their dates without becoming cash
  const payday=paydayForecasts(p,'2026-11-16',1)[0];assert.equal(payday.retirement,30300);assert.equal(payday.deposits,1100);assert.equal(payday.salaryAmount,100);assert.equal(payday.net,31400);
 });
 
+test('retirement forecasts apply replacement amounts through the last contribution month',()=>{
+ const data=samplePortfolio('2026-11-16');
+ Object.assign(data.retirement[0],{monthlyContribution:300000,contributionDate:'2027-01-31',
+  contributionEndMonth:'2027-05',contributionChanges:[{month:'2027-05',amount:450000},{month:'2027-02',amount:400000},{month:'2027-04',amount:0}]});
+ const clean=validatePortfolio(data);
+ assert.deepEqual(clean.retirement[0].contributionChanges.map(row=>row.month),['2027-02','2027-04','2027-05']);
+ const forecast=forecastMonths(clean,'2027-01-01',6);
+ assert.deepEqual(forecast.map(row=>row.retirementContribution),[300000,400000,400000,0,450000,0]);
+ assert.equal(forecast.at(-1).retirement,34800000+1550000);
+ assert.deepEqual(retirementContributionsForMonth(clean,'2027-02').map(row=>row.date),['2027-02-28']);
+ assert.deepEqual(retirementContributionsForMonth(clean,'2027-06'),[]);
+ for(const patch of [{contributionEndMonth:'2026-12'},{contributionChanges:[{month:'2027-06',amount:400000}]},{contributionChanges:[{month:'2027-02',amount:-1}]},{contributionChanges:[{month:'2027-02',amount:1},{month:'2027-02',amount:2}]}]){
+  const invalid=structuredClone(data);Object.assign(invalid.retirement[0],patch);
+  assert.throws(()=>validatePortfolio(invalid));
+ }
+});
+
 test('the API retains retirement plans for old clients and permits explicitly stopping contributions',async()=>{
  const env={DB:database()},data=samplePortfolio('2026-11-16');
- Object.assign(data.retirement[0],{monthlyContribution:350000,contributionDate:'2027-01-31'});
+ Object.assign(data.retirement[0],{monthlyContribution:350000,contributionDate:'2027-01-31',contributionEndMonth:'2027-12',contributionChanges:[{month:'2027-04',amount:390000}]});
  assert.equal((await handleApi(req('pension-owner','PUT',{data,revision:0}),env)).status,200);
  const legacy=structuredClone(data);delete legacy.retirement[0].monthlyContribution;delete legacy.retirement[0].contributionDate;legacy.retirement[0].amount=36000000;
+ delete legacy.retirement[0].contributionEndMonth;delete legacy.retirement[0].contributionChanges;
  assert.equal((await handleApi(req('pension-owner','PUT',{data:legacy,revision:1}),env)).status,200);
  let saved=await(await handleApi(req('pension-owner'),env)).json();
  assert.equal(saved.data.retirement[0].amount,36000000);assert.equal(saved.data.retirement[0].monthlyContribution,350000);assert.equal(saved.data.retirement[0].contributionDate,'2027-01-31');
+ assert.equal(saved.data.retirement[0].contributionEndMonth,'2027-12');assert.deepEqual(saved.data.retirement[0].contributionChanges,[{month:'2027-04',amount:390000}]);
  assert.equal((await handleApi(req('pension-owner','PUT',{data:legacy,revision:1}),env)).status,409);
  assert.equal((await(await handleApi(req('another-owner'),env)).json()).data.retirement.length,0);
  saved.data.retirement[0].monthlyContribution=0;saved.data.retirement[0].contributionDate='';
+ saved.data.retirement[0].contributionEndMonth='';saved.data.retirement[0].contributionChanges=[];
  assert.equal((await handleApi(req('pension-owner','PUT',{data:saved.data,revision:2}),env)).status,200);
  saved=await(await handleApi(req('pension-owner'),env)).json();assert.equal(saved.data.retirement[0].monthlyContribution,0);assert.equal(saved.data.retirement[0].contributionDate,'');
 });

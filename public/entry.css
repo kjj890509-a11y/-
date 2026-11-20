@@ -96,3 +96,31 @@ button.entry-all-records{width:100%;text-align:left;border:0;background:transpar
 .entry-column-sort::after { content: "↕" / ""; color: var(--muted); }
 .entry-edit-table [aria-sort="ascending"] .entry-column-sort::after { content: "↑" / ""; color: var(--ink); }
 .entry-edit-table [aria-sort="descending"] .entry-column-sort::after { content: "↓" / ""; color: var(--ink); }
+
+.retirement-plan {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0 0;
+  border: 0;
+}
+.retirement-plan legend {
+  padding: 0;
+  font-size: var(--font-sm);
+  font-weight: 650;
+}
+.retirement-plan .field-hint { margin: 0 0 12px; }
+.retirement-change-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 12px;
+  margin: 0 0 10px;
+  border-radius: 10px;
+  background: var(--soft-surface);
+}
+.retirement-change-row .button { min-height: 40px; }
+@media (max-width: 460px) {
+  .retirement-change-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .retirement-change-row .button { grid-column: 2; justify-self: end; }
+}

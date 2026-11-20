@@ -1,11 +1,11 @@
 import {recordLayoutSpecs} from './record-layout-model.mjs';
-import {KINDS,todayKST,paymentDate,isCardIncludedExpense} from './domain.mjs';
+import {KINDS,todayKST,paymentDate,isCardIncludedExpense,nextRetirementContribution} from './domain.mjs';
 export const ledgerKinds=[...KINDS,'all','planned',...Object.keys(recordLayoutSpecs)];
 export const ledgerLabels={stocks:'주식·투자',loans:'대출',retirement:'퇴직금·연금',deposits:'예금·현금',cards:'카드 청구',cashflow:'수입·지출',fixed:'정기 지출',all:'전체 내역',planned:'예정 거래'};
 export const ledgerColumns={
  stocks:[['name','계좌·종목명'],['cost','매입금액'],['valuation','평가액'],['profit','평가손익']],
  deposits:[['name','예금명'],['institution','금융기관'],['balance','잔액'],['rate','연 이율'],['date','만기일']],
- retirement:[['name','퇴직금·연금'],['institution','기관·회사'],['amount','현재 금액'],['monthlyContribution','회사 월 납입액'],['date','기준일']],
+ retirement:[['name','퇴직금·연금'],['institution','기관·회사'],['amount','현재 금액'],['monthlyContribution','기본 월 납입액'],['date','기준일']],
  loans:[['name','대출명'],['balance','잔액'],['rate','연 이율'],['principal','월 원금'],['interest','이번 이자'],['payment','상환액'],['date','상환일']],
  cards:[['name','카드사·카드명'],['amount','청구액'],['date','결제일'],['status','결제 상태']],
  cashflow:[['name','항목명'],['type','구분'],['amount','금액'],['date','입출금일'],['repeat','반복'],['paymentSource','결제 방식']],
@@ -26,7 +26,7 @@ export function ledgerStatus(entry,today=todayKST()){
  if(kind==='cashflow')return row.includeInForecast===false?'excluded':isCardIncludedExpense(row)?'card':'included';
  if(kind==='deposits')return !row.maturity?'liquid':row.maturity<today?'matured':'term';
  if(kind==='stocks')return row.valuation>row.cost?'gain':row.valuation<row.cost?'loss':'flat';
- if(kind==='retirement')return row.monthlyContribution>0?'contributing':'fixed';
+ if(kind==='retirement')return nextRetirementContribution(row,today)?'contributing':'fixed';
  return row.paymentSource==='card'?'card':'account';
 }
 export const statusLabels={paid:'결제 완료',overdue:'결제일 경과',unpaid:'미결제',active:'상환 중',settled:'상환 완료',excluded:'예상 제외',included:'예상 반영',liquid:'만기 없음',matured:'만기 경과',term:'만기 예정',gain:'평가이익',loss:'평가손실',flat:'보합',contributing:'월 납입 있음',fixed:'월 납입 없음',card:'카드 청구액에 포함 · 중복 제외',account:'계좌 결제'};

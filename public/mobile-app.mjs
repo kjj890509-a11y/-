@@ -1,6 +1,6 @@
 import {renderExpenseConfirmationSummary} from './dashboard-view.mjs';
 import {contextTip} from './context-tips.mjs';
-import {KINDS,LABELS,FLOW_LABELS,todayKST,totals,monthlyFlow,eventsForMonth,cashflowForMonth,fixedForMonth,scheduledCashflows,loanSchedule,loanPlanSummary,loanNextPayment,budgetPlan,forecastMonths,paydayForecasts,snapshotTotals,shiftMonth,paymentDate,actualSpendingForMonth} from './domain.mjs';
+import {KINDS,LABELS,FLOW_LABELS,todayKST,totals,monthlyFlow,eventsForMonth,cashflowForMonth,fixedForMonth,scheduledCashflows,loanSchedule,loanPlanSummary,loanNextPayment,nextRetirementContribution,budgetPlan,forecastMonths,paydayForecasts,snapshotTotals,shiftMonth,paymentDate,actualSpendingForMonth} from './domain.mjs';
 import {ledgerEntries,ledgerQuery,defaultLedgerState,ledgerLabels} from './ledger-model.mjs';
 import {entryPresets,entryGroups} from './entry-hub.mjs';
 import {renderTrendChart} from './chart.mjs';
@@ -51,12 +51,12 @@ function home(data,state,{money,demoBanner,advisorStatus='unknown',hidden=false}
   return `<article class="m-account-card m-home-asset-row m-${kind}${kind==='deposits'?' m-account-secondary':''}">${link(route(kind,id),`<span class="m-card-symbol" aria-hidden="true">${picture}</span><span class="m-card-copy"><strong>${money(amount)}</strong><span class="m-card-label"><span>${esc(name)}</span></span>${sub?`<small>${esc(sub)}</small>`:''}</span>`,'m-card-main')}${id?action('edit','수정',`data-kind="${kind}" data-id="${esc(id)}" aria-label="${esc(name)} 수정"`,'m-home-row-action'):link(route(kind),'보기','m-home-row-action')}</article>`;
  };
  const profit=hidden?money(t.profit):signedMoney(t.profit,money);
- const retirementMonthly=data.retirement.reduce((sum,row)=>sum+(row.monthlyContribution||0),0);
+ const retirementMonthly=data.retirement.reduce((sum,row)=>sum+(nextRetirementContribution(row,today)?.amount||0),0);
  const unpaidCards=data.cards.filter(row=>!row.paid);
  const items=[
   ...data.deposits.map(r=>item('deposits',r.name,r.balance,r.institution,r.id,renderFinanceRecordIcon('deposits',r))),
   ...(data.stocks.length?[item('stocks','주식·투자 총평가액',t.stock,'평가손익 '+profit)]:[]),
-  ...(data.retirement.length?[item('retirement','퇴직금·연금',t.retirement,'회사 월 납입 '+money(retirementMonthly))]:[]),
+  ...(data.retirement.length?[item('retirement','퇴직금·연금',t.retirement,'다음 납입 합계 '+money(retirementMonthly))]:[]),
   ...(data.loans.length?[item('loans','대출 잔액',t.loans,'월 이자 '+money(t.monthlyInterest),'',data.loans.length===1?renderFinanceRecordIcon('loans',data.loans[0]):undefined)]:[]),
   ...(data.cards.length||data.cardAccounts?.length?[item('cards','미결제 카드',t.cards,unpaidCards.length+'건 결제 예정','',unpaidCards.length===1?renderFinanceIcon('cards',issuerFor('cards',unpaidCards[0],data)):undefined)]:[])
  ];
@@ -86,7 +86,7 @@ function accountSummary(kind,entries,money,hidden){
   const profit=entries.reduce((sum,row)=>sum+row.valuation-row.cost,0);
   return '평가손익 '+(hidden?money(profit):signedMoney(profit,money));
  }
- if(kind==='retirement')return '회사 월 납입 '+money(entries.reduce((sum,row)=>sum+(row.monthlyContribution||0),0));
+ if(kind==='retirement')return '다음 납입 합계 '+money(entries.reduce((sum,row)=>sum+(nextRetirementContribution(row)?.amount||0),0));
  return '다음 납부 이자 합계 '+money(entries.reduce((sum,row)=>sum+loanNextPayment(row).interest,0));
 }
 function accountMeta(kind,record,money,hidden){
@@ -95,7 +95,10 @@ function accountMeta(kind,record,money,hidden){
   const profit=record.valuation-record.cost;
   return '평가손익 '+(hidden?money(profit):signedMoney(profit,money));
  }
- if(kind==='retirement')return [record.asOf?'기준 '+record.asOf:'',record.monthlyContribution?'월 납입 '+money(record.monthlyContribution):''].filter(Boolean).join(' · ');
+ if(kind==='retirement'){
+  const next=nextRetirementContribution(record);
+  return [next?'다음 '+next.date+' · '+money(next.amount):record.asOf?'기준 '+record.asOf:'',record.contributionEndMonth?'마지막 '+record.contributionEndMonth:''].filter(Boolean).join(' · ');
+ }
  if(record.balance===0)return '상환 완료';
  const next=loanNextPayment(record,todayKST());
  return (next.date?'다음 납부 '+next.date:'매월 '+record.day+'일')+' · 이자 '+money(next.interest);
@@ -128,7 +131,12 @@ function recordDetail(data,kind,id,{money,hidden}){
  if(r.institution)facts.push(['금융기관',esc(r.institution)]);
  if(kind==='deposits')facts.push(['연 이율',hidden?'••%':r.rate+'%'],['만기일',esc(r.maturity||'만기 없음')]);
  if(kind==='stocks')facts.push(['총매입금액',money(r.cost)],['평가손익',money(r.valuation-r.cost)]);
- if(kind==='retirement')facts.push(['금액 기준일',r.asOf],['회사 월 납입액',money(r.monthlyContribution||0)],['첫 납입 예정일',r.contributionDate||'미설정']);
+ if(kind==='retirement'){
+  const next=nextRetirementContribution(r);
+  facts.push(['금액 기준일',r.asOf],['기본 월 납입액',money(r.monthlyContribution||0)],['첫 납입 예정일',r.contributionDate||'미설정'],
+   ['마지막 납입월',r.contributionEndMonth||'미설정'],['다음 납입',next?next.date+' · '+money(next.amount):'없음']);
+  for(const change of r.contributionChanges||[])facts.push([change.month+'부터 월 납입',money(change.amount)]);
+ }
  if(kind==='loans'){
   const next=loanNextPayment(r,todayKST()),plan=loanPlanSummary(r);
   facts.push(['연 이율',hidden?'••%':r.rate+'%'],['상환 방식',esc(r.method)],['다음 납부일',next.date||'매월 '+r.day+'일'],
