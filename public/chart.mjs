@@ -35,8 +35,10 @@ function plotMarkup(points,options,id,width=760,height=264){
  }).join('');
  const circles=indexed.map((point,index)=>{
   const date=dateLabel(point),amount=formatMoney(point.value);
+  const href=/^#[A-Za-z0-9_/-]+$/.test(point.href||'')?point.href:'',tag=href?'a':'g';
+  const action=href?`href="${href}" aria-label="${escapeHTML(date+', '+amount+' · 월별 상세 보기')}"`:`role="button" aria-pressed="false" aria-label="${escapeHTML(date+', '+amount)}"`;
   const hitLeft=index===0?left-12:(indexed[index-1].x+point.x)/2,hitRight=index===indexed.length-1?width-right+12:(point.x+indexed[index+1].x)/2;
-  return `<g class="chart-point" data-chart-point data-x="${point.x}" data-y="${point.y}" data-label="${escapeHTML(date)}" data-date="${escapeHTML(date)}" data-amount="${escapeHTML(amount)}" role="button" tabindex="0" aria-pressed="false" aria-label="${escapeHTML(date+', '+amount)}"><rect class="chart-hit-area" x="${hitLeft}" y="${top}" width="${hitRight-hitLeft}" height="${height-top-bottom}" fill="transparent"/><circle class="chart-point-halo" cx="${point.x}" cy="${point.y}" r="11" fill="var(--green)" fill-opacity=".1"/><circle class="chart-dot" cx="${point.x}" cy="${point.y}" r="3" fill="${point.forecast?'#fff':'var(--green)'}" stroke="${point.forecast?'var(--chart-secondary)':'var(--green)'}" stroke-width="1.8"/></g>`;
+  return `<${tag} class="chart-point" data-chart-point data-x="${point.x}" data-y="${point.y}" data-label="${escapeHTML(date)}" data-date="${escapeHTML(date)}" data-amount="${escapeHTML(amount)}" tabindex="0" ${action}><rect class="chart-hit-area" x="${hitLeft}" y="${top}" width="${hitRight-hitLeft}" height="${height-top-bottom}" fill="transparent"/><circle class="chart-point-halo" cx="${point.x}" cy="${point.y}" r="11" fill="var(--green)" fill-opacity=".1"/><circle class="chart-dot" cx="${point.x}" cy="${point.y}" r="3" fill="${point.forecast?'#fff':'var(--green)'}" stroke="${point.forecast?'var(--chart-secondary)':'var(--green)'}" stroke-width="1.8"/></${tag}>`;
  }).join('');
  return `<svg viewBox="0 0 ${width} ${height}" role="group" aria-label="${escapeHTML(title)}" aria-describedby="${id}-help"><desc>${escapeHTML(title)}. 날짜에 마우스를 올리거나 터치해 금액을 확인하세요.</desc><defs><clipPath id="${id}-reveal" clipPathUnits="userSpaceOnUse"><rect class="chart-reveal-mask" width="${width}" height="${height}"/></clipPath></defs>${grid}<g clip-path="url(#${id}-reveal)">${real.length>1?`<path d="${path(real)} L${real.at(-1).x},${height-bottom} L${real[0].x},${height-bottom} Z" fill="var(--green)" fill-opacity=".04"/><path d="${path(real)}" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`:''}${comparisonPoints.length>1?`<path d="${path(comparisonPoints.map((point,index)=>({...point,x:x(index),y:y(point.value)})))}" fill="none" stroke="var(--chart-secondary)" stroke-width="2" stroke-dasharray="5 5"/>`:''}${projected.length>1?`<path d="${path(projected)}" fill="none" stroke="var(--chart-secondary)" stroke-width="2.2" stroke-dasharray="5 5" stroke-linecap="round"/>`:''}</g>${circles}${labels}<line class="chart-selection-line" data-chart-cursor y1="${top}" y2="${height-bottom}" hidden aria-hidden="true"/></svg>`;
 }
@@ -81,7 +83,7 @@ export function mountTrendCharts(root) {
     };
     const show = (point, event) => {
       const {x, y, label, date, amount} = point.dataset;
-      points.forEach(item => item.setAttribute('aria-pressed', String(item === point)));
+      points.forEach(item => { if(item.hasAttribute('aria-pressed'))item.setAttribute('aria-pressed', String(item === point)); });
       chart.querySelector('[data-chart-tooltip-date]').textContent = date;
       chart.querySelector('[data-chart-tooltip-value]').textContent = amount;
       tooltip.removeAttribute('hidden');
@@ -93,7 +95,7 @@ export function mountTrendCharts(root) {
       readoutValue.textContent = amount;
     };
     const clear = () => {
-      points.forEach(point => point.setAttribute('aria-pressed', 'false'));
+      points.forEach(point => { if(point.hasAttribute('aria-pressed'))point.setAttribute('aria-pressed', 'false'); });
       tooltip.setAttribute('hidden', '');
       cursor.setAttribute('hidden', '');
       readoutLabel.textContent = instruction;
@@ -127,7 +129,10 @@ export function mountTrendCharts(root) {
       if (event.key === 'Escape') { clear(); return; }
       const point = event.target.closest('[data-chart-point]');
       if (!point) return;
-      if (['Enter', ' '].includes(event.key)) { event.preventDefault(); show(point); return; }
+      if (['Enter', ' '].includes(event.key)) {
+        if(!point.hasAttribute('href')){event.preventDefault();show(point);}
+        return;
+      }
       const index = points.indexOf(point);
       const next = {ArrowLeft: Math.max(0, index-1), ArrowRight: Math.min(points.length-1, index+1), Home: 0, End: points.length-1}[event.key];
       if (next === undefined) return;
