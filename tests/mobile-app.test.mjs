@@ -180,12 +180,16 @@ test('forecast table rows and graphs lead to the same month detail on desktop an
  data.cashflow.push({id:'excluded-detail',type:'expense',name:'숨은 제외 항목',date,amount:1200,repeat:'once',includeInForecast:false});
  const t=await app(data,'forecast');
  const url='#forecast/'+month;
+ const stockAmount=new Intl.NumberFormat('ko-KR').format(domain.totals(data).stock)+'원';
+ const stockFact=container=>[...container.querySelectorAll('dt')].find(label=>label.textContent==='주식 평가액').nextElementSibling.textContent;
+ assert.equal(stockFact(t.document.querySelector('.m-detail-section')),stockAmount);
  assert.ok(t.document.querySelector(`.m-forecast-chart a[href="${url}"]`));
  t.click(`[data-action=mobile-forecast-date][data-date="${domain.paymentDate(month,31)}"]`);
  assert.equal(t.document.querySelector('.m-forecast-detail-link').getAttribute('href'),url);
  await t.visit(url.slice(1));
  const mobileDetail=t.document.querySelector('[data-forecast-detail-month]');
  assert.equal(mobileDetail.dataset.forecastDetailMonth,month);
+ assert.equal(stockFact(mobileDetail),stockAmount);
  assert.match(mobileDetail.textContent,/상세 조회 수입/);
  assert.doesNotMatch(mobileDetail.textContent,/숨은 제외 항목/);
  const monthNet=mobileDetail.querySelector('.forecast-detail-hero strong').textContent;
@@ -194,6 +198,7 @@ test('forecast table rows and graphs lead to the same month detail on desktop an
  assert.ok(t.document.querySelector(`a[data-chart-point][href="${url}"]`));
  const row=t.document.querySelector(`[data-forecast-row="${month}"]`);
  assert.equal(row.querySelector('a').getAttribute('href'),url);
+ assert.equal(row.querySelector('[data-forecast-stock]').textContent,stockAmount);
  assert.equal(row.lastElementChild.textContent,monthNet);
  t.click(`[data-forecast-row="${month}"] td:last-child`);
  assert.equal(t.context.location.hash,url);
