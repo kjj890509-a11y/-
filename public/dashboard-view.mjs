@@ -2,6 +2,7 @@ import {contextTip} from './context-tips.mjs';
 import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate,pendingExpenses,monthlyForecastPeriod} from './domain.mjs';
 import {renderAmountBars,renderAssetDonut,renderBudgetRing,renderSparkline,snapshotSeries} from './financial-charts.mjs';
 import {renderMonthPicker} from './month-picker.mjs';
+export {renderForecastMonthPage} from './forecast-detail.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=(rows,key)=>rows.reduce((total,row)=>total+(row[key]||0),0);
 export function dashboardData(data,today=todayKST()){

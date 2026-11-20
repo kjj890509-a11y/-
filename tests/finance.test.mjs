@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync} from 'node:fs';
-import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,paydayForecasts,scheduledCashflows,retirementContributionsForMonth,expenseConfirmationStart,pendingExpenses,confirmExpense} from '../public/domain.mjs';
+import {emptyPortfolio,validatePortfolio,samplePortfolio,totals,eventsForMonth,todayKST,paymentDate,cashflowForMonth,monthlyFlow,budgetPlan,forecastMonths,recordCurrentSnapshot,snapshotTotals,captureSnapshot,shiftMonth,fixedForMonth,interestForLoan,loanSchedule,forecastOnDates,forecastMonthDetails,paydayForecasts,scheduledCashflows,retirementContributionsForMonth,expenseConfirmationStart,pendingExpenses,confirmExpense} from '../public/domain.mjs';
 import {handleApi} from '../server/api.mjs';
 test('net worth subtracts loan balances and only unpaid cards',()=>{
  const data=samplePortfolio('2026-11-16');const t=totals(data);
@@ -368,6 +368,34 @@ test('the API retains retirement plans for old clients and permits explicitly st
  saved.data.retirement[0].contributionEndMonth='';saved.data.retirement[0].contributionChanges=[];
  assert.equal((await handleApi(req('pension-owner','PUT',{data:saved.data,revision:2}),env)).status,200);
  saved=await(await handleApi(req('pension-owner'),env)).json();assert.equal(saved.data.retirement[0].monthlyContribution,0);assert.equal(saved.data.retirement[0].contributionDate,'');
+});
+
+test('monthly drill-down lists exactly the events used in each monthly projection',()=>{
+ const today='2026-11-20';
+ const data=validatePortfolio({...emptyPortfolio(),
+  deposits:[{id:'bank',name:'예금',balance:1500000,rate:0}],
+  cashflow:[{id:'salary',name:'월급',type:'salary',amount:2000000,date:'2026-11-25',repeat:'monthly'},
+   {id:'overlap',name:'카드 포함 지출',type:'expense',amount:22000,date:'2026-12-02',repeat:'once',paymentSource:'card'}],
+  fixed:[{id:'rent',name:'월세',amount:450000,day:3,startMonth:'2026-12',paymentSource:'account'}],
+  cards:[{id:'overdue',name:'지난 카드 청구',amount:300000,dueDate:'2026-11-19',paid:false}],
+  retirement:[{id:'pension',name:'연금',asOf:today,amount:1000000,monthlyContribution:150000,contributionDate:'2026-12-31'}]
+ });
+ const forecast=forecastMonths(data,today,2);
+ const first=forecastMonthDetails(data,'2026-11',today),second=forecastMonthDetails(data,'2026-12',today);
+ assert.equal(first.opening.net,totals(data).net);
+ assert.equal(second.opening.net,first.closing.net);
+ assert.equal(first.closing.periodEvents[0].dueDate,'2026-11-19');
+ assert.deepEqual(second.closing.periodEvents.map(event=>event.kind),['fixed','salary','retirement']);
+ for(const [index,detail]of [first,second].entries()){
+  const {periodEvents,...closing}=detail.closing;
+  assert.deepEqual(closing,forecast[index]);
+  const sum=predicate=>periodEvents.filter(predicate).reduce((total,event)=>total+event.amount,0);
+  assert.equal(sum(event=>event.income),closing.income);
+  assert.equal(sum(event=>!event.income&&event.kind!=='retirement'),closing.expense);
+  assert.equal(sum(event=>event.kind==='retirement'),closing.retirementContribution);
+ }
+ assert.equal(forecastMonthDetails(data,'2026-10',today),null);
+ assert.equal(forecastMonthDetails(data,'invalid',today),null);
 });
 
 test('due and overdue expenses stay in forecasts until a withdrawal or existing balance is confirmed',()=>{

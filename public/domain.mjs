@@ -426,7 +426,7 @@ export function monthlyForecastPeriod(today=todayKST(),horizon=12,customEndMonth
  const endMonth=custom?customEndMonth:shiftMonth(startMonth,horizon-1);
  return {startMonth,endMonth,maxMonth,count:forecastMonthCount(startMonth,endMonth),custom};
 }
-export function forecastOnDates(data,targetDates,startDate=todayKST()) {
+export function forecastOnDates(data,targetDates,startDate=todayKST(),{includePeriodEvents=false}={}) {
  if(!validDate(startDate)||!Array.isArray(targetDates)||targetDates.some(date=>!validDate(date)||date<startDate))throw new Error('예상 기준일과 조회 날짜를 확인해 주세요.');
  const dates=[...new Set(targetDates)].sort();if(!dates.length)return [];
  const firstMonth=startDate.slice(0,7),lastMonth=dates.at(-1).slice(0,7);
@@ -449,6 +449,7 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  const baseline=totals(data),sums={income:0,expense:0,principal:0,interest:0,otherExpense:0,fixedCash:0,cardPayments:0,retirementContribution:0};
  let deposits=baseline.deposits,retirement=baseline.retirement,loanDebt=baseline.loans,cardDebt=baseline.cards,pointer=0,previous={...sums};
  return dates.map(date=>{
+  const periodStart=pointer;
   while(pointer<events.length&&events[pointer].date<=date){
    const event=events[pointer++];
    if(event.kind==='retirement'){retirement+=event.amount;sums.retirementContribution+=event.amount;continue;}
@@ -461,8 +462,16 @@ export function forecastOnDates(data,targetDates,startDate=todayKST()) {
   }
   const period=Object.fromEntries(Object.keys(sums).map(key=>[key,sums[key]-previous[key]]));previous={...sums};
   const gross=baseline.stock+retirement+deposits,debt=loanDebt+cardDebt;
-  return {...period,date,month:date.slice(0,7),deposits,retirement,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,cumulativeRetirementContribution:sums.retirementContribution,dayEvents:events.filter(event=>event.date===date&&event.kind!=='retirement'),retirementEvents:events.filter(event=>event.date===date&&event.kind==='retirement')};
+  return {...period,date,month:date.slice(0,7),deposits,retirement,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,cumulativeRetirementContribution:sums.retirementContribution,dayEvents:events.filter(event=>event.date===date&&event.kind!=='retirement'),retirementEvents:events.filter(event=>event.date===date&&event.kind==='retirement'),...(includePeriodEvents?{periodEvents:events.slice(periodStart,pointer)}:{})};
  });
+}
+export function forecastMonthDetails(data,month,today=todayKST()) {
+ const period=monthlyForecastPeriod(today,12,month);
+ if(!period.custom)return null;
+ const firstMonth=month===period.startMonth,closingDate=paymentDate(month,31);
+ const dates=firstMonth?[closingDate]:[paymentDate(shiftMonth(month,-1),31),closingDate];
+ const rows=forecastOnDates(data,dates,today,{includePeriodEvents:true});
+ return {opening:firstMonth?totals(data):rows[0],closing:rows.at(-1),firstMonth};
 }
 export function forecastMonths(data,startDate=todayKST(),count=12) {
  const dates=Array.from({length:count},(_,index)=>paymentDate(shiftMonth(startDate.slice(0,7),index),31));
