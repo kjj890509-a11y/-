@@ -374,6 +374,7 @@ test('monthly drill-down lists exactly the events used in each monthly projectio
  const today='2026-11-20';
  const data=validatePortfolio({...emptyPortfolio(),
   deposits:[{id:'bank',name:'예금',balance:1500000,rate:0}],
+  stocks:[{id:'stocks',name:'투자 계좌',valuation:800000,cost:600000}],
   cashflow:[{id:'salary',name:'월급',type:'salary',amount:2000000,date:'2026-11-25',repeat:'monthly'},
    {id:'overlap',name:'카드 포함 지출',type:'expense',amount:22000,date:'2026-12-02',repeat:'once',paymentSource:'card'}],
   fixed:[{id:'rent',name:'월세',amount:450000,day:3,startMonth:'2026-12',paymentSource:'account'}],
@@ -381,6 +382,8 @@ test('monthly drill-down lists exactly the events used in each monthly projectio
   retirement:[{id:'pension',name:'연금',asOf:today,amount:1000000,monthlyContribution:150000,contributionDate:'2026-12-31'}]
  });
  const forecast=forecastMonths(data,today,2);
+ assert.deepEqual(budgetPlan(data,'2026-12'),budgetPlan({...data,stocks:[]},'2026-12'));
+ assert.ok(forecast.every(row=>row.stock===800000&&row.net===row.deposits+row.stock+row.retirement-row.debt));
  const first=forecastMonthDetails(data,'2026-11',today),second=forecastMonthDetails(data,'2026-12',today);
  assert.equal(first.opening.net,totals(data).net);
  assert.equal(second.opening.net,first.closing.net);

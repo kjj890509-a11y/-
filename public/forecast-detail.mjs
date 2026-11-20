@@ -1,4 +1,4 @@
-import {forecastMonthDetails,shiftMonth,todayKST,totals} from './domain.mjs';
+import {forecastMonthDetails,shiftMonth,todayKST} from './domain.mjs';
 
 const escapeHTML=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const monthLabel=month=>Number(month.slice(0,4))+'년 '+Number(month.slice(5,7))+'월';
@@ -41,7 +41,7 @@ export function renderForecastMonthPage(data,month,{period,money,hidden=false,to
    ${closing.cashShortage?'<p class="inline-warning">이 달 말에는 예상 예금이 부족합니다.</p>':''}
    <div class="forecast-detail-grid">
     <section class="forecast-detail-group"><h2>월말 자산·부채</h2>${facts([
-     ['총자산',money(closing.gross)],['예금·현금',money(closing.deposits)],['주식·투자',money(totals(data).stock)],['퇴직금·연금',money(closing.retirement)],
+     ['총자산',money(closing.gross)],['예금·현금',money(closing.deposits)],['주식 평가액',money(closing.stock)],['퇴직금·연금',money(closing.retirement)],
      ['총부채',money(closing.debt)],['대출 잔액',money(closing.loans)],['미결제 카드',money(closing.cards)]
     ])}</section>
     <section class="forecast-detail-group"><h2>이달 현금 흐름·적립</h2>${facts([

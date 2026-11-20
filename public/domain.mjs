@@ -462,7 +462,7 @@ export function forecastOnDates(data,targetDates,startDate=todayKST(),{includePe
   }
   const period=Object.fromEntries(Object.keys(sums).map(key=>[key,sums[key]-previous[key]]));previous={...sums};
   const gross=baseline.stock+retirement+deposits,debt=loanDebt+cardDebt;
-  return {...period,date,month:date.slice(0,7),deposits,retirement,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,cumulativeRetirementContribution:sums.retirementContribution,dayEvents:events.filter(event=>event.date===date&&event.kind!=='retirement'),retirementEvents:events.filter(event=>event.date===date&&event.kind==='retirement'),...(includePeriodEvents?{periodEvents:events.slice(periodStart,pointer)}:{})};
+  return {...period,date,month:date.slice(0,7),deposits,stock:baseline.stock,retirement,loans:loanDebt,cards:cardDebt,gross,debt,net:gross-debt,cashShortage:deposits<0,cumulativeIncome:sums.income,cumulativeExpense:sums.expense,cumulativePrincipal:sums.principal,cumulativeInterest:sums.interest,cumulativeRetirementContribution:sums.retirementContribution,dayEvents:events.filter(event=>event.date===date&&event.kind!=='retirement'),retirementEvents:events.filter(event=>event.date===date&&event.kind==='retirement'),...(includePeriodEvents?{periodEvents:events.slice(periodStart,pointer)}:{})};
  });
 }
 export function forecastMonthDetails(data,month,today=todayKST()) {
