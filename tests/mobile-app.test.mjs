@@ -147,6 +147,32 @@ test('future date selection changes summary and composition from the same foreca
  assert.equal(t.document.querySelectorAll('[data-action=mobile-forecast-date]').length,12);assert.ok(t.document.querySelector('[data-trend-chart]'));t.click('[data-action=mobile-forecast-date][data-date="'+chosen.date+'"]');assert.equal(t.document.querySelector('.m-forecast-summary>strong').textContent,fmt(chosen.net));assert.match(t.document.querySelector('.m-detail-section').textContent,new RegExp(fmt(chosen.deposits).replaceAll(',','\\,')));
  await t.visit('payday');assert.ok(t.document.querySelector('[data-action=mobile-forecast-date]'));assert.match(t.document.querySelector('.m-forecast-summary').textContent,/급여 입금 후/);assert.equal(t.state.writes,0);
 });
+test('a custom forecast end month is inclusive and shared with the desktop charts and table',async()=>{
+ const t=await app(domain.samplePortfolio(),'forecast'),today=domain.todayKST(),start=today.slice(0,7);
+ const end=domain.shiftMonth(start,27),expected=domain.forecastMonths(t.state.data,today,28).at(-1);
+ t.click('#forecast-end-month-button');
+ t.change('[data-month-year]',end.slice(0,4));
+ t.click(`[data-month-option="${end}"]`);
+ assert.equal(t.document.querySelector('#forecast-end-month').value,end);
+ assert.equal(t.document.querySelector('#forecast-detail-month').value,end);
+ assert.match(t.document.querySelector('.m-forecast-summary').textContent,new RegExp(expected.date));
+ t.change('#forecast-detail-month',domain.shiftMonth(end,-1));
+ assert.equal(t.document.querySelector('#forecast-end-month').value,end);
+ assert.notEqual(t.document.querySelector('#forecast-detail-month').value,end);
+ t.context.location.search='?display=desktop';
+ await t.visit('forecast');
+ const rows=t.document.querySelectorAll('#main .table-panel tbody tr');
+ assert.equal(rows.length,28);
+ assert.equal(rows[27].querySelector('strong').textContent,end);
+ assert.equal(rows[27].lastElementChild.textContent,new Intl.NumberFormat('ko-KR').format(expected.net)+'원');
+ assert.ok(t.document.querySelector(`[data-chart-point][data-date="${expected.date.replaceAll('-','.')}"]`));
+ await t.visit('overview');
+ assert.equal(t.document.querySelectorAll('.overview-forecast .amount-bar-point').length,28);
+ t.click('[data-action="chart-range"][data-range="6"]');
+ assert.equal(t.document.querySelectorAll('.overview-forecast .amount-bar-point').length,6);
+ assert.equal(t.document.querySelector('[data-action="chart-range"][data-range="6"]').getAttribute('aria-pressed'),'true');
+ assert.equal(t.state.writes,0);
+});
 test('general asset consultation works without loans, sends only question/history/revision and masks prior answers',async()=>{
  const data=domain.emptyPortfolio();data.deposits=[{id:'account',name:'내 계좌',balance:1000000,rate:0}];const t=await app(data,'advisor',{configured:true});const form=t.document.querySelector('#asset-advisor-form');assert.equal(form.querySelector('button').disabled,false);t.change('#asset-advisor-question','다음 달 자산을 알려 주세요.');form.dispatchEvent(new t.Event('submit',{bubbles:true,cancelable:true}));assert.equal(t.state.advisorCalls.length,0);t.document.getElementById('confirm-ok').onclick();await tick();await tick();
  assert.equal(t.state.advisorCalls.length,1);const sent=t.state.advisorCalls[0];assert.equal(sent.mode,'assets');assert.equal(sent.revision,1);assert.equal(sent.dataSharingAccepted,true);assert.equal(sent.question,'다음 달 자산을 알려 주세요.');assert.equal(sent.data,undefined);assert.equal(sent.apiKey,undefined);assert.match(t.document.querySelector('.m-consult-answer').textContent,/급여일과 월말/);

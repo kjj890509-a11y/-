@@ -1,12 +1,12 @@
 import {createWorkspaceState,renderWorkspace,mountWorkspace,unmountWorkspace,defaultDashboard,dashboardConfig,widgetTemplates} from '/workspace.mjs';
-import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, nextRetirementContribution, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense} from '/domain.mjs';
+import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, monthlyForecastPeriod, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, nextRetirementContribution, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense} from '/domain.mjs';
 import {renderTrendChart, mountTrendCharts} from '/chart.mjs';
 import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
 import {initialStatisticsFilters,renderStatisticsPage,mountStatisticsControls} from '/statistics-page.mjs';
 import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advisor-page.mjs';
 import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, renderMonthlySpending, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation, createCoachmarkState, mountCoachmarks, renderFinanceRecordIcon} from '/navigation.mjs';
-import {renderDashboard, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
+import {renderDashboard, renderForecastPeriod, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 import {mountDesktopNavigation} from '/navigation.mjs';
 const icons = {
@@ -55,7 +55,8 @@ let entryEditing=false,entryDetailEditing=false,entryActiveType='salary',entryDr
 let entryManagerState=createEntryManagerState();
 let cardBillingState=createCardBillingState();
 let calendarSelected='',calendarFilter='all',calendarCategory='all',calendarMode='month';
-let chartHorizon=12,loanForecastId='',loanForecastPeriod='12';
+const forecastEndPreference='moa-forecast-end-month';
+let chartHorizon=12,forecastEndMonth=localStorage.getItem(forecastEndPreference)||'',loanForecastId='',loanForecastPeriod='12';
 let statisticsFilters;
 let advisorState;
 let workspaceState=createWorkspaceState();
@@ -148,14 +149,15 @@ function flowSummary(selectedMonth,link=true){
 function planningHeader(title,subtitle,action,label){
  return `<div class="page-heading"><div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div><div class="heading-actions">${action?`<button class="button primary" data-action="${action}">${svg('plus')}${label}</button>`:''}</div></div>`;
 }
-function assetTrend(horizon=6,historyOnly=false){
+function assetTrend(forecastRows=[]){
+ const historyOnly=forecastRows.length===0;
  const today=todayKST(),current=today.slice(0,7),t=totals(portfolio);
  const saved=(portfolio.snapshots||[]).filter(r=>historyOnly||r.month<current).slice(-6).map(r=>({label:r.month.slice(2).replace('-','.'),detailLabel:r.asOf.replaceAll('-','.')+' · 기록',value:snapshotTotals(r).net,forecast:false}));
- const points=historyOnly?saved:[...saved,{label:'현재',detailLabel:today.replaceAll('-','.')+' · 현재',value:t.net,forecast:false},...forecastMonths(portfolio,today,horizon).map(r=>({label:r.month.slice(2).replace('-','.')+' 말',detailLabel:paymentDate(r.month,31).replaceAll('-','.')+' · 월별 전망',value:r.net,forecast:true}))];
+ const points=historyOnly?saved:[...saved,{label:'현재',detailLabel:today.replaceAll('-','.')+' · 현재',value:t.net,forecast:false},...forecastRows.map(r=>({label:r.month.slice(2).replace('-','.')+' 말',detailLabel:paymentDate(r.month,31).replaceAll('-','.')+' · 월별 전망',value:r.net,forecast:true}))];
  return renderTrendChart(points,{formatMoney:money,formatCompact:compact,historyOnly});
 }
 function overview(){
- return renderDashboard(portfolio,{money,compact,svg,horizon:chartHorizon,hideAmounts:hidden,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
+ return renderDashboard(portfolio,{money,compact,svg,horizon:chartHorizon,forecastEndMonth,hideAmounts:hidden,demoBanner:demoBanner(),selection:homeSelection,detail:homeSelection==='all'?'':homeDetail()});
 }
 function homeDetailHeading(title,description,kind){
  return `<div class="home-detail-heading"><div><h2 tabindex="-1" data-home-detail-title>${title}</h2><p class="subtitle">${description}</p></div>${kind?`<button class="button primary" data-action="add" data-kind="${kind}">${svg('plus')}${LABELS[kind]} 추가</button>`:''}</div>`;
@@ -164,8 +166,9 @@ function homeDetail(){
  const t=totals(portfolio);
  if(['deposits','stocks','retirement','cards'].includes(homeSelection))return category(homeSelection,{embedded:true});
  if(homeSelection==='net'){
+  const today=todayKST(),period=monthlyForecastPeriod(today,chartHorizon,forecastEndMonth);
   const parts=[['deposits','예금·현금',t.deposits,'자산'],['stocks','주식·투자',t.stock,'자산'],['retirement','퇴직금·연금',t.retirement,'자산'],['debt','대출 잔액',t.loans,'부채'],['cards','미결제 카드',t.cards,'부채']];
-  return homeDetailHeading('순자산 상세','보유 자산에서 대출과 미결제 카드대금을 뺀 금액입니다.')+`<div class="planning-metrics">${metric('총자산',money(t.gross))}${metric('남은 부채',money(t.debt))}${metric('순자산',money(t.net))}</div><div class="home-primary-grid"><section class="panel home-chart"><div class="panel-header"><div><h2>순자산 흐름</h2><p>기록·현재 잔액과 앞으로의 예상</p></div><div class="segmented" aria-label="전망 기간">${[6,12].map(n=>`<button data-action="chart-range" data-range="${n}" aria-pressed="${chartHorizon===n}" class="${chartHorizon===n?'active':''}">${n===6?'6개월':'1년'}</button>`).join('')}</div></div>${assetTrend(chartHorizon)}</section><section class="panel"><div class="panel-header"><h2>순자산 구성</h2></div><div class="home-net-breakdown">${parts.map(([key,label,value,side])=>`<button type="button" data-action="home-detail" data-detail="${key}" aria-controls="home-dashboard"><span><strong>${label}</strong><small>${side} · 상세 보기</small></span><b>${side==='부채'?'− ':''}${money(value)}</b></button>`).join('')}</div></section></div>`;
+  return homeDetailHeading('순자산 상세','보유 자산에서 대출과 미결제 카드대금을 뺀 금액입니다.')+`<div class="planning-metrics">${metric('총자산',money(t.gross))}${metric('남은 부채',money(t.debt))}${metric('순자산',money(t.net))}</div><div class="home-primary-grid"><section class="panel home-chart"><div class="panel-header"><div><h2>순자산 흐름</h2><p>기록·현재 잔액과 앞으로의 예상</p></div>${renderForecastPeriod(period)}</div>${assetTrend(forecastMonths(portfolio,today,period.count))}</section><section class="panel"><div class="panel-header"><h2>순자산 구성</h2></div><div class="home-net-breakdown">${parts.map(([key,label,value,side])=>`<button type="button" data-action="home-detail" data-detail="${key}" aria-controls="home-dashboard"><span><strong>${label}</strong><small>${side} · 상세 보기</small></span><b>${side==='부채'?'− ':''}${money(value)}</b></button>`).join('')}</div></section></div>`;
  }
  if(homeSelection==='debt'){
   const cards=portfolio.cards.filter(row=>!row.paid).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
@@ -275,11 +278,12 @@ function historyPage(){
  const rows=(portfolio.snapshots||[]).slice().sort((a,b)=>b.month.localeCompare(a.month));
  const selected=rows.find(r=>r.month===month),t=selected?snapshotTotals(selected):null;
  const previous=rows.find(r=>r.month<month),delta=t&&previous?t.net-snapshotTotals(previous).net:null;
- return `${planningHeader('자산 기록','지난달의 자산을 남겨두고, 변화를 확인하세요.','snapshot-form','자산 기록')}${demoBanner()}<div class="flow-month-bar"><span>확인할 월</span>${monthToolbar()}</div>${t?`<div class="planning-metrics">${metric('기록된 순자산',money(t.net),t.asOf.replaceAll('-','.')+' 기준')}${metric('기록된 총자산',money(t.gross))}${metric('기록된 총부채',money(t.debt))}${metric('이전 기록 대비',delta===null?'—':money(delta),previous?previous.month+' 기록과 비교':'비교할 이전 기록이 없습니다.')}</div>`:'<div class="empty-welcome"><div><h2>이 달에는 저장된 자산 기록이 없어요.</h2><p>과거 월말 잔액을 알고 있다면 직접 기록할 수 있습니다. 미래 기록은 예상 화면에서 확인하세요.</p></div></div>'}<section class="panel history-trend"><div class="panel-header"><div><h2>기록으로 보는 자산 변화</h2><p>저장된 기준일의 순자산입니다.</p></div><span class="subtle-tag">HISTORY</span></div>${assetTrend(0,true)}</section><section class="table-panel history-records"><div class="table-heading"><h2>월별 자산 기록 <span>${rows.length}개월</span></h2></div>${rows.length?`<div class="table-scroll"><table><caption class="sr-only">월별 자산 기록</caption><thead><tr><th>월 · 기준일</th><th>기록 구분</th><th class="numeric">총자산</th><th class="numeric">총부채</th><th class="numeric">순자산</th><th></th></tr></thead><tbody>${rows.map(r=>{const t=snapshotTotals(r);return `<tr><td><strong>${r.month}</strong><small>${r.asOf} 기준</small></td><td><span class="status-pill ${r.source==='manual'?'paid':''}">${r.source==='auto'?'저장 시 자동 기록':r.asOf===paymentDate(r.month,31)?'월말 기록':'기준일 기록'}</span></td><td class="numeric">${money(t.gross)}</td><td class="numeric">${money(t.debt)}</td><td class="numeric history-net"><strong>${money(t.net)}</strong></td><td><button class="button secondary small" data-action="snapshot-form" data-month="${r.month}" aria-label="${r.month} 자산 기록 수정">기록 수정</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-symbol">'+svg('history')+'</div><h3>첫 자산 기록을 남겨보세요.</h3><p>내역을 저장하면 그달 기준 기록이 자동으로 생깁니다.<br>월말의 정확한 잔액은 직접 기록해 주세요.</p></div>'}</section><p class="category-note">자동 기록은 사이트에서 내역을 저장한 날의 잔액입니다. 월말 당일의 기록이 없으면 마지막 저장일을 표시하며, 정확한 과거 월말 잔액을 추정해 확정하지 않습니다. 직접 저장한 기록은 이후 현재 잔액을 수정해도 유지됩니다.</p>`;
+ return `${planningHeader('자산 기록','지난달의 자산을 남겨두고, 변화를 확인하세요.','snapshot-form','자산 기록')}${demoBanner()}<div class="flow-month-bar"><span>확인할 월</span>${monthToolbar()}</div>${t?`<div class="planning-metrics">${metric('기록된 순자산',money(t.net),t.asOf.replaceAll('-','.')+' 기준')}${metric('기록된 총자산',money(t.gross))}${metric('기록된 총부채',money(t.debt))}${metric('이전 기록 대비',delta===null?'—':money(delta),previous?previous.month+' 기록과 비교':'비교할 이전 기록이 없습니다.')}</div>`:'<div class="empty-welcome"><div><h2>이 달에는 저장된 자산 기록이 없어요.</h2><p>과거 월말 잔액을 알고 있다면 직접 기록할 수 있습니다. 미래 기록은 예상 화면에서 확인하세요.</p></div></div>'}<section class="panel history-trend"><div class="panel-header"><div><h2>기록으로 보는 자산 변화</h2><p>저장된 기준일의 순자산입니다.</p></div><span class="subtle-tag">HISTORY</span></div>${assetTrend()}</section><section class="table-panel history-records"><div class="table-heading"><h2>월별 자산 기록 <span>${rows.length}개월</span></h2></div>${rows.length?`<div class="table-scroll"><table><caption class="sr-only">월별 자산 기록</caption><thead><tr><th>월 · 기준일</th><th>기록 구분</th><th class="numeric">총자산</th><th class="numeric">총부채</th><th class="numeric">순자산</th><th></th></tr></thead><tbody>${rows.map(r=>{const t=snapshotTotals(r);return `<tr><td><strong>${r.month}</strong><small>${r.asOf} 기준</small></td><td><span class="status-pill ${r.source==='manual'?'paid':''}">${r.source==='auto'?'저장 시 자동 기록':r.asOf===paymentDate(r.month,31)?'월말 기록':'기준일 기록'}</span></td><td class="numeric">${money(t.gross)}</td><td class="numeric">${money(t.debt)}</td><td class="numeric history-net"><strong>${money(t.net)}</strong></td><td><button class="button secondary small" data-action="snapshot-form" data-month="${r.month}" aria-label="${r.month} 자산 기록 수정">기록 수정</button></td></tr>`;}).join('')}</tbody></table></div>`:'<div class="empty-state"><div class="empty-symbol">'+svg('history')+'</div><h3>첫 자산 기록을 남겨보세요.</h3><p>내역을 저장하면 그달 기준 기록이 자동으로 생깁니다.<br>월말의 정확한 잔액은 직접 기록해 주세요.</p></div>'}</section><p class="category-note">자동 기록은 사이트에서 내역을 저장한 날의 잔액입니다. 월말 당일의 기록이 없으면 마지막 저장일을 표시하며, 정확한 과거 월말 잔액을 추정해 확정하지 않습니다. 직접 저장한 기록은 이후 현재 잔액을 수정해도 유지됩니다.</p>`;
 }
 function forecastPage(){
- const today=todayKST(),rows=forecastMonths(portfolio,today,12),first=rows[0],last=rows.at(-1),overdue=portfolio.cards.filter(r=>!r.paid&&r.dueDate<=today).length;
- return `${planningHeader('월별 전망','각 월말에 남을 예금과 순자산을 확인하세요.')}${demoBanner()}<div class="forecast-banner">${svg('forecast')}<div><strong>${today.replaceAll('-','.')} 현재 잔액 기준 예상</strong><p>확인이 필요한 지출과 오늘 이후의 일정을 포함합니다. 주식 평가액·연 이율은 유지하고 퇴직연금에는 등록한 회사 월 납입액을 더합니다. 예상 이자는 모든 대출에 대해 매달 남은 잔액과 연 이율로 다시 계산합니다.</p></div><span class="forecast-badge">예상치</span></div>${overdue?`<p class="inline-warning">결제일이 오늘이거나 지난 미결제 카드 ${overdue}건이 있습니다. 실제 결제했다면 지출 반영 확인에서 처리해 주세요. 결제 예정일을 조정하면 예상에 반영됩니다.</p>`:''}<div class="planning-metrics">${metric('이번 달 말 예상 순자산',money(first.net))}${metric('이번 달 말 예상 예금',money(first.deposits),first.cashShortage?'현금 부족':'',first.cashShortage?'text-danger':'')}${metric('12개월 후 예상 순자산',money(last.net),last.month+' 말')}${metric('12개월 후 예상 대출',money(last.loans),'예정 원금 상환 반영','',true)}</div><section class="panel history-trend"><div class="panel-header"><div><h2>순자산 예상 추이</h2><p>실선은 기록·현재, 점선은 앞으로의 예상</p></div><span class="subtle-tag">FORECAST</span></div>${assetTrend(12)}</section><section class="table-panel"><div class="table-heading"><h2>월별 전망 내역</h2><span class="table-hint">원 단위 · 첫 달은 미확인 지출과 오늘 이후 일정 반영</span></div><div class="table-scroll"><table><thead><tr><th>예상 월</th><th class="numeric">수입</th><th class="numeric">지출</th><th class="numeric">예금 잔액</th><th class="numeric">퇴직금·연금</th><th class="numeric">대출 잔액</th><th class="numeric">순자산</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><strong>${r.month}</strong><small>${i===0?'미확인 지출 및 월말까지 일정':'월별 전망'}${r.cashShortage?' · 현금 부족':''}</small></td><td class="numeric income-color">${money(r.income)}</td><td class="numeric">${money(r.expense)}</td><td class="numeric ${r.cashShortage?'text-danger':''}">${money(r.deposits)}</td><td class="numeric">${money(r.retirement)}</td><td class="numeric">${money(r.loans)}</td><td class="numeric"><strong>${money(r.net)}</strong></td></tr>`).join('')}</tbody></table></div></section><p class="category-note">예금에 수입을 더하고 지출을 뺍니다. 대출 원금은 잔액까지만 상환하며, 잔액이 0이 되면 다음 상환을 중단합니다. 카드 결제는 예금과 미결제 부채에서 함께 차감하므로 순자산에서 중복 차감하지 않습니다. 미등록 지출, 새 카드 청구, 시장가격·환율·금리 변화는 예측에 포함되지 않습니다.</p>`;
+ const today=todayKST(),period=monthlyForecastPeriod(today,chartHorizon,forecastEndMonth);
+ const rows=forecastMonths(portfolio,today,period.count),first=rows[0],last=rows.at(-1),overdue=portfolio.cards.filter(r=>!r.paid&&r.dueDate<=today).length;
+ return `${planningHeader('월별 전망','각 월말에 남을 예금과 순자산을 확인하세요.')}${demoBanner()}<div class="forecast-period-toolbar">${renderForecastPeriod(period)}</div><div class="forecast-banner">${svg('forecast')}<div><strong>${today.replaceAll('-','.')} 현재 잔액 기준 예상</strong><p>확인이 필요한 지출과 오늘 이후의 일정을 포함합니다. 주식 평가액·연 이율은 유지하고 퇴직연금에는 등록한 회사 월 납입액을 더합니다. 예상 이자는 모든 대출에 대해 매달 남은 잔액과 연 이율로 다시 계산합니다.</p></div><span class="forecast-badge">예상치</span></div>${overdue?`<p class="inline-warning">결제일이 오늘이거나 지난 미결제 카드 ${overdue}건이 있습니다. 실제 결제했다면 지출 반영 확인에서 처리해 주세요. 결제 예정일을 조정하면 예상에 반영됩니다.</p>`:''}<div class="planning-metrics">${metric('이번 달 말 예상 순자산',money(first.net))}${metric('이번 달 말 예상 예금',money(first.deposits),first.cashShortage?'현금 부족':'',first.cashShortage?'text-danger':'')}${metric('종료월 예상 순자산',money(last.net),last.month+' 말')}${metric('종료월 예상 대출 잔액',money(last.loans),last.month+' 말')}</div><section class="panel history-trend"><div class="panel-header"><div><h2>순자산 예상 추이</h2><p>실선은 기록·현재, 점선은 앞으로의 예상</p></div><span class="subtle-tag">FORECAST</span></div>${assetTrend(rows)}</section><section class="table-panel"><div class="table-heading"><h2>월별 전망 내역 <span>${period.count}개월</span></h2><span class="table-hint">원 단위 · 첫 달은 미확인 지출과 오늘 이후 일정 반영</span></div><div class="table-scroll"><table><thead><tr><th>예상 월</th><th class="numeric">수입</th><th class="numeric">지출</th><th class="numeric">예금 잔액</th><th class="numeric">퇴직금·연금</th><th class="numeric">대출 잔액</th><th class="numeric">순자산</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td><strong>${r.month}</strong><small>${i===0?'미확인 지출 및 월말까지 일정':'월별 전망'}${r.cashShortage?' · 현금 부족':''}</small></td><td class="numeric income-color">${money(r.income)}</td><td class="numeric">${money(r.expense)}</td><td class="numeric ${r.cashShortage?'text-danger':''}">${money(r.deposits)}</td><td class="numeric">${money(r.retirement)}</td><td class="numeric">${money(r.loans)}</td><td class="numeric"><strong>${money(r.net)}</strong></td></tr>`).join('')}</tbody></table></div></section><p class="category-note">예금에 수입을 더하고 지출을 뺍니다. 대출 원금은 잔액까지만 상환하며, 잔액이 0이 되면 다음 상환을 중단합니다. 카드 결제는 예금과 미결제 부채에서 함께 차감하므로 순자산에서 중복 차감하지 않습니다. 미등록 지출, 새 카드 청구, 시장가격·환율·금리 변화는 예측에 포함되지 않습니다.</p>`;
 }
 function paydayPage(){
  const today=todayKST(),salaries=portfolio.cashflow.filter(row=>row.type==='salary');
@@ -648,7 +652,7 @@ function mountPageCoachmarks(root,mobile){
 }
 function renderMobile(){
  advisorState??=initialAdvisorState();
- const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
+ const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,forecastHorizon:chartHorizon,forecastEndMonth,recordId:mobileRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
  enhanceDisclosure(root,{view,mobile:true});
  const pageTitle=view==='menu'?'전체':navLabels[view];
  document.title=view==='overview'||!pageTitle?'돈모아':pageTitle+' · 돈모아';
@@ -909,7 +913,11 @@ document.addEventListener('click',async e=>{
  if(action==='reset-payday-filter'){paydaySalaryId='all';paydaySelectedDate='';render();}
  if(action==='select-payday'){paydaySelectedDate=button.dataset.date;render();}
  if(action==='loan-forecast'){loanForecastId=id;render();$('loan-forecast-title')?.scrollIntoView?.({behavior:'smooth',block:'start'});}
- if(action==='chart-range'){chartHorizon=Number(button.dataset.range);render();}
+ if(action==='chart-range'){
+  const horizon=Number(button.dataset.range);if(![6,12].includes(horizon))return;
+  chartHorizon=horizon;forecastEndMonth='';localStorage.setItem(forecastEndPreference,'');
+  render();document.querySelector('[data-action="chart-range"][aria-pressed="true"]')?.focus({preventScroll:true});return;
+ }
  if(action==='add'||action==='edit'){if($('editor').open)$('editor').close();$('record-form').querySelector('button[type="submit"]').hidden=false;openEditor(kind,id);}
  if(action==='choose-kind'){$('editor').close();$('record-form').querySelector('button[type="submit"]').hidden=false;openEditor(kind);}
  if(action==='delete'){
@@ -929,6 +937,19 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('change',e=>{
  const monthPickerId=e.target.id;
+ if(monthPickerId==='forecast-end-month'){
+  const period=monthlyForecastPeriod(todayKST(),chartHorizon,e.target.value);
+  if(!period.custom)return;
+  forecastEndMonth=period.endMonth;localStorage.setItem(forecastEndPreference,forecastEndMonth);
+  mobileState.forecastDate=paymentDate(period.endMonth,31);
+  render();$('forecast-end-month-button')?.focus({preventScroll:true});return;
+ }
+ if(monthPickerId==='forecast-detail-month'){
+  const period=monthlyForecastPeriod(todayKST(),chartHorizon,forecastEndMonth),selected=e.target.value;
+  if(!validMonth(selected)||selected<period.startMonth||selected>period.endMonth)return;
+  mobileState.forecastDate=paymentDate(selected,31);
+  render();$('forecast-detail-month-button')?.focus({preventScroll:true});return;
+ }
  if((monthPickerId==='workspace-month'||monthPickerId==='spending-month'&&e.target.value<=todayKST().slice(0,7))&&validMonth(e.target.value)){
   month=e.target.value;render();$(monthPickerId+'-button')?.focus();return;
  }

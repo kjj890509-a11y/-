@@ -412,6 +412,7 @@ body:not(.mobile-app) :is(.context-tip-bubble, .coach-card, dialog) { border: 0;
 #main .overview-workspace .home-stat > strong { margin: 13px 0 0; font-size: clamp(16px, 1.5vw, 22px); line-height: 1.3; color: var(--ink); }
 #main .overview-workspace .home-stat > small { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 .overview-forecast { --amount-bar-color: #828282; --chart-min-width: min(100%, 680px); }
+.overview-forecast[data-long-range] { --chart-min-width: initial; }
 .overview-forecast .amount-bar-point:last-child { --amount-bar-color: #454545; }
 .overview-forecast .amount-bar-point:is(:hover,:focus-visible) { --amount-bar-color: var(--ink); }
 .overview-chart-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }

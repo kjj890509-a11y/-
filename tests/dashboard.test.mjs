@@ -1,11 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseHTML} from 'linkedom';
-import {emptyPortfolio,samplePortfolio,validatePortfolio,budgetPlan,totals} from '../public/domain.mjs';
+import {emptyPortfolio,samplePortfolio,validatePortfolio,budgetPlan,totals,monthlyForecastPeriod} from '../public/domain.mjs';
 import {dashboardData,renderDashboard,renderAssets} from '../public/dashboard-view.mjs';
 import {viewLabels,navigationGroups,groupForView,sectionTabs} from '../public/navigation.mjs';
 const money=value=>new Intl.NumberFormat('ko-KR').format(value)+'원';
 const format={money,compact:money,svg:()=>'',chart:'',today:'2026-11-16'};
+
+test('forecast periods include the selected calendar month and respect the projection limit',()=>{
+ const today='2026-11-16';
+ assert.equal(monthlyForecastPeriod(today,12,'2026-11').count,1);
+ assert.equal(monthlyForecastPeriod(today,12,'2027-01').count,3);
+ assert.equal(monthlyForecastPeriod(today,12,'2036-10').count,120);
+ for(const invalid of ['2026-10','2036-11','2027-13','<b>']){
+  const period=monthlyForecastPeriod(today,6,invalid);
+  assert.equal(period.custom,false);
+  assert.equal(period.endMonth,'2027-04');
+  assert.equal(period.count,6);
+ }
+});
 
 test('every existing destination remains reachable in one of six navigation groups',()=>{
  const expected=['entry','records','overview','statistics','advisor','budget','forecast','payday','planned','history','stocks','loans','retirement','deposits','cards','fixed','cashflow','spending','schedule','assets','workspace'];

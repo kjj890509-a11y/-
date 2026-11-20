@@ -418,12 +418,20 @@ export function budgetPlan(data,month) {
   const expense=flow.expense+paidCards,budget=(data.budgets||[]).find(row=>row.month===month);
   return {...flow,expense,cardBills:flow.cardDue+paidCards,balance:flow.income-expense,limit:budget?.expenseLimit??null,target:budget?.savingsTarget??null,remaining:budget?budget.expenseLimit-expense:null};
 }
+const forecastMonthLimit=120;
+const forecastMonthCount=(first,last)=>(Number(last.slice(0,4))-Number(first.slice(0,4)))*12+Number(last.slice(5))-Number(first.slice(5))+1;
+export function monthlyForecastPeriod(today=todayKST(),horizon=12,customEndMonth='') {
+ const startMonth=today.slice(0,7),maxMonth=shiftMonth(startMonth,forecastMonthLimit-1);
+ const custom=validMonth(customEndMonth)&&customEndMonth>=startMonth&&customEndMonth<=maxMonth;
+ const endMonth=custom?customEndMonth:shiftMonth(startMonth,horizon-1);
+ return {startMonth,endMonth,maxMonth,count:forecastMonthCount(startMonth,endMonth),custom};
+}
 export function forecastOnDates(data,targetDates,startDate=todayKST()) {
  if(!validDate(startDate)||!Array.isArray(targetDates)||targetDates.some(date=>!validDate(date)||date<startDate))throw new Error('예상 기준일과 조회 날짜를 확인해 주세요.');
  const dates=[...new Set(targetDates)].sort();if(!dates.length)return [];
  const firstMonth=startDate.slice(0,7),lastMonth=dates.at(-1).slice(0,7);
- const monthCount=(Number(lastMonth.slice(0,4))-Number(firstMonth.slice(0,4)))*12+Number(lastMonth.slice(5))-Number(firstMonth.slice(5))+1;
- if(monthCount>120)throw new Error('예상 기간은 10년 이내로 선택해 주세요.');
+ const monthCount=forecastMonthCount(firstMonth,lastMonth);
+ if(monthCount>forecastMonthLimit)throw new Error('예상 기간은 10년 이내로 선택해 주세요.');
  const loanMonths=loanSchedule(data,firstMonth,monthCount,startDate);
  const confirmed=new Set((data.expenseConfirmations||[]).map(row=>row.key));
  const events=pendingExpenses(data,startDate).map(row=>({...row,date:startDate,kind:row.kind==='cards'?'card':row.kind==='cashflow'?'expense':'fixed',income:false}));

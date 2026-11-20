@@ -1,6 +1,7 @@
 import {contextTip} from './context-tips.mjs';
-import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate,pendingExpenses} from './domain.mjs';
+import {totals,budgetPlan,paydayForecasts,forecastMonths,eventsForMonth,todayKST,shiftMonth,snapshotTotals,paymentDate,pendingExpenses,monthlyForecastPeriod} from './domain.mjs';
 import {renderAmountBars,renderAssetDonut,renderBudgetRing,renderSparkline,snapshotSeries} from './financial-charts.mjs';
+import {renderMonthPicker} from './month-picker.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=(rows,key)=>rows.reduce((total,row)=>total+(row[key]||0),0);
 export function dashboardData(data,today=todayKST()){
@@ -34,7 +35,19 @@ function upcomingAgenda({events,today},money,svg,cashflowCard,expenseSummary) {
  </aside>`;
 }
 
-export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBanner='',today=todayKST(),selection='all',detail='',hideAmounts=false}){
+export function renderForecastPeriod({startMonth,endMonth,maxMonth,count,custom}){
+ const buttons=[[6,'6개월'],[12,'1년']].map(([months,label])=>{
+  const active=!custom&&count===months;
+  return `<button type="button" ${active?'class="active"':''} aria-pressed="${active}" data-action="chart-range" data-range="${months}">${label}</button>`;
+ }).join('');
+ return `<div class="forecast-period-controls">
+  <div class="segmented" aria-label="전망 기간">${buttons}</div>
+  <div class="forecast-end-field"><label for="forecast-end-month-button">전망 종료월</label>
+   ${renderMonthPicker({id:'forecast-end-month',value:endMonth,label:'전망 종료월',min:startMonth,max:maxMonth,required:true})}
+  </div>
+ </div>`;
+}
+export function renderDashboard(data,{money,compact=money,svg,horizon=12,forecastEndMonth='',demoBanner='',today=todayKST(),selection='all',detail='',hideAmounts=false}){
  const summary=dashboardData(data,today);
  const {t,budget,month,nextPayday,monthEnd,previous}=summary;
  const delta=previous?t.net-snapshotTotals(previous).net:null;
@@ -44,7 +57,8 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
    <span class="overview-metric-label"><i aria-hidden="true">${svg(icon)}</i>${label}<span data-home-indicator aria-hidden="true">${selection===key?'✓':'↗'}</span></span>
    <strong data-motion-value data-motion-value-key="home:${key}">${money(value)}</strong>${fact?`<small>${fact}</small>`:''}
  </button>${contextTip(label,description)}</div>`;
- const chartPoints=hasAssets&&!hideAmounts&&!detail?forecastMonths(data,today,horizon).map(row=>({
+ const period=monthlyForecastPeriod(today,horizon,forecastEndMonth);
+ const chartPoints=hasAssets&&!hideAmounts&&!detail?forecastMonths(data,today,period.count).map(row=>({
   label:row.month.slice(2).replace('-','.'),detailLabel:row.date+' · 월말 예상 순자산',value:row.net
  })):[];
  const chart=chartPoints.length?renderAmountBars(chartPoints,{formatMoney:money,formatCompact:compact,title:'월말 순자산 전망',minWidth:680,height:232,showHint:false}):
@@ -62,11 +76,11 @@ export function renderDashboard(data,{money,compact=money,svg,horizon=12,demoBan
    </div>
    <section id="home-dashboard" class="home-dashboard" aria-label="자산 상세">
    ${detail?`<div class="home-detail-toolbar"><span role="status">${selectedLabels[selection]} 상세</span><button type="button" class="button secondary" data-action="home-detail" data-detail="all" aria-controls="home-dashboard">전체 보기</button></div>${detail}`: `
-    <section class="overview-forecast">
+    <section class="overview-forecast" ${chartPoints.length>24?'data-long-range':''}>
      <div class="overview-section-head">
       <div><h2>월말 순자산 전망</h2><p>현재 잔액과 등록한 입출금 일정 기준</p></div>
       <div class="overview-chart-actions">
-       <div class="segmented" aria-label="전망 기간">${[6,12].map(count=>`<button type="button" aria-pressed="${horizon===count}" class="${horizon===count?'active':''}" data-action="chart-range" data-range="${count}">${count===6?'6개월':'1년'}</button>`).join('')}</div>
+       ${renderForecastPeriod(period)}
        <a class="overview-link" href="#forecast">월별 전망</a>
       </div>
      </div>${chart}
