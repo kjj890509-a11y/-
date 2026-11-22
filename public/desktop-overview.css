@@ -207,6 +207,48 @@ body:not(.mobile-app) #main .loan-card-heading { margin-bottom: 14px; }
 body:not(.mobile-app) #main .loan-card-inline { padding-top: 10px; }
 body:not(.mobile-app) #main :is(.loan-card-meta, .loan-card-details) { margin-top: 12px; }
 body:not(.mobile-app) #main .loan-card-details > summary { padding-block: 8px; }
+
+#main .record-amount-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: #f5f5f5;
+  cursor: text;
+}
+#main .record-amount-control > input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+#main .record-amount-control > span { color: inherit; font-size: inherit; }
+#main .record-amount-input { text-align: right; font-variant-numeric: tabular-nums; }
+#main .record-amount-control:hover { background: #ececec; }
+#main .record-amount-control.is-changed { background: #fff5d6; }
+#main .record-amount-control:focus-within { outline: 2px solid #a77e19; outline-offset: -2px; }
+#main :is([data-record-amount-save], [data-record-amount-undo], [data-card-bill-save-row])[hidden] { display: none; }
+#main .loan-card-balance {
+  margin-top: 6px;
+  font-size: var(--font-xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#main .loan-card-balance .record-amount-control { max-width: 12em; }
+#main .loan-card-edit-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .forecast-toggle-cell {
   display: flex;
   flex-direction: column;

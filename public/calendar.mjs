@@ -23,7 +23,7 @@ const eventTone=row=>row.paid?'paid':row.income?'in':'out';
 const dateLabel=date=>`${Number(date.slice(5,7))}월 ${Number(date.slice(8))}일 ${weekdays[new Date(date+'T00:00:00Z').getUTCDay()]}요일`;
 function eventRow(row,money){
  const tone=eventTone(row);
- return `<button type="button" class="cf-event" data-action="edit" data-kind="${row.type}" data-id="${esc(row.id)}" aria-label="${esc(row.name)} 내역 수정"><span class="cf-event-mark cf-event-${tone}" aria-hidden="true">${row.paid?'✓':row.income?'↙':'↗'}</span><span class="cf-event-info"><strong>${esc(row.name)}</strong><small>${eventKind(row)}</small></span><span class="cf-event-value ${row.income?'cf-in':row.paid?'cf-paid-value':''}">${row.paid?'':row.income?'+':'−'}${esc(money(row.amount))}</span><span class="cf-event-edit" aria-hidden="true">›</span></button>`;
+ return `<button type="button" class="cf-event" data-action="edit" data-kind="${row.type}" data-id="${esc(row.id)}" aria-label="${esc(row.name)} 상세 수정"><span class="cf-event-mark cf-event-${tone}" aria-hidden="true">${row.paid?'✓':row.income?'↙':'↗'}</span><span class="cf-event-info"><strong>${esc(row.name)}</strong><small>${eventKind(row)}</small></span><span class="cf-event-value ${row.income?'cf-in':row.paid?'cf-paid-value':''}">${row.paid?'':row.income?'+':'−'}${esc(money(row.amount))}</span><span class="cf-event-edit" aria-hidden="true">›</span></button>`;
 }
 function groupedEvents(rows,money,selected='all'){
  if(selected!=='all')return rows.map(row=>eventRow(row,money)).join('');

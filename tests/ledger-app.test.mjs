@@ -32,6 +32,34 @@ async function setup(){
  return {db,document,window,Event,context,click,change,downloads};
 }
 
+test('direct amount editing saves only the active row and preserves drafts across desktop tables',async()=>{
+ const {db,document,Event,context,window,click}=await setup();
+ const visit=view=>{context.location.hash='#'+view;window.dispatchEvent(new Event('hashchange'));};
+ const read=()=>db.prepare('SELECT data,revision FROM portfolios').get();
+ const edit=(key,value)=>{
+  const input=document.querySelector(`[data-record-amount-row="${key}"] [data-record-amount-field]`);
+  assert.ok(input,key);input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));
+ };
+ visit('deposits');
+ const keys=['deposits:demo-d1','deposits:demo-d2'];
+ const original=read();
+ edit(keys[0],'8,500,123');edit(keys[1],'40000123');
+ assert.deepEqual(read(),original);
+ click(`[data-record-amount-row="${keys[0]}"] [data-record-amount-save]`);await tick();await tick();
+ const saved=read(),data=JSON.parse(saved.data);
+ assert.equal(saved.revision,original.revision+1);
+ assert.equal(data.deposits[0].balance,8500123);assert.equal(data.deposits[1].balance,40000000);
+ visit('records');
+ assert.equal(document.querySelector(`[data-record-amount-row="${keys[1]}"] [data-record-amount-field="balance"]`).value,'40000123');
+ click(`[data-record-amount-row="${keys[1]}"] [data-record-amount-undo]`);
+ assert.equal(document.querySelector(`[data-record-amount-row="${keys[1]}"] [data-record-amount-field]`).value,'40,000,000');
+ assert.equal(document.querySelector('[data-ledger-action="edit"]').textContent,'상세 수정');
+ assert.equal(document.querySelector('.ledger-actions .icon-button'),null);
+ document.querySelector('#privacy-toggle').onclick();
+ assert.equal(document.querySelector('[data-record-amount-field]'),null);
+ assert.deepEqual(read(),saved);db.close();
+});
+
 test('live ledger saves and reloads account views, exports the whole filtered set, and updates selected cards only',async()=>{
  const t=await setup(),{db,document,Event,click,change,context,window}=t;
  const initial=db.prepare('SELECT data,revision FROM portfolios').get();

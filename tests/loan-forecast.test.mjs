@@ -92,7 +92,7 @@ test('the loan management page mounts the forecast and preserves amount hiding',
   assert.equal(document.querySelectorAll('.loan-forecast-panel').length, 1);
   assert.equal(document.querySelectorAll('.loan-forecast-panel [data-loan-month]').length, 12);
   assert.equal(document.querySelectorAll('[data-loan-card]').length, 2);
-  assert.equal(document.querySelector('[data-loan-card="first"] [data-loan-amount="balance"]').textContent,'1,200원');
+  assert.equal(document.querySelector('[data-loan-card="first"] [data-loan-amount="balance"] input').value,'1,200');
   assert.equal(document.querySelector('[data-loan-card="first"] [data-loan-amount="payment"]').textContent,'412원');
   assert.equal(document.querySelector('[data-loan-card="second"] [data-loan-amount="payment"]').textContent,'309원');
   assert.equal(document.querySelectorAll('#main .ledger-table').length, 1);
