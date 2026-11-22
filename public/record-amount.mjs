@@ -14,7 +14,7 @@ export function recordAmountActions(state,key,hidden) {
  return `<button type="button" class="button primary small" data-record-amount-save ${dirty&&!hidden?'':'hidden'} ${state.busy?'disabled':''}>이 행 저장</button><button type="button" class="text-button" data-record-amount-undo ${dirty?'':'hidden'} ${state.busy?'disabled':''}>되돌리기</button>`;
 }
 
-export function mountRecordAmountEditing(root,state,{getData,isHidden,save,render,feedback}) {
+export function createRecordAmountEditing(root,state,{getData,isHidden,save,render,feedback}) {
  const rows=()=>[...root.querySelectorAll('[data-record-amount-row]')];
  const update=key=>{
   const draft=state.drafts.get(key);
@@ -32,7 +32,7 @@ export function mountRecordAmountEditing(root,state,{getData,isHidden,save,rende
   row?.querySelector(field?`[data-record-amount-field="${field}"]`:'[data-record-amount-field], [data-ledger-action="edit"], [data-action="edit"]')?.focus();
  };
  const input=event=>{
-  const field=event.target.dataset.recordAmountField;
+  const field=event.target.dataset?.recordAmountField;
   if(!field||state.busy||isHidden())return;
   const key=event.target.closest('[data-record-amount-row]').dataset.recordAmountRow;
   const [kind,id]=key.split(':');
@@ -62,21 +62,25 @@ export function mountRecordAmountEditing(root,state,{getData,isHidden,save,rende
    focus(key,field,position);
   }
  };
- root.addEventListener('input',input);
- root.addEventListener('click',event=>{
-  const button=event.target.closest('[data-record-amount-save], [data-record-amount-undo]');
-  if(!button||button.disabled||state.busy)return;
+ const click=event=>{
+  const button=event.target;
+  if(!button.hasAttribute?.('data-record-amount-save')&&!button.hasAttribute?.('data-record-amount-undo'))return false;
+  if(button.disabled||state.busy)return true;
   const row=button.closest('[data-record-amount-row]'),key=row.dataset.recordAmountRow;
-  if(button.hasAttribute('data-record-amount-save'))return saveRow(row);
-  const position=rows().filter(item=>item.dataset.recordAmountRow===key).indexOf(row);
-  state.drafts.delete(key);
-  render();
-  focus(key,undefined,position);
- });
- root.addEventListener('keydown',event=>{
-  const field=event.target.dataset.recordAmountField;
+  if(button.hasAttribute('data-record-amount-save'))saveRow(row);
+  else {
+   const position=rows().filter(item=>item.dataset.recordAmountRow===key).indexOf(row);
+   state.drafts.delete(key);
+   render();
+   focus(key,undefined,position);
+  }
+  return true;
+ };
+ const keydown=event=>{
+  const field=event.target.dataset?.recordAmountField;
   if(!field||event.key!=='Enter'||event.isComposing)return;
   event.preventDefault();
   return saveRow(event.target.closest('[data-record-amount-row]'),field);
- });
+ };
+ return {input,click,keydown};
 }

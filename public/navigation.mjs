@@ -56,4 +56,4 @@ export {createCoachmarkState,mountCoachmarks} from './coachmarks.mjs';
 export {renderFinanceIcon,renderFinanceRecordIcon} from './finance-icons.mjs';
 export {mountDesktopNavigation} from './desktop-navigation.mjs';
 export {applyEntryDrafts} from './entry-manager.mjs';
-export {mountRecordAmountEditing,recordAmountInput,recordAmountActions} from './record-amount.mjs';
+export {createRecordAmountEditing,recordAmountInput,recordAmountActions} from './record-amount.mjs';
