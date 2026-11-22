@@ -39,7 +39,15 @@ test('the retirement editor saves a monthly company contribution and reveals its
  assert.equal(writes,1);assert.equal(stored.retirement[0].monthlyContribution,250000);assert.equal(stored.retirement[0].contributionDate,firstDate);
  assert.equal(stored.retirement[0].amount,10000000);assert.equal(stored.deposits[0].balance,1000);
  const monthlyCell=document.querySelector('#records-body tr [data-column="monthlyContribution"]');
- assert.equal(monthlyCell.querySelector('input').value,'250,000');assert.match(monthlyCell.textContent,/매월 25일/);
+ assert.equal(monthlyCell.querySelector('input').value,'250,000');
+ const tip=monthlyCell.querySelector('[data-info-sources]');
+ assert.ok(tip);assert.equal(monthlyCell.querySelector('small'),null);
+ const schedule=document.getElementById(tip.dataset.infoSources);
+ assert.ok(schedule.hidden);assert.equal(schedule.textContent,'매월 25일 · '+firstDate.slice(0,7)+'부터');
+ tip.dispatchEvent(new Event('click',{bubbles:true}));
+ assert.equal(document.querySelector('.context-tip-bubble').textContent,schedule.textContent);
+ tip.dispatchEvent(new Event('click',{bubbles:true}));
+ assert.equal(document.querySelector('.context-tip-bubble'),null);
  assert.equal(document.querySelector('.metric-strip .metric-box:nth-child(2) strong').textContent,'250,000원');
  edit();assert.equal(document.getElementById('field-contributionDate').value,firstDate);
  document.getElementById('field-monthlyContribution').value='0';document.getElementById('field-monthlyContribution').dispatchEvent(new Event('input',{bubbles:true}));

@@ -18,13 +18,11 @@ export function renderLedger(entries,state,{scope,money,cell,today,amountState,h
  const activeFilters=filterKeys.filter(key=>!['sort','status'].includes(key)&&state[key]&&state[key]!=='all').length;
  const label=key=>defs.find(([k])=>k===key)?.[1]||key;
  const displayCell=(entry,key)=>{
-  const content=cell(entry,key);
-  if(key==='name')return `<button type="button" class="ledger-open" data-ledger-action="detail" data-id="${esc(entry.key)}">${content}</button>`;
+  if(key==='name')return `<button type="button" class="ledger-open" data-ledger-action="detail" data-id="${esc(entry.key)}">${cell(entry,key)}</button>`;
   const primary=amountKeys[entry.kind];
   const field=key==='amount'&&scope==='all'?primary:key;
-  if(!amountState||hidden||!(field===primary||entry.kind==='stocks'&&field==='cost'||entry.kind==='retirement'&&field==='monthlyContribution'))return content;
-  const note=content.indexOf('<small');
-  return recordAmountInput(amountState,entry,field,label(key))+(note<0?'':content.slice(note));
+  const editable=amountState&&!hidden&&(field===primary||entry.kind==='stocks'&&field==='cost'||entry.kind==='retirement'&&field==='monthlyContribution');
+  return cell(entry,key,editable?recordAmountInput(amountState,entry,field,label(key)):undefined);
  };
  const rowActions=entry=>`${amountState?recordAmountActions(amountState,entry.key,hidden):''}<button type="button" class="button secondary small" data-ledger-action="edit" data-id="${esc(entry.key)}">상세 수정</button>${keys.includes('name')?'':`<button type="button" class="button secondary small" data-ledger-action="detail" data-id="${esc(entry.key)}">상세 보기</button>`}${extraActions(entry)}`;
  const order=[...state.columns.filter(key=>defs.some(([k])=>k===key)),...defs.map(([k])=>k).filter(key=>!state.columns.includes(key))];
