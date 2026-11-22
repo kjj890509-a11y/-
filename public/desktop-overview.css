@@ -313,7 +313,7 @@ body:not(.mobile-app) #main .table-scroll tbody tr:nth-child(even) td:not(:has(.
 body:not(.mobile-app) #main tbody td:has(.record-amount-input) { background: #fff; }
 /* Use the same button shapes and selection states throughout desktop filters and tabs. */
 body:not(.mobile-app) #main :is(
-  .section-tabs, .ledger-views, .ledger-statuses, .entry-mode-tabs, .entry-kind-filters,
+  .section-tabs, .entry-mode-tabs, .entry-kind-filters,
   .ui-steps, .workspace-period-controls, .segmented, .cf-view-switch, .cf-categories,
   .rank-controls, .spending-modes
 ) {
@@ -327,7 +327,7 @@ body:not(.mobile-app) #main :is(.segmented, .cf-view-switch, .spending-modes, .s
   padding: 0;
 }
 body:not(.mobile-app) #main :is(
-  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
   .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
   .cf-categories > button, .rank-controls > button, .spending-modes > button
@@ -352,7 +352,7 @@ body:not(.mobile-app) #main :is(
   white-space: normal;
 }
 body:not(.mobile-app) #main :is(
-  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
   .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
   .cf-categories > button, .rank-controls > button, .spending-modes > button
@@ -360,7 +360,7 @@ body:not(.mobile-app) #main :is(
   background: var(--desk-panel-active);
 }
 body:not(.mobile-app) #main :is(
-  .section-tabs > a, .ledger-views .ledger-view, .ledger-statuses > button,
+  .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
   .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
   .cf-categories > button, .rank-controls > button, .spending-modes > button
@@ -368,25 +368,6 @@ body:not(.mobile-app) #main :is(
   background: var(--desk-choice-selected);
   color: #fff;
   box-shadow: none;
-}
-body:not(.mobile-app) #main .ledger-view-pair {
-  align-items: center;
-  max-width: 100%;
-  border: 0;
-  border-radius: 11px;
-  background: var(--desk-panel);
-  overflow: visible;
-}
-body:not(.mobile-app) #main .ledger-view-pair > .ledger-view { flex-shrink: 1; }
-body:not(.mobile-app) #main .ledger-view-pair > .ledger-view-delete {
-  flex: 0 0 32px;
-  margin-inline: 2px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-}
-body:not(.mobile-app) #main .ledger-view-pair > .ledger-view-delete:is(:hover, :focus-visible) {
-  background: var(--expense-soft);
 }
 body:not(.mobile-app) #main :is(.entry-category-count, .entry-mode-tabs span) {
   min-width: 0;

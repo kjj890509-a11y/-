@@ -60,12 +60,29 @@ async function ui(scope='cards',portfolio=data()){
 }
 
 test('row selection, status filters, bulk actions, detail and export operate on the intended records',async()=>{
- const t=await ui();t.change('[data-ledger-select-page]',true);assert.equal(t.state.selected.length,2);
+ const portfolio=data();portfolio.cards[0].paid=true;
+ const t=await ui('cards',portfolio);t.change('[data-ledger-select-page]',true);assert.equal(t.state.selected.length,2);
  t.click('[data-ledger-action="bulk-paid"]');await tick();assert.equal(t.bulk[0].action,'paid');assert.equal(t.bulk[0].keys.length,2);
  t.click('[data-ledger-action="detail"]');assert.equal(t.details.length,1);
  t.click('[data-ledger-action="edit"]');assert.equal(t.edited.length,1);
  t.click('[data-ledger-action="bulk-export"]');assert.equal(t.exported[0].rows.length,2);
  t.click('[data-ledger-action="status"][data-value="unpaid"]');assert.equal(t.state.selected.length,0);
+ unmountLedger(t.root);
+});
+
+test('the toolbar omits redundant status filters and separates view and table options',async()=>{
+ const t=await ui();
+ assert.equal(t.root.querySelector('.ledger-statuses'),null);
+ assert.equal(t.root.querySelector('.ledger-result').textContent,'2건');
+ const views=t.root.querySelector('[data-ledger-menu="views"]'),options=t.root.querySelector('[data-ledger-menu="options"]');
+ assert.ok(views.querySelector('[data-ledger-action="save-dialog"]'));
+ assert.ok(options.querySelector('[data-ledger-action="export"]'));
+ views.setAttribute('open','');
+ views.querySelector('summary').dispatchEvent(Object.assign(new t.Event('keydown',{bubbles:true,cancelable:true}),{key:'Escape'}));
+ assert.equal(views.hasAttribute('open'),false);
+ options.setAttribute('open','');
+ t.root.querySelector('[data-ledger-field="query"]').dispatchEvent(new t.Event('pointerdown',{bubbles:true}));
+ assert.equal(options.hasAttribute('open'),false);
  unmountLedger(t.root);
 });
 
