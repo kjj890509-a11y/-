@@ -509,10 +509,10 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
 .ledger-sort-indicator { flex-shrink:0; }
 .ledger-table th.numeric .ledger-sort { justify-content:flex-end; }
 .ledger-table th.numeric .ledger-sort-indicator { order:-1; }
-.ledger-table th.ledger-actions-cell { width:136px; min-width:136px; }
-.ledger-table .ledger-actions-cell { text-align:left; white-space:nowrap; }
-.ledger-actions { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
-.ledger-actions .button.small { min-height:32px; padding:6px 10px; }
+.ledger-table .ledger-actions-cell { --ledger-action-inset:10px; padding-inline-start:12px; text-align:start; white-space:nowrap; }
+.ledger-table th.ledger-actions-cell { width:136px; min-width:136px; padding-inline-start:calc(12px + var(--ledger-action-inset)); }
+.ledger-actions { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.ledger-actions .button.small { min-height:32px; padding:6px var(--ledger-action-inset, 10px); }
 .ledger-actions .icon-button { display:inline-grid; width:32px; height:32px; flex-shrink:0; }
 .ledger-resize { position:absolute; right:0; top:0; bottom:0; width:10px; cursor:col-resize; touch-action:none; }
 .ledger-resize:hover,.ledger-resize:focus { background:var(--soft-surface); border-right:2px solid var(--green); }

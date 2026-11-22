@@ -45,6 +45,9 @@ test('direct amount editing saves only the active row and preserves drafts acros
  const original=read();
  edit(keys[0],'8,500,123');edit(keys[1],'40000123');
  assert.deepEqual(read(),original);
+ const changedActions=document.querySelector(`[data-record-amount-row="${keys[0]}"] .ledger-actions`);
+ assert.equal(changedActions.firstElementChild.dataset.ledgerAction,'edit');
+ assert.equal(changedActions.querySelector('[data-record-amount-save]').hidden,false);
  click(`[data-record-amount-row="${keys[0]}"] [data-record-amount-save]`);await tick();await tick();
  const saved=read(),data=JSON.parse(saved.data);
  assert.equal(saved.revision,original.revision+1);
