@@ -8,6 +8,15 @@ import {createCardBillingState,saveCardAccount,setCardArchived,stageCardBill,sta
 import {handleApi} from '../server/api.mjs';
 const account={id:'card-a',name:'현대 M',day:31,note:''};
 const cardData=()=>saveCardAccount(emptyPortfolio(),account);
+test('an individual bill save leaves other months staged',()=>{
+ const data=cardData(),state=createCardBillingState();
+ state.month='2027-01';stageCardBill(state,data,account.id,'amount','10,000');
+ const first=[...state.drafts.keys()][0];
+ state.month='2027-02';stageCardBill(state,data,account.id,'amount','20,000');
+ const next=applyCardBills(data,state,{keys:[first],createId:()=> 'first-bill'});
+ assert.deepEqual(next.cards.map(bill=>[bill.billingMonth,bill.amount]),[['2027-01',10000]]);
+ assert.equal(state.drafts.size,2);
+});
 test('saved cards have no debt until an explicit monthly bill; each billing month keeps its own independent record',()=>{
  const p=cardData(),state=createCardBillingState();assert.equal(totals(p).cards,0);assert.equal(p.cards.length,0);
  state.month='2028-02';assert.match(renderCardBilling(p,state,{money:String}),/2028-02-29/);stageCardBill(state,p,account.id,'amount','123,400');const feb=applyCardBills(p,state,{createId:()=> 'feb-bill'});assert.equal(feb.cards[0].dueDate,'2028-02-29');assert.equal(feb.cards[0].cardAccountId,account.id);assert.equal(totals(feb).cards,123400);assert.equal(eventsForMonth(feb,'2028-02').filter(e=>e.type==='cards').length,1);

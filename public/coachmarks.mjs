@@ -82,7 +82,7 @@ export function coachmarkPosition(target,options){
 const saveStep=[{title:'저장 후 다른 화면에도 반영',body:'입력 창의 저장하기를 눌러야 내 계정에 반영됩니다. 같은 계정의 PC·모바일이 이 내역을 함께 사용합니다. 안내를 다시 보려면 입력·수정 안내를 누르세요.',target:'[data-mobile-sync],#save-state'}];
 function stepsFor(view,detail,mobile){
  const page=config[view],lastStep=view==='entry'&&!mobile?[{title:'변경 목록을 저장하세요',body:'기존 내역 수정은 변경 목록에 담은 뒤 변경 저장을 눌러 일괄 반영합니다. 새 내역은 입력 창에서 저장합니다.',target:'#entry-manager'}]:saveStep;
- if(detail)return[{title:'이 내역 수정하기',body:'수정 버튼에서 현재 내역을 열 수 있습니다. 값을 바꾼 뒤 저장하기를 눌러 반영하세요.',action:'edit',label:'이 내역 수정',target:'[data-action="edit"],.m-balance-hero'},...lastStep];
+ if(detail)return[{title:'이 내역 수정하기',body:'상세 수정에서 현재 내역을 열 수 있습니다. 값을 바꾼 뒤 저장하기를 눌러 반영하세요.',action:'edit',label:'이 내역 수정',target:'[data-action="edit"],.m-balance-hero'},...lastStep];
  if(view==='history')return[{title:'월별 자산 기록 남기기',body:'선택한 월의 잔액을 기록합니다. 과거 월은 당시의 실제 잔액을 입력하세요.',action:'add',label:'자산 기록 입력',target:page.addTarget},{title:'기존 월 기록 수정하기',body:'수정할 월을 선택하면 저장된 기록이 열립니다.',action:'edit',label:'기록 선택',target:page.editTarget},...lastStep];
  if(view==='budget')return[{title:'이달 예산 입력·수정',body:'화면에서 선택한 월의 지출 한도와 저축 목표를 입력합니다. 기존 값이 있으면 수정할 수 있습니다.',action:'budget',label:'선택한 월 예산 열기',target:page.addTarget},{title:'지출 계획 수정하기',body:'수입·지출, 대출, 카드 내역을 고치면 예산과 전망에도 함께 반영됩니다.',action:'edit',label:'수정할 내역 선택',target:page.editTarget},...lastStep];
  if(view==='spending')return[

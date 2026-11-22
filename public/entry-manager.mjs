@@ -4,7 +4,7 @@ import {KINDS,LABELS,FLOW_LABELS,validatePortfolio,emptyPortfolio} from './domai
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const order=['cashflow','fixed','deposits','stocks','retirement','loans','cards'];
 const won=new Intl.NumberFormat('ko-KR');
-const amountKeys={cashflow:'amount',fixed:'amount',deposits:'balance',stocks:'valuation',retirement:'amount',loans:'balance',cards:'amount'};
+export const amountKeys={cashflow:'amount',fixed:'amount',deposits:'balance',stocks:'valuation',retirement:'amount',loans:'balance',cards:'amount'};
 const spec={
  name:['이름','text'],institution:['금융기관·회사','text'],note:['메모','text'],balance:['현재 잔액','money'],valuation:['현재 평가액','money'],cost:['총매입금액','money'],amount:['금액','money'],rate:['연 이율 · %','number'],maturity:['만기일','date'],monthlyContribution:['기본 월 납입액','money'],contributionDate:['첫 납입 예정일','date'],asOf:['금액 기준일','date'],remainingMonths:['남은 납부 횟수','number'],nextPaymentDate:['다음 납부일','date'],day:['매월 납부일','number'],dueDate:['결제일','date'],date:['일자·반복 시작일','date'],startMonth:['시작월','month'],endMonth:['종료월','month'],
  type:['수입·지출 구분','select',Object.entries(FLOW_LABELS)],repeat:['반복','select',[['once','한 번'],['monthly','매월']]],paid:['결제 상태','boolean',[['false','결제 예정'],['true','결제 완료']]],includeInForecast:['예상 반영','boolean',[['true','포함'],['false','제외']]],paymentSource:['결제 방식','select',[['account','계좌 결제'],['card','카드 청구액에 포함 · 중복 제외']]]
@@ -104,7 +104,7 @@ function cell(item,column,state,{money,hidden}){
  if(hidden&&type==='money')input='<span class="entry-hidden-value">••••••</span>';
  else if(type==='month')input=renderMonthPicker({id:'entry-'+kind+'-'+row.id+'-'+field,value,label:row.name+' · '+label,required:field==='startMonth',disabled:state.busy,rangeStartId:field==='endMonth'?'entry-'+kind+'-'+row.id+'-startMonth':'',inputAttributes:attrs,emptyLabel:field==='endMonth'?'종료월 없음':'월 선택',clearLabel:'종료월 없음'});
  else if(type==='select'||type==='boolean')input=`<select ${attrs}>${definition[2].map(([v,label])=>`<option value="${v}" ${String(value)===v?'selected':''}>${label}</option>`).join('')}</select>`;
- else input=`<input ${attrs} type="${['date','month'].includes(type)?type:'text'}" value="${esc(type==='money'&&typeof value==='number'?won.format(value):value)}" ${['money','number'].includes(type)?'inputmode="decimal"':`maxlength="${field==='note'?500:100}"`} ${field==='name'?'required':''} autocomplete="off">`;
+ else input=`<input ${type==='money'?'class="record-amount-input"':''} ${attrs} type="${['date','month'].includes(type)?type:'text'}" value="${esc(type==='money'&&typeof value==='number'?won.format(value):value)}" ${type==='money'?'inputmode="numeric"':type==='number'?'inputmode="decimal"':`maxlength="${field==='note'?500:100}"`} ${field==='name'?'required':''} autocomplete="off">`;
  const old=type==='money'?money(row[field]||0):type==='select'||type==='boolean'?definition[2].find(([v])=>String(row[field])===v)?.[1]:String(row[field]??'')||'없음';
  return `<td data-layout-column="${column}" class="entry-edit-cell ${type==='money'||type==='number'?'entry-number-cell':''} ${dirty?'is-changed':''}">${input}${dirty?`<small class="entry-before">이전: ${esc(old)}</small>`:''}</td>`;
 }
