@@ -6,7 +6,7 @@ const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&
 export function recordAmountInput(state,entry,field,label) {
  const draft=state.drafts.get(entry.key),changed=Object.hasOwn(draft?.changes||{},field);
  const value=changed?draft.changes[field]:won.format(entry.row[field]??0);
- return `<label class="record-amount-control${changed?' is-changed':''}"><input type="text" class="record-amount-input" inputmode="numeric" autocomplete="off" maxlength="24" data-record-amount-field="${field}" aria-label="${escape(entry.row.name+' · '+label)}" value="${escape(value)}" ${state.busy?'disabled':''}><span aria-hidden="true">원</span></label>`;
+ return `<label class="record-amount-control"><input type="text" class="record-amount-input" inputmode="numeric" autocomplete="off" maxlength="24" data-record-amount-field="${field}" aria-label="${escape(entry.row.name+' · '+label)}" value="${escape(value)}" ${state.busy?'disabled':''}><span aria-hidden="true">원</span></label>`;
 }
 
 export function recordAmountActions(state,key,hidden) {
@@ -21,9 +21,6 @@ export function createRecordAmountEditing(root,state,{getData,isHidden,save,rend
   for(const row of rows().filter(row=>row.dataset.recordAmountRow===key)) {
    row.querySelector('[data-record-amount-save]').hidden=!draft||isHidden();
    row.querySelector('[data-record-amount-undo]').hidden=!draft;
-   for(const input of row.querySelectorAll('[data-record-amount-field]')) {
-    input.closest('.record-amount-control').classList.toggle('is-changed',Object.hasOwn(draft?.changes||{},input.dataset.recordAmountField));
-   }
   }
  };
  const focus=(key,field,position)=>{

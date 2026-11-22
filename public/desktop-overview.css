@@ -227,7 +227,6 @@ body:not(.mobile-app) #main .loan-card-details > summary { padding-block: 8px; }
   min-height: 34px;
   padding: 0 8px;
   border-radius: 5px;
-  background: #f5f5f5;
   cursor: text;
 }
 #main .record-amount-control > input {
@@ -237,7 +236,6 @@ body:not(.mobile-app) #main .loan-card-details > summary { padding-block: 8px; }
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
   box-shadow: none;
   outline: 0;
   color: inherit;
@@ -245,9 +243,8 @@ body:not(.mobile-app) #main .loan-card-details > summary { padding-block: 8px; }
   cursor: text;
 }
 #main .record-amount-control > span { color: inherit; font-size: inherit; }
+#main :is(.record-amount-control, .record-amount-input) { background: #fff; }
 #main .record-amount-input { text-align: right; font-variant-numeric: tabular-nums; }
-#main .record-amount-control:hover { background: #ececec; }
-#main .record-amount-control.is-changed { background: #fff5d6; }
 #main .record-amount-control:focus-within { outline: 2px solid #a77e19; outline-offset: -2px; }
 #main :is([data-record-amount-save], [data-record-amount-undo], [data-card-bill-save-row])[hidden] { display: none; }
 #main .loan-card-balance {
@@ -310,9 +307,10 @@ body:not(.mobile-app) #main .page-content .entry-tile-icon {
   border: 0;
   box-shadow: none;
 }
-body:not(.mobile-app) #main .table-scroll tbody tr:nth-child(even) td {
+body:not(.mobile-app) #main .table-scroll tbody tr:nth-child(even) td:not(:has(.record-amount-input)) {
   background: transparent;
 }
+body:not(.mobile-app) #main tbody td:has(.record-amount-input) { background: #fff; }
 /* Use the same button shapes and selection states throughout desktop filters and tabs. */
 body:not(.mobile-app) #main :is(
   .section-tabs, .ledger-views, .ledger-statuses, .entry-mode-tabs, .entry-kind-filters,
