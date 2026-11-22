@@ -1,6 +1,8 @@
 import {layoutDots} from './record-layout.mjs';
 
-const storageKey='moa-desktop-menu-v1';
+const storageKey='moa-desktop-menu-v2';
+const previousStorageKey='moa-desktop-menu-v1';
+const movedFrom={entry:'home',records:'flow',schedule:'flow',advisor:'debt'};
 const chevron='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m5 3 5 5-5 5"/></svg>';
 const handle=(kind,label)=>`<button type="button" class="desk-${kind}-handle" aria-label="${label} 순서 이동" aria-keyshortcuts="ArrowUp ArrowDown${kind==='item'?' Shift+ArrowUp Shift+ArrowDown':''}" title="드래그 또는 위아래 방향키로 이동">${layoutDots}</button>`;
 
@@ -10,8 +12,14 @@ function restoreMenu(groups,storage) {
   label:group.label,
   items:[group.defaultView,...group.views.filter(key=>key!==group.defaultView)]
  }));
- let saved;
- try {saved=JSON.parse(storage.getItem(storageKey));}catch{saved=null;}
+ let saved,legacy=false;
+ try{
+  saved=JSON.parse(storage.getItem(storageKey));
+  if(!Array.isArray(saved)){
+   saved=JSON.parse(storage.getItem(previousStorageKey));
+   legacy=Array.isArray(saved);
+  }
+ }catch{saved=null;}
  const knownGroups=new Map(defaults.map(group=>[group.id,group]));
  const knownItems=new Set(defaults.flatMap(group=>group.items));
  const restored=new Map(),used=new Set();
@@ -20,16 +28,24 @@ function restoreMenu(groups,storage) {
   const items=[];
   for(const key of Array.isArray(group.items)?group.items:[]){
    if(!knownItems.has(key)||used.has(key))continue;
+   // Move old default placements while retaining items the user moved between groups.
+   if(legacy&&movedFrom[key]===group.id)continue;
    items.push(key);used.add(key);
   }
   restored.set(group.id,{...knownGroups.get(group.id),collapsed:group.collapsed===true,items});
  }
+ const insertManage=legacy&&knownGroups.has('manage')&&!restored.has('manage');
  for(const group of defaults){
   const current=restored.get(group.id)||{...group,items:[]};
   current.items.push(...group.items.filter(key=>!used.has(key)));
   restored.set(group.id,current);
  }
- return [...restored.values()];
+ const layout=[...restored.values()];
+ if(insertManage){
+  const [manage]=layout.splice(layout.findIndex(group=>group.id==='manage'),1);
+  layout.splice(layout.findIndex(group=>group.id==='home')+1,0,manage);
+ }
+ return layout;
 }
 
 export function mountDesktopNavigation(root,groups,{

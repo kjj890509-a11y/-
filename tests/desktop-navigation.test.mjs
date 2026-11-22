@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {parseHTML} from 'linkedom';
 import {mountDesktopNavigation,navigationGroups,viewLabels} from '../public/navigation.mjs';
 
-const key='moa-desktop-menu-v1';
+const key='moa-desktop-menu-v2';
 const tick=()=>new Promise(setImmediate);
 
 function sidebar(storage=new Map()){
@@ -63,7 +63,7 @@ test('group and nested Sortable drops preserve every link and restore the custom
  assert.equal(t.group('assets').hasAttribute('data-current-group'),false);
  assert.equal(t.find('[aria-current="page"]').getAttribute('href'),'#deposits');
  const reloaded=sidebar(t.storage);
- assert.deepEqual(reloaded.groups().slice(0,3),['home','flow','assets']);
+ assert.deepEqual(reloaded.groups().slice(0,4),['home','manage','flow','assets']);
  assert.equal(reloaded.items('flow').at(-1),'deposits');
  assert.ok(!reloaded.items('assets').includes('deposits'));
  assert.equal(new Set(reloaded.groups().flatMap(id=>reloaded.items(id))).size,Object.keys(viewLabels).length);
@@ -90,4 +90,30 @@ test('keyboard movement works across groups and saved data retains new menu link
  t.move(t.group('assets').querySelector('.desk-group-handle'),'ArrowUp');
  assert.equal(t.groups()[0],'assets');
  t.navigation.destroy();
+});
+
+test('the old layout adopts relocated menu items and keeps custom moves and collapsed groups',()=>{
+ const storage=new Map([['moa-desktop-menu-v1',JSON.stringify([
+  {id:'home',items:['overview','entry','workspace']},
+  {id:'flow',collapsed:true,items:['records','cashflow','stocks','spending','fixed','planned','schedule']},
+  {id:'debt',items:['loans','cards','advisor']},
+  {id:'assets',items:['assets','deposits','retirement']},
+  {id:'plan',items:['forecast','payday','budget']},
+  {id:'reports',items:['statistics','history']},
+ ])]]);
+ const t=sidebar(storage);
+ assert.deepEqual(t.groups(),['home','manage','flow','debt','assets','plan','reports']);
+ assert.deepEqual(t.items('home'),['overview','workspace']);
+ assert.deepEqual(t.items('manage'),['entry','records']);
+ assert.deepEqual(t.items('flow'),['cashflow','stocks','spending','fixed','planned']);
+ assert.deepEqual(t.items('debt'),['loans','cards']);
+ assert.ok(t.items('plan').includes('schedule'));
+ assert.ok(t.items('reports').includes('advisor'));
+ assert.equal(t.list('flow').hasAttribute('hidden'),true);
+ t.move(t.find('[data-sidebar-item="schedule"] .desk-item-handle'),'ArrowUp',true);
+ const reloaded=sidebar(storage);
+ assert.ok(reloaded.items('assets').includes('schedule'));
+ assert.equal(new Set(reloaded.groups().flatMap(id=>reloaded.items(id))).size,Object.keys(viewLabels).length);
+ t.navigation.destroy();
+ reloaded.navigation.destroy();
 });

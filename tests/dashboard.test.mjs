@@ -20,9 +20,9 @@ test('forecast periods include the selected calendar month and respect the proje
  }
 });
 
-test('every existing destination remains reachable in one of six navigation groups',()=>{
+test('every existing destination remains reachable under the menu group that describes its purpose',()=>{
  const expected=['entry','records','overview','statistics','advisor','budget','forecast','payday','planned','history','stocks','loans','retirement','deposits','cards','fixed','cashflow','spending','schedule','assets','workspace'];
- assert.equal(navigationGroups.length,6);
+ assert.equal(navigationGroups.length,7);
  const routes=navigationGroups.flatMap(group=>group.views);
  assert.equal(new Set(routes).size,expected.length);
  assert.deepEqual([...routes].sort(),expected.sort());
@@ -35,8 +35,11 @@ test('every existing destination remains reachable in one of six navigation grou
   assert.equal(document.querySelectorAll('a').length,group.views.length);
  }
  assert.equal(groupForView('retirement').label,'보유 자산');
- assert.equal(groupForView('schedule').label,'수입·지출');
- assert.equal(groupForView('payday').label,'자금 계획');
+ assert.equal(groupForView('records').id,groupForView('entry').id);
+ assert.equal(groupForView('cashflow').label,'수입·지출');
+ assert.equal(groupForView('schedule').label,'계획·전망');
+ assert.equal(groupForView('payday').label,'계획·전망');
+ assert.equal(groupForView('advisor').label,'분석·상담');
 });
 
 test('dashboard totals match financial data and show monthly interest without opening help',()=>{
