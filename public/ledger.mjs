@@ -10,12 +10,57 @@ const filterKeys=['query','category','status','institution','type','repeat','sta
 export const dragHandleDots='<span class="drag-nine-dots" aria-hidden="true">'+Array.from({length:9},()=>'<i></i>').join('')+'</span>';
 const numericColumns=new Set(['amount','balance','rate','principal','interest','payment','cost','valuation','profit','monthlyContribution']);
 const chip=(action,value,label,selected)=>`<button type="button" class="ledger-chip ${selected?'active':''}" data-ledger-action="${action}" data-value="${esc(value)}" aria-pressed="${selected}">${esc(label)}</button>`;
+const sortChoices=[['manual','직접 정한 순서'],['newest','최근 등록순'],['oldest','등록 오래된순'],['date:desc','날짜 최신순'],['date:asc','날짜 오래된순'],['amount:desc','금액 높은순'],['amount:asc','금액 낮은순'],['name:asc','이름 가나다순']];
+
+function ledgerControls(entries,state,today,label,resultCount){
+ const counts=new Map();
+ for(const entry of entries){
+  const status=ledgerStatus(entry,today);
+  counts.set(status,(counts.get(status)||0)+1);
+ }
+ if(state.status!=='all'&&!counts.has(state.status))counts.set(state.status,0);
+ const showStatus=counts.size>1||state.status!=='all';
+ const activeFilters=filterKeys.filter(key=>!['query','sort','status'].includes(key)&&state[key]&&state[key]!=='all').length;
+ const filtered=activeFilters>0||state.status!=='all'||Boolean(state.query.trim());
+ const activeView=state.savedViews.find(view=>view.id===state.activeView);
+ const sorts=sortChoices.map(([value,name])=>option(value,name,state.sort)).join('')+
+  (sortChoices.some(([value])=>value===state.sort)?'':option(state.sort,label(state.sort.split(':')[0])+' 순',state.sort));
+ return `<div class="ledger-controls">
+  <div class="ledger-toolbar">
+   <input id="record-search" data-ledger-field="query" maxlength="200" class="search-input" type="search" value="${esc(state.query)}" placeholder="이름·금융기관·메모 검색" aria-label="내역 검색">
+   <button type="button" class="ledger-tool" data-ledger-action="filters" aria-haspopup="dialog">필터${activeFilters?` <span class="ledger-filter-count" aria-label="${activeFilters}개 적용">${activeFilters}</span>`:''}</button>
+   <select data-ledger-field="sort" aria-label="내역 정렬">${sorts}</select>
+   <div class="ledger-utilities">
+    <details class="ledger-menu" data-ledger-menu="views"><summary class="ledger-tool" aria-label="저장한 보기${activeView?' · '+esc(activeView.name):''}"><span>${activeView?esc(activeView.name):'저장한 보기'}</span></summary>
+     <div class="ledger-menu-panel ledger-views" role="group" aria-label="저장한 보기">
+      <button type="button" class="ledger-view" data-ledger-action="default-view" aria-pressed="${!activeView}">기본 보기</button>
+      ${state.savedViews.map(view=>`<div class="ledger-view-pair"><button type="button" class="ledger-view" data-ledger-action="load-view" data-id="${esc(view.id)}" aria-pressed="${state.activeView===view.id}">${esc(view.name)}</button><button type="button" class="ledger-view-delete" data-ledger-action="delete-view" data-id="${esc(view.id)}" aria-label="${esc(view.name)} 보기 삭제" title="${esc(view.name)} 보기 삭제">×</button></div>`).join('')}
+      <button type="button" class="ledger-view ledger-menu-save" data-ledger-action="save-dialog" aria-haspopup="dialog">＋ 현재 보기 저장</button>
+     </div>
+    </details>
+    <details class="ledger-menu" data-ledger-menu="options"><summary class="ledger-tool">표 옵션</summary>
+     <div class="ledger-menu-panel" role="group" aria-label="표 옵션">
+      <button type="button" class="ledger-view" data-ledger-action="columns" aria-haspopup="dialog">열 설정</button>
+      <button type="button" class="ledger-view" data-ledger-action="persist">배치 저장</button>
+      <button type="button" class="ledger-view" data-ledger-action="export" data-table-export>CSV 다운로드</button>
+      <button type="button" class="ledger-view" data-ledger-action="reset">조회 조건 초기화</button>
+     </div>
+    </details>
+   </div>
+  </div>
+  <div class="ledger-refinements">
+   ${showStatus?`<div class="ledger-statuses" role="group" aria-label="내역 상태"><span class="ledger-status-label" aria-hidden="true">상태</span>${chip('status','all',`전체 ${entries.length}`,state.status==='all')}${[...counts].map(([status,count])=>chip('status',status,`${statusLabels[status]} ${count}`,state.status===status)).join('')}</div>`:''}
+   <span class="ledger-result" role="status">${resultCount===entries.length?`${resultCount}건`:`전체 ${entries.length}건 중 ${resultCount}건`}${state.rowOrderDirty?' · 배치 변경됨':''}</span>
+   ${filtered?'<button type="button" class="ledger-clear" data-ledger-action="reset">필터 초기화</button>':''}
+  </div>
+ </div>`;
+}
+
 export function renderLedger(entries,state,{scope,money,cell,today,amountState,hidden=false,extraActions=()=>''}){
  const results=ledgerQuery(entries,state,today),page=ledgerPage(results,state);state.page=page.page;
- const defs=ledgerColumns[scope],keys=ledgerLayout(scope,state),statuses=[...new Set(entries.map(entry=>ledgerStatus(entry,today)))];
+ const defs=ledgerColumns[scope],keys=ledgerLayout(scope,state);
  const selected=new Set(state.selected),institutions=[...new Set(entries.map(entry=>entry.row.institution||'미등록'))].sort((a,b)=>a.localeCompare(b,'ko'));
  const selectedVisible=page.rows.filter(entry=>selected.has(entry.key)).length;
- const activeFilters=filterKeys.filter(key=>!['sort','status'].includes(key)&&state[key]&&state[key]!=='all').length;
  const label=key=>defs.find(([k])=>k===key)?.[1]||key;
  const displayCell=(entry,key)=>{
   if(key==='name')return `<button type="button" class="ledger-open" data-ledger-action="detail" data-id="${esc(entry.key)}">${cell(entry,key)}</button>`;
@@ -26,11 +71,9 @@ export function renderLedger(entries,state,{scope,money,cell,today,amountState,h
  };
  const rowActions=entry=>`<button type="button" class="button secondary small" data-ledger-action="edit" data-id="${esc(entry.key)}">상세 수정</button>${keys.includes('name')?'':`<button type="button" class="button secondary small" data-ledger-action="detail" data-id="${esc(entry.key)}">상세 보기</button>`}${extraActions(entry)}${amountState?recordAmountActions(amountState,entry.key,hidden):''}`;
  const order=[...state.columns.filter(key=>defs.some(([k])=>k===key)),...defs.map(([k])=>k).filter(key=>!state.columns.includes(key))];
- return `<div class="ledger-views" role="group" aria-label="저장한 보기"><button type="button" class="ledger-view ${!state.activeView?'active':''}" data-ledger-action="default-view" aria-pressed="${!state.activeView}">전체 보기</button>${state.savedViews.map(view=>`<span class="ledger-view-pair"><button type="button" class="ledger-view ${state.activeView===view.id?'active':''}" data-ledger-action="load-view" data-id="${esc(view.id)}" aria-pressed="${state.activeView===view.id}">${esc(view.name)}</button><button type="button" class="ledger-view-delete" data-ledger-action="delete-view" data-id="${esc(view.id)}" aria-label="${esc(view.name)} 보기 삭제" title="${esc(view.name)} 보기 삭제">×</button></span>`).join('')}<button type="button" class="ledger-view" data-ledger-action="save-dialog">＋ 보기 저장</button></div>
- <div class="ledger-statuses" role="group" aria-label="내역 상태">${chip('status','all',`전체 ${entries.length}`,state.status==='all')}${statuses.map(status=>chip('status',status,`${statusLabels[status]} ${entries.filter(entry=>ledgerStatus(entry,today)===status).length}`,state.status===status)).join('')}</div>
- <div class="ledger-toolbar"><input id="record-search" data-ledger-field="query" maxlength="200" class="search-input" type="search" value="${esc(state.query)}" placeholder="이름·금융기관·메모 검색" aria-label="내역 검색"><select data-ledger-field="sort" aria-label="내역 정렬">${[['manual','직접 정한 순서'],['newest','최근 등록순'],['oldest','등록 오래된순'],['date:desc','날짜 최신순'],['date:asc','날짜 오래된순'],['amount:desc','금액 높은순'],['amount:asc','금액 낮은순'],['name:asc','이름 가나다순']].map(([v,n])=>option(v,n,state.sort)).join('')}${!['manual','newest','oldest','date:desc','date:asc','amount:desc','amount:asc','name:asc'].includes(state.sort)?option(state.sort,label(state.sort.split(':')[0])+' 순',state.sort):''}</select><button class="button secondary small" data-ledger-action="filters">필터${activeFilters?' · '+activeFilters:''}</button><button class="button secondary small" data-ledger-action="columns">열 설정</button><button class="button secondary small" data-ledger-action="export" data-table-export>CSV 다운로드</button><button class="button secondary small" data-ledger-action="persist">배치 저장</button><button class="button secondary small" data-ledger-action="reset">초기화</button></div>
+ return `${ledgerControls(entries,state,today,label,results.length)}
  ${state.selected.length?`<div class="ledger-bulk" role="status"><strong>${state.selected.length}개 선택</strong><button class="button secondary small" data-ledger-action="bulk-export">선택 내보내기</button>${scope==='cards'?'<button class="button secondary small" data-ledger-action="bulk-paid">결제 완료</button><button class="button secondary small" data-ledger-action="bulk-unpaid">미결제로 변경</button>':''}${['cashflow','planned'].includes(scope)?'<button class="button secondary small" data-ledger-action="bulk-include">예상에 반영</button><button class="button secondary small" data-ledger-action="bulk-exclude">예상 제외</button>':''}${entries.filter(entry=>state.selected.includes(entry.key)).every(entry=>entry.kind==='fixed'||entry.kind==='cashflow'&&entry.row.type==='expense')?'<button class="button secondary small" data-ledger-action="bulk-card-included">카드 청구액에 포함 · 중복 제외</button><button class="button secondary small" data-ledger-action="bulk-account-paid">계좌 결제 · 별도 지출</button>':''}<button class="button danger small" data-ledger-action="bulk-delete">선택 삭제</button><button class="text-button" data-ledger-action="unselect">선택 해제</button></div>`:''}
- <p class="ledger-result" role="status">${state.sort==='manual'?'직접 정한 순서 · ':''}${state.rowOrderDirty?'순서 변경됨 · ':''}${results.length}건 조회 · 전체 ${entries.length}건</p>
+
  <div class="table-scroll ledger-scroll"><table class="ledger-table ${state.density==='compact'?'compact':''}"><caption class="sr-only">${ledgerLabels[scope]} 조회 내역</caption><thead><tr><th class="ledger-drag-cell"><span class="sr-only">행 순서 이동</span></th><th class="ledger-select"><input type="checkbox" data-ledger-select-page aria-label="이 페이지 전체 선택" ${page.rows.length&&selectedVisible===page.rows.length?'checked':''}></th>${keys.map(key=>`<th data-column="${key}" class="${numericColumns.has(key)?'numeric':''}" style="width:${state.widths[key]||160}px;min-width:${state.widths[key]||160}px" aria-sort="${state.sort===key+':asc'?'ascending':state.sort===key+':desc'?'descending':'none'}"><div class="ledger-header-content"><button type="button" class="ledger-header-handle" aria-label="${esc(label(key))} 열 이동. 좌우 방향키 지원">${dragHandleDots}</button><button class="ledger-sort" data-ledger-action="sort-column" data-value="${key}"><span class="ledger-sort-label">${esc(label(key))}</span>${state.sort.startsWith(key+':')?`<span class="ledger-sort-indicator" aria-hidden="true">${state.sort.endsWith('desc')?'↓':'↑'}</span>`:''}</button></div><span class="ledger-resize" data-resize="${key}" role="separator" tabindex="0" aria-label="${esc(label(key))} 열 너비. 좌우 방향키로 조절" aria-orientation="vertical" aria-valuemin="90" aria-valuemax="600" aria-valuenow="${state.widths[key]||160}"></span></th>`).join('')}<th class="ledger-actions-cell">관리</th></tr></thead><tbody id="records-body">${page.rows.map(entry=>`<tr data-entry-key="${esc(entry.key)}"${amountState?` data-record-amount-row="${esc(entry.key)}"`: ''} class="${selected.has(entry.key)?'is-selected':''}"><td class="ledger-drag-cell"><button type="button" class="ledger-row-handle" aria-label="${esc(entry.row.name)} 순서 이동. 위아래 방향키로 이동" title="드래그로 이동 · 위아래 방향키 지원">${dragHandleDots}</button></td><td class="ledger-select"><input type="checkbox" data-ledger-select="${esc(entry.key)}" aria-label="${esc(entry.row.name)} 선택" ${selected.has(entry.key)?'checked':''}></td>${keys.map(key=>`<td data-column="${key}" class="${numericColumns.has(key)?'numeric':''}">${displayCell(entry,key)}</td>`).join('')}<td class="ledger-actions-cell"><div class="ledger-actions">${rowActions(entry)}</div></td></tr>`).join('')||`<tr><td colspan="${keys.length+3}"><div class="empty-inline">조건에 맞는 내역이 없습니다.<button class="button secondary" data-ledger-action="reset">필터 초기화</button></div></td></tr>`}</tbody></table></div>
  <div class="ledger-pagination"><span>${results.length?(page.page-1)*state.pageSize+1:0}–${Math.min(page.page*state.pageSize,results.length)} / ${results.length}건</span><label>페이지당 <select data-ledger-field="pageSize">${[20,50,100].map(n=>option(n,n+'개',state.pageSize)).join('')}</select></label><button class="button secondary small" data-ledger-action="prev" ${page.page<=1?'disabled':''}>이전</button><span>${page.page} / ${page.pages}</span><button class="button secondary small" data-ledger-action="next" ${page.page>=page.pages?'disabled':''}>다음</button></div>
  ${state.error?`<p class="form-error" role="alert">${esc(state.error)}</p>`:''}
@@ -58,11 +101,19 @@ export function mountLedger(root,entries,state,options){
  };
  const find=key=>entries.find(entry=>entry.key===key);
  const applyRowOrder=(keys,focusKey)=>{
-  try{state.rowOrder=reorderLedgerRows(entries,state,keys,options.today);state.sort='manual';state.rowOrderDirty=true;state.error='';draw();if(focusKey)root.querySelector(`[data-entry-key="${focusKey}"] .ledger-row-handle`)?.focus();onFeedback('행 순서를 바꿨어요. 배치 저장을 누르면 다음에도 유지됩니다.');}
+  try{state.rowOrder=reorderLedgerRows(entries,state,keys,options.today);state.sort='manual';state.rowOrderDirty=true;state.error='';draw();if(focusKey)root.querySelector(`[data-entry-key="${focusKey}"] .ledger-row-handle`)?.focus();onFeedback('행 순서를 바꿨어요. 표 옵션에서 배치를 저장할 수 있습니다.');}
   catch(error){state.error=error.message;draw();}
  };
  const save=async()=>{if(life.saving)return;life.saving=true;state.error='';try{await onSave(ledgerPreference(state));state.rowOrderDirty=false;onFeedback('행·열 배치와 보기를 계정에 저장했어요.');open='';draw();}catch(error){state.error=error.message;open='';draw();}finally{life.saving=false;}};
+ const closeMenus=event=>{
+  for(const menu of root.querySelectorAll('[data-ledger-menu][open]'))if(!menu.contains(event.target))menu.removeAttribute('open');
+ };
+ const closeMenu=menu=>{
+  menu?.removeAttribute('open');
+  menu?.querySelector('summary')?.focus();
+ };
  const click=async event=>{
+  closeMenus(event);
   const target=event.target.closest('[data-ledger-action]');if(!target||target.disabled)return;event.preventDefault();
   const {ledgerAction:action,value,id}=target.dataset;
   if(['filters','columns','save-dialog'].includes(action)){open=action==='save-dialog'?'save':action;draw();return;}
@@ -74,7 +125,7 @@ export function mountLedger(root,entries,state,options){
   if(action==='edit'){const entry=find(id);if(entry)onEdit(entry);return;}
   if(action==='detail'){const entry=find(id);if(entry)onDetail(entry);return;}
   if(action==='unselect'){state.selected=[];draw();return;}
-  if(action==='export'||action==='bulk-export'){onExport(ledgerQuery(entries,state,options.today).filter(e=>action==='export'||state.selected.includes(e.key)),ledgerLayout(options.scope,state));return;}
+  if(action==='export'||action==='bulk-export'){closeMenu(target.closest('[data-ledger-menu]'));onExport(ledgerQuery(entries,state,options.today).filter(e=>action==='export'||state.selected.includes(e.key)),ledgerLayout(options.scope,state));return;}
   if(action.startsWith('bulk-')){const selected=entries.filter(e=>state.selected.includes(e.key));if(selected.length)await onBulk(action.slice(5),selected);return;}
   if(action==='load-view'){const view=state.savedViews.find(v=>v.id===id);if(view)Object.assign(state,view.filters,view.layout||{},{page:1,selected:[],activeView:id});draw();return;}
   if(action==='delete-view'){
@@ -117,12 +168,15 @@ export function mountLedger(root,entries,state,options){
  };
  const cancel=()=>{open='';};root.addEventListener('cancel',cancel,true);
  const key=event=>{
+  const menu=event.target.closest('[data-ledger-menu][open]');
+  if(event.key==='Escape'&&menu){event.preventDefault();closeMenu(menu);return;}
   const rowHandle=event.target.closest('.ledger-row-handle');
   if(rowHandle&&['ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();const keys=ledgerPage(ledgerQuery(entries,state,options.today),state).rows.map(entry=>entry.key),id=rowHandle.closest('[data-entry-key]').dataset.entryKey,index=keys.indexOf(id),target=index+(event.key==='ArrowUp'?-1:1);if(target>=0&&target<keys.length){[keys[index],keys[target]]=[keys[target],keys[index]];applyRowOrder(keys,id);}return;}
   const column=event.target.closest('.ledger-header-handle');if(column&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();const th=column.closest('[data-column]'),id=th.dataset.column,visible=ledgerLayout(options.scope,state),index=visible.indexOf(id),next=index+(event.key==='ArrowLeft'?-1:1);if(next<0||next>=visible.length)return;[visible[index],visible[next]]=[visible[next],visible[index]];state.columns=[...visible,...state.columns.filter(key=>!visible.includes(key))];state.rowOrderDirty=true;draw();root.querySelector(`th[data-column="${id}"] .ledger-header-handle`)?.focus();return;}
   const handle=event.target.closest('[data-resize]');if(handle&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();state.widths[handle.dataset.resize]=Math.min(600,Math.max(90,(state.widths[handle.dataset.resize]||160)+(event.key==='ArrowRight'?10:-10)));const key=handle.dataset.resize;draw();root.querySelector(`[data-resize="${key}"]`)?.focus();}};
  for(const [type,handler]of Object.entries({click,change,input,submit,pointerdown:resize,keydown:key}))root.addEventListener(type,handler);
- life.cleanup=()=>{root.removeEventListener('cancel',cancel,true);for(const [type,handler]of Object.entries({click,change,input,submit,pointerdown:resize,keydown:key}))root.removeEventListener(type,handler);};
+ root.ownerDocument.addEventListener('pointerdown',closeMenus);
+ life.cleanup=()=>{root.removeEventListener('cancel',cancel,true);root.ownerDocument.removeEventListener('pointerdown',closeMenus);for(const [type,handler]of Object.entries({click,change,input,submit,pointerdown:resize,keydown:key}))root.removeEventListener(type,handler);};
  draw();
  return ()=>unmountLedger(root);
 }
