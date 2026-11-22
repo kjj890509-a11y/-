@@ -37,6 +37,30 @@ test('all desktop routes share the page frame and summary hierarchy with populat
  }
  const t=await app(domain.samplePortfolio());t.document.querySelector('#privacy-toggle').onclick();for(const [view,label]of Object.entries(navigation.viewLabels)){await t.visit(view);check(t,view,label);}assert.equal(t.writes(),0);
 });
+test('desktop record tables put secondary values in independently accessible tooltips',async()=>{
+ const data=domain.samplePortfolio(),card=data.cards[0];
+ card.cardAccountId='card-profile';card.billingMonth=card.dueDate.slice(0,7);
+ data.cardAccounts=[{id:'card-profile',name:card.name,day:25,note:'',archived:false}];
+ const t=await app(data);
+ const examples=[
+  ['loans','.ledger-table td[data-column="interest"]',/이번 납부액 직접 입력/],
+  ['loans','.ledger-table td[data-column="date"]',/원금균등|원리금균등/],
+  ['stocks','.ledger-table td[data-column="profit"]',/%/],
+  ['fixed','.ledger-table td[data-column="period"]',/종료월 없음/],
+  ['cashflow','.ledger-table td[data-column="date"]:has([data-info-sources])',/시작 [\d.]+/],
+  ['cards','.card-billing-table th[scope="row"]',/매월 25일/],
+  ['forecast','[data-forecast-row] td:first-child',/월말까지 예정된 입출금/]
+ ];
+ for(const [view,selector,expected]of examples){
+  await t.visit(view);
+  const cell=t.document.querySelector(selector),button=cell?.querySelector('button[data-info-sources]');
+  assert.ok(button,view+' '+selector);
+  assert.equal(cell.querySelector('small'),null);
+  const source=t.document.getElementById(button.getAttribute('aria-describedby'));
+  assert.ok(source?.hidden);assert.match(source.textContent,expected);
+ }
+ assert.equal(t.writes(),0);
+});
 test('page normalization keeps header actions, calculation help and partial home interactions intact',async()=>{
  const t=await app(domain.samplePortfolio());await t.visit('forecast');const root=t.document.querySelector('#main'),content=root.querySelector('[data-page-content]');assert.ok(content.querySelector(':scope > .planning-metrics'));assert.ok([...content.children].indexOf(content.querySelector('.planning-metrics'))<[...content.children].indexOf(content.querySelector('.forecast-banner')));assert.ok(root.querySelector('.forecast-banner p').hidden);assert.match(root.textContent,/주식 평가액·연 이율은 유지/);assert.ok(root.querySelector('h1 [data-info-sources]'));
  await t.visit('statistics');assert.match(root.textContent,/실제 입출금 완료를 뜻하지 않습니다/);await t.visit('assets');assert.ok(root.querySelector('.page-header .heading-actions [data-action=add]'));await t.visit('advisor');assert.ok(root.querySelector('[data-ui-stage="3"]'));assert.equal(root.querySelector('[data-ui-stage-panel="3"]').hidden,false);assert.match(root.textContent,/연결이 설정되지 않았습니다/);

@@ -25,3 +25,7 @@ button.context-tip-trigger:hover, button.context-tip-trigger:focus-visible { col
 #main .home-tip-card .overview-metric-label { padding-right: 24px; }
 #main .home-tip-card [data-home-indicator] { display: none; }
 .field-tip-label { display: flex; align-items: center; gap: 2px; }
+.value-with-context-tip { display: inline-flex; width: 100%; min-width: 0; align-items: center; gap: 4px; }
+.numeric .value-with-context-tip { justify-content: flex-end; }
+.value-with-context-tip > .record-amount-control { flex: 1; min-width: 0; }
+.value-with-context-tip > button.context-tip-trigger { margin: 0; }

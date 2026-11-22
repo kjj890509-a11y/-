@@ -9,6 +9,10 @@ export function contextTip(label, copy) {
   return `<button type="button" class="info-button context-tip-trigger" data-info-sources="${id}" aria-label="${escape(label)} 설명 보기" aria-describedby="${id}"></button><span id="${id}" hidden>${escape(copy)}</span>`;
 }
 
+export function valueWithContextTip(content, label, copy) {
+  return copy ? `<span class="value-with-context-tip">${content}${contextTip(label, copy)}</span>` : content;
+}
+
 export function enableContextTips(doc) {
   if (controllers.has(doc)) return controllers.get(doc);
   const win = doc.defaultView;

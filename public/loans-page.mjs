@@ -1,3 +1,4 @@
+import {valueWithContextTip} from './context-tips.mjs';
 import {renderFinanceRecordIcon} from './finance-icons.mjs';
 import {layoutRowHandle,layoutToolbar,orderLayoutRows} from './record-layout.mjs';
 import {interestForLoan, loanSchedule, todayKST, totals,loanNextPayment,loanPlanSummary} from './domain.mjs';
@@ -19,7 +20,7 @@ export function renderLoanCards(loans, {formatMoney,layout,amountState,hidden=fa
       <div class="loan-card-edit-actions">${amountState?recordAmountActions(amountState,key,hidden):''}<button type="button" class="button secondary small" data-action="edit" data-kind="loans" data-id="${esc(loan.id)}">상세 수정</button></div>
       <div class="loan-card-inline"><span>월 이자 <b>${money(interest)}</b></span><span>연 이율 <b>${loan.rate}%</b></span></div>${period?`<div class="loan-plan-card-summary"><span>${loan.remainingMonths}회 남음 · ${esc(loan.method)}${loan.graceMonths?' · 거치 '+loan.graceMonths+'회':''}</span><span>남은 총이자 <b>${money(plan.interest)}</b></span><span>완납 예정 <b>${plan.payoffDate||'상환 완료'}</b></span></div>${plan.adjusted?'<p class="loan-plan-warning">등록한 납부일이 지났습니다. 잔액과 남은 횟수를 확인해 수정하세요. 지난 납부는 자동 차감하지 않고 다음 납부일부터 계산했습니다.</p>':''}`:''}<div class="loan-card-meta"><span>${period&&loan.balance>0?`다음 ${next.date}`:loan.balance > 0 ? `매월 ${loan.day}일 상환` : `등록 납입일 · 매월 ${loan.day}일`}</span>${loan.balance > 0 ? `<button type="button" class="button secondary small" data-action="loan-forecast" data-id="${esc(loan.id)}">원금·이자 상환표 ↗</button>` : ''}</div>
       <details class="loan-card-details" data-loan-details data-ui-section="loan-card-${esc(loan.id)}"><summary>상환 조건·관리 <span aria-hidden="true">⌄</span></summary>
-        <dl class="loan-detail-grid"><div><dt>상환 원금</dt><dd data-loan-amount="principal">${money(principal)}</dd></div><div><dt>다음 납부 이자</dt><dd data-loan-amount="interest">${money(interest)}<small>${loan.interestMode === 'estimate' ? '잔액·이율 자동 추정' : '은행 청구액 직접 입력'}</small></dd></div><div><dt>연 이율</dt><dd>${loan.rate}%</dd></div><div><dt>상환 방식</dt><dd>${esc(loan.method)}</dd></div></dl>
+        <dl class="loan-detail-grid"><div><dt>상환 원금</dt><dd data-loan-amount="principal">${money(principal)}</dd></div><div><dt>다음 납부 이자</dt><dd data-loan-amount="interest">${valueWithContextTip(money(interest),loan.name+' 이자 계산 기준',loan.interestMode==='estimate'?'잔액·이율 자동 추정':'은행 청구액 직접 입력')}</dd></div><div><dt>연 이율</dt><dd>${loan.rate}%</dd></div><div><dt>상환 방식</dt><dd>${esc(loan.method)}</dd></div></dl>
         ${loan.note ? `<p class="loan-card-note">${esc(loan.note)}</p>` : ''}
         <div class="loan-card-actions"><button type="button" class="text-button loan-delete" data-action="delete" data-kind="loans" data-id="${esc(loan.id)}">삭제</button></div>
       </details>

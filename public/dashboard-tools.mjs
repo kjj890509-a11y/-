@@ -15,7 +15,7 @@ export function tableCSV(table){
  const clean=cell=>{
   const clone=cell.cloneNode(true);clone.querySelectorAll('button,svg,[aria-hidden="true"],.row-actions').forEach(node=>node.remove());
   // Preserve separate lines for names, dates and helper labels in a single spreadsheet cell.
-  clone.querySelectorAll('small,br').forEach(node=>node.before(clone.ownerDocument.createTextNode(' ')));
+  clone.querySelectorAll('small,br,.value-with-context-tip > [hidden]').forEach(node=>node.before(clone.ownerDocument.createTextNode(' ')));
   let value=clone.textContent.replace(/\s+/g,' ').trim();
   if(/^[=+\-@\t\r\n]/.test(value))value="'"+value;
   return '"'+value.replaceAll('"','""')+'"';
