@@ -8,7 +8,7 @@ import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advis
 import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, renderMonthlySpending, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation, createCoachmarkState, mountCoachmarks, renderFinanceRecordIcon} from '/navigation.mjs';
 import {renderDashboard, renderForecastPeriod, renderForecastMonthPage, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
-import {mountDesktopNavigation,applyEntryDrafts,createRecordAmountEditing,recordAmountInput,recordAmountActions,contextTip,valueWithContextTip} from '/navigation.mjs';
+import {mountDesktopNavigation,applyEntryDrafts,createRecordAmountEditing,recordAmountInput,recordAmountActions,contextTip,valueWithContextTip,spendingBreakdown,spendingEntryHint} from '/navigation.mjs';
 const icons = {
   home:'<path d="m3 10 9-7 9 7M5 9v11h14V9M10 20v-7h4v7"/>',
   portfolio:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M9 5v5"/>',
@@ -362,17 +362,31 @@ function openSpendingEditor(){
  const title=`${Number(selectedMonth.slice(0,4))}년 ${Number(selectedMonth.slice(5))}월 생활비`;
  $('editor-title').textContent=title;
  $('form-error').textContent='';
- $('form-fields').innerHTML=`<div class="field full-width"><label for="spending-amount">실제 생활비 합계</label><div class="input-wrap"><input id="spending-amount" name="amount" type="text" inputmode="numeric" required maxlength="21" value="${record?wonFormat.format(record.amount):''}" aria-describedby="spending-amount-help"><span>원</span></div><p class="field-hint" id="spending-amount-help">고정비와 기타 생활비를 합쳐 입력하세요. 따로 등록한 카드·대출 납부액은 빼주세요.</p></div>
- <div class="field full-width"><label for="spending-applied">이 달 반영 여부</label><select id="spending-applied" name="applied" aria-describedby="spending-applied-help"><option value="false" ${record?.applied?'':'selected'}>미반영 · 가계부에만 보관</option><option value="true" ${record?.applied?'selected':''}>반영 · 이 달 생활비 계획 대체</option></select><p class="field-hint" id="spending-applied-help">아직 낼 생활비를 계획에 남기려면 미반영을 선택하세요.</p></div>`;
+ const plan=budgetPlan(portfolio,selectedMonth);
+ $('form-fields').innerHTML=`<div class="field full-width"><label for="spending-amount">실제 생활비 · 카드·대출 제외</label><div class="input-wrap"><input id="spending-amount" name="amount" type="text" inputmode="numeric" required maxlength="21" value="${record?wonFormat.format(record.amount):''}" aria-describedby="spending-amount-help"><span>원</span></div><p class="spending-entry-hint" id="spending-amount-help">${spendingEntryHint}</p></div>
+ <div class="field full-width"><label for="spending-applied">이 달 생활비 기준</label><select id="spending-applied" name="applied" aria-describedby="spending-applied-help"><option value="false" ${record?.applied?'':'selected'}>기존 계획 사용 · 기록만 저장</option><option value="true" ${record?.applied?'selected':''}>가계부 금액 사용 · 생활비 계획 대체</option></select><p class="spending-entry-hint" id="spending-applied-help">아직 낼 생활비를 계획에 남기려면 기존 계획을 사용하세요.</p></div>
+ <section class="spending-preview full-width" aria-labelledby="spending-preview-title"><h3 id="spending-preview-title">저장 후 월 예산 미리보기</h3><dl>${spendingBreakdown(plan).map(([key,label,amount])=>`<div ${key==='total'?'class="spending-effective"':''}><dt>${label}</dt><dd data-spending-preview="${key}" ${key==='total'?'aria-live="polite"':''}>${money(amount)}</dd></div>`).join('')}</dl></section>`;
+ const amountFrom=value=>{
+  const raw=String(value||'').trim().replaceAll(',',''),number=Number(raw);
+  return /^\d+$/.test(raw)&&Number.isSafeInteger(number)&&number<=1e15?number:null;
+ };
+ const amountInput=$('spending-amount'),modeInput=$('spending-applied');
+ const preview=()=>{
+  const livingExpense=modeInput.value==='true'?amountFrom(amountInput.value):plan.fixedCash+plan.otherExpense;
+  const expense=livingExpense===null?null:livingExpense+plan.cardBills+plan.loanDue;
+  const values={living:livingExpense,total:expense};
+  for(const key of ['living','total'])$('form-fields').querySelector(`[data-spending-preview="${key}"]`).textContent=values[key]===null?'금액 입력 후 표시':money(values[key]);
+ };
+ amountInput.addEventListener('input',preview);modeInput.addEventListener('change',preview);preview();
  const form=$('record-form'),submit=form.querySelector('button[type="submit"]');
  submit.hidden=false;submit.disabled=false;submit.textContent='생활비 저장';
  form.onsubmit=async event=>{
   event.preventDefault();if(saving)return;
-  const values=new FormData(form),raw=String(values.get('amount')||'').trim().replaceAll(',','');
-  if(!/^\d+$/.test(raw)){$('form-error').textContent='실제 생활비를 원 단위 정수로 입력해 주세요.';return;}
+  const values=new FormData(form),amount=amountFrom(values.get('amount'));
+  if(amount===null){$('form-error').textContent='실제 생활비를 원 단위 정수로 입력해 주세요.';return;}
   submit.disabled=true;
   try{
-   await saveActualSpending({month:selectedMonth,amount:Number(raw),applied:values.get('applied')==='true'});
+   await saveActualSpending({month:selectedMonth,amount,applied:values.get('applied')==='true'});
    $('editor').close();toast('월 생활비를 저장했어요.');
   }catch(error){$('form-error').textContent=error.message;}
   finally{submit.disabled=false;}

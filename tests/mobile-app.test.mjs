@@ -87,6 +87,10 @@ test('monthly ledger saves actuals separately, applies a month with one tap, and
  const data=domain.emptyPortfolio(),month=domain.todayKST().slice(0,7),previous=domain.shiftMonth(month,-1);
  data.fixed=[{id:'rent',name:'월세',amount:700000,day:20,startMonth:previous,paymentSource:'account'}];
  data.actualSpending=[{month:previous,amount:500000,applied:true}];
+ data.cards=[
+  {id:'paid-bill',name:'이번 달 카드',dueDate:month+'-20',billingMonth:previous,amount:200000,paid:true},
+  {id:'future-bill',name:'다음 달 카드',dueDate:domain.shiftMonth(month,1)+'-20',billingMonth:month,amount:80000,paid:false}
+ ];
  const t=await app(data,'spending'),mode='[data-action=spending-mode]',setAmount='[data-action=spending-form]';
  assert.ok(t.document.querySelector('.m-budget-hero '+setAmount+'.m-primary'));
  assert.ok(t.document.querySelector('.m-detail-section .m-facts .m-spending-total-row'));
@@ -94,6 +98,12 @@ test('monthly ledger saves actuals separately, applies a month with one tap, and
  assert.equal(t.document.querySelector('.spending-content'),null);
  assert.equal(t.document.querySelector(mode+'[data-applied=true]').disabled,true);
  t.click(setAmount);
+ const preview=key=>t.document.querySelector(`[data-spending-preview="${key}"]`).textContent;
+ assert.equal(preview('cards'),'200,000원');assert.equal(preview('total'),'900,000원');
+ t.change('#spending-applied','true');assert.equal(preview('total'),'금액 입력 후 표시');
+ const amount=t.document.querySelector('#spending-amount');amount.value='500,000';amount.dispatchEvent(new t.Event('input',{bubbles:true}));
+ assert.equal(preview('living'),'500,000원');assert.equal(preview('total'),'700,000원');assert.equal(t.state.writes,0);
+ t.change('#spending-applied','false');assert.equal(preview('total'),'900,000원');
  t.change('#spending-amount','900,000');
  await t.submit();
  assert.deepEqual(t.state.data.actualSpending.find(row=>row.month===month),{month,amount:900000,applied:false});

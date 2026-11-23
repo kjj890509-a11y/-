@@ -1,5 +1,6 @@
 import {renderExpenseConfirmationSummary,renderForecastPeriod,renderForecastMonthPage} from './dashboard-view.mjs';
 import {contextTip} from './context-tips.mjs';
+import {spendingBreakdown,spendingEntryHint} from './actual-spending.mjs';
 import {KINDS,LABELS,FLOW_LABELS,todayKST,totals,monthlyFlow,eventsForMonth,cashflowForMonth,fixedForMonth,scheduledCashflows,loanSchedule,loanPlanSummary,loanNextPayment,nextRetirementContribution,budgetPlan,monthlyForecastPeriod,forecastMonths,paydayForecasts,snapshotTotals,shiftMonth,paymentDate,actualSpendingForMonth} from './domain.mjs';
 import {ledgerEntries,ledgerQuery,defaultLedgerState,ledgerLabels} from './ledger-model.mjs';
 import {entryPresets,entryGroups} from './entry-hub.mjs';
@@ -191,24 +192,21 @@ function budget(data,{money,month}){const p=budgetPlan(data,month);return `${hea
 function spending(data,{money,month}){
  const record=actualSpendingForMonth(data,month),plan=budgetPlan(data,month);
  const mode=(applied,label)=>action('spending-mode',label,`data-applied="${applied}" aria-pressed="${plan.actualApplied===applied}" ${record?'':'disabled'}`,plan.actualApplied===applied?'is-active':'');
- const status=!record?'생활비를 저장하면 반영 여부를 바꿀 수 있어요.':plan.actualApplied?'가계부 합계가 이 달의 생활비 계획을 대체해요.':'기존 생활비 계획으로 집계해요. 가계부 금액은 보관돼요.';
- const summary=[
-  ['기존 생활비 계획',money(plan.fixedCash+plan.otherExpense)],
-  ['집계에 쓴 생활비',money(plan.livingExpense),'m-spending-effective'],
-  ['대출·카드 납부',money(plan.expense-plan.livingExpense)],
-  ['이 달 지출 합계',money(plan.expense),'m-spending-total-row']
- ];
+ const status=!record?'생활비를 저장하면 기준을 바꿀 수 있어요.':plan.actualApplied?'이 달 생활비 계획 전체를 가계부 금액으로 대체했어요.':'아직 낼 생활비를 계획에 남기려면 기존 계획을 사용하세요.';
+ const rowClasses={living:'m-spending-effective',total:'m-spending-total-row'};
+ const summary=spendingBreakdown(plan).map(([key,label,amount])=>[label,money(amount),rowClasses[key]]);
  return `${header('가계부',{right:action('mobile-privacy',icon('eye'),'aria-label="금액 표시 전환"','m-icon')})}
  ${monthControl(month,{pickerId:'spending-month',max:todayKST().slice(0,7)})}
  <section class="m-budget-hero m-spending-record" aria-labelledby="m-spending-label">
-  <span id="m-spending-label">실제 생활비</span>
+  <span id="m-spending-label">실제 생활비 · 카드·대출 제외</span>
   <strong>${record?money(record.amount):'미입력'}</strong>
   ${action('spending-form',record?'금액 수정':'생활비 입력','','m-primary')}
+  <p class="spending-entry-hint">${spendingEntryHint}</p>
  </section>
  <section class="m-detail-section m-spending-budget" aria-labelledby="m-spending-budget-label">
-  <h2 id="m-spending-budget-label">월 예산 반영</h2>
+  <h2 id="m-spending-budget-label">월 예산에 잡히는 금액</h2>
   <div class="m-spending-apply">
-   <div class="m-inline-tabs" role="group" aria-label="이 달 가계부 반영 여부">${mode(false,'미반영')}${mode(true,'반영')}</div>
+   <div class="m-inline-tabs" role="group" aria-label="이 달 생활비 기준">${mode(false,'기존 계획 사용')}${mode(true,'가계부 금액 사용')}</div>
    ${note(status,Boolean(record))}
   </div>
   ${details(summary)}
