@@ -22,6 +22,12 @@ test('date and type filters narrow the agenda without changing the month totals'
 test('calendar exposes a selectable day, safe edit actions, empty-day registration and masked values',()=>{
  const html=renderCashCalendar(data(),{month:'2028-02',today:'2028-02-10',selectedDate:'2028-02-29',money,compact:money});
  const {document}=parseHTML(html);assert.equal(document.querySelector('[aria-pressed=true][data-action=calendar-day]').dataset.date,'2028-02-29');
+ const board=document.querySelector('.cf-month-board');
+ assert.equal(board.querySelector('.cf-weekdays').children.length,7);
+ assert.equal(board.querySelector('.cf-grid').children.length,35);
+ assert.equal(board.querySelector('[aria-current="date"]').dataset.date,'2028-02-10');
+ assert.equal(board.querySelector('.is-selected').dataset.date,'2028-02-29');
+ assert.equal(document.querySelector('#calendar-month[data-month-value]').value,'2028-02');
  assert.equal(document.querySelectorAll('.cf-event').length,4);assert.equal(document.querySelector('[data-id=expense] strong').textContent,'<지출>');assert.equal(document.querySelectorAll('지출').length,0);
  assert.equal(document.querySelector('[data-action=calendar-add]').dataset.date,'2028-02-29');
  const masked=renderCashCalendar(data(),{month:'2028-02',selectedDate:'all',money:()=>'••••••',compact:()=>'••••'});assert.doesNotMatch(masked,/3,000,000|3000000|120,000|120000|80,000/);
@@ -43,6 +49,7 @@ test('compact month cells aggregate every matching transaction while details ret
  const html=renderCashCalendar(p,{month:'2028-02',today:'2028-02-10',selectedDate:'2028-02-29',money,compact:value=>value.toLocaleString('ko-KR')});
  const {document}=parseHTML(html),day=document.querySelector('[data-action=calendar-day][data-date="2028-02-29"]');
  assert.equal(day.querySelector('[data-day-income]').textContent,'+3,100,000원');assert.equal(day.querySelector('[data-day-expense]').textContent,'−200,000원');assert.equal(day.querySelectorAll('.cf-day-total').length,2);assert.equal(day.querySelector('.cf-entry'),null);
+ assert.equal(day.querySelector('.cf-day-check').textContent,'✓');assert.match(day.getAttribute('aria-label'),/결제 완료 포함/);
  assert.equal(document.querySelectorAll('.cf-event').length,5);assert.equal(day.querySelector('.cf-count').textContent,'5건');
  const {document:paid}=parseHTML(renderCashCalendar(p,{month:'2028-02',selectedDate:'2028-02-29',filter:'paid',money,compact:String}));
  const paidDay=paid.querySelector('[data-action=calendar-day][data-date="2028-02-29"]');assert.equal(paidDay.querySelector('[data-day-expense]'),null);assert.match(paidDay.querySelector('.cf-day-paid').textContent,/완료/);

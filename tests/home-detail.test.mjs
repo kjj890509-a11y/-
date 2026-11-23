@@ -155,6 +155,7 @@ test('calendar category and list controls combine with status, month selection a
  assert.equal(document.querySelector('.cf-grid'),null);assert.ok(document.querySelector('.cf-month-list'));
  assert.ok([...document.querySelectorAll('.cf-event')].every(row=>row.dataset.kind==='cards'));
  click('[data-action=calendar-reset]');assert.equal(document.querySelector('[data-action=calendar-category][aria-pressed=true]').dataset.category,'all');
- const monthField=document.querySelector('#calendar-month');monthField.value='2028-02';monthField.dispatchEvent(new Event('change',{bubbles:true}));assert.equal(document.querySelector('#calendar-month').value,'2028-02');
+ click('#calendar-month-button');const year=document.querySelector('[data-month-year]');year.value='2028';year.dispatchEvent(new Event('input',{bubbles:true}));
+ click('[data-month-option="2028-02"]');assert.equal(document.querySelector('#calendar-month').value,'2028-02');
  click('[data-action=calendar-mode][data-mode=month]');assert.equal(document.querySelectorAll('.cf-day:not(.is-outside)').length,29);assert.equal(state.writes,0);
 });

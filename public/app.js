@@ -975,16 +975,33 @@ document.addEventListener('click',async e=>{
  }
  if(action==='toggle-paid'){const next=structuredClone(portfolio),r=next.cards.find(r=>r.id===id);if(r){r.paid=!r.paid;try{await persist(next);toast(r.paid?'결제 완료로 표시했어요. 예금 잔액도 확인해 주세요.':'결제 예정으로 변경했어요.');}catch(error){toast(error.message);}}}
  if(action==='demo')startDemo();if(action==='exit-demo')exitDemo();if(action==='retry')loadData();
- if(['prev-month','next-month','this-month'].includes(action)){if(action==='this-month')month=todayKST().slice(0,7);else{const [y,m]=month.split('-').map(Number),d=new Date(Date.UTC(y,m-1+(action==='next-month'?1:-1),1));month=d.toISOString().slice(0,7);}render();}
+ if(['prev-month','next-month','this-month'].includes(action)){
+  const calendarControl=button.closest('.cf-toolbar');
+  const nextMonth=action==='this-month'?todayKST().slice(0,7):shiftMonth(month,action==='next-month'?1:-1);
+  if(calendarControl&&!validMonth(nextMonth))return;
+  month=nextMonth;render();
+  if(calendarControl){
+   const control=$('main').querySelector(`.cf-toolbar [data-action="${action}"]`);
+   (control?.disabled?$('calendar-month-button'):control)?.focus({preventScroll:true});
+  }
+ }
 });
 document.addEventListener('keydown',e=>{
  recordAmountEditing.keydown(e);
  const cell=e.target.closest?.('[data-action="calendar-day"]');if(!cell)return;
  const offset={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7}[e.key];if(offset===undefined)return;
- e.preventDefault();calendarSelected=shiftCalendarDay(cell.dataset.date,offset);month=calendarSelected.slice(0,7);render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
+ e.preventDefault();
+ const date=shiftCalendarDay(cell.dataset.date,offset),nextMonth=date.slice(0,7);
+ if(!validMonth(nextMonth))return;
+ calendarSelected=date;month=nextMonth;
+ render();document.querySelector(`[data-action="calendar-day"][data-date="${calendarSelected}"]`)?.focus();
 });
 document.addEventListener('change',e=>{
  const monthPickerId=e.target.id;
+ if(monthPickerId==='calendar-month'){
+  if(!validMonth(e.target.value))return;
+  month=e.target.value;calendarSelected='';render();$('calendar-month-button')?.focus({preventScroll:true});return;
+ }
  if(monthPickerId==='forecast-end-month'){
   const period=monthlyForecastPeriod(todayKST(),chartHorizon,e.target.value);
   if(!period.custom)return;
@@ -1001,7 +1018,7 @@ document.addEventListener('change',e=>{
  if((monthPickerId==='workspace-month'||monthPickerId==='spending-month'&&e.target.value<=todayKST().slice(0,7))&&validMonth(e.target.value)){
   month=e.target.value;render();$(monthPickerId+'-button')?.focus();return;
  }
- if(e.target.id==='field-type')syncExpensePaymentSource();if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='calendar-month'&&/^\d{4}-\d{2}$/.test(e.target.value)&&e.target.value>='1900-01'&&e.target.value<='2200-12'){month=e.target.value;calendarSelected='';render();$('calendar-month')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
+ if(e.target.id==='field-type')syncExpensePaymentSource();if(e.target.id==='card-account-link'){const fieldset=$('form-fields').querySelector('[data-card-account-details]');fieldset.hidden=Boolean(e.target.value);fieldset.disabled=Boolean(e.target.value);return;}if(e.target.id==='entry-type'){startEntryEditor(e.target.value);return;}if(e.target.id==='entry-continue'){e.target.closest('form').querySelector('button[type="submit"]').textContent=e.target.checked?'저장하고 다음 입력':'저장하기';return;}if(e.target.id==='calendar-status'){calendarFilter=e.target.value;render();$('calendar-status')?.focus();}if(e.target.id==='loan-forecast-select'){loanForecastId=e.target.value;render();}if(e.target.id==='payment-loan'){const loan=portfolio.loans.find(row=>row.id===e.target.value);if(loan){$('payment-name').value=loan.name;$('payment-institution').value=loan.institution||'';$('payment-principal').value=wonFormat.format(loan.principal);$('payment-interest').value=wonFormat.format(interestForLoan(loan));}}if(e.target.id==='scheduled-range'){scheduledRange=e.target.value;render();}if(e.target.id==='scheduled-type'){scheduledType=e.target.value;render();}if(e.target.id==='field-nextPaymentDate'&&e.target.value)$('field-day').value=Number(e.target.value.slice(8));if(['field-interestMode','field-calculationMode','field-method','field-nextPaymentDate','field-day','field-remainingMonths','field-graceMonths'].includes(e.target.id))syncLoanPlan();if(e.target.id==='loan-forecast-period'){loanForecastPeriod=e.target.value;render();}if(e.target.id==='payday-salary-filter'){paydaySalaryId=e.target.value;paydaySelectedDate='';render();}if(e.target.id==='payday-date-filter'){paydaySelectedDate=e.target.value;render();}});
 document.addEventListener('input',e=>{
  recordAmountEditing.input(e);
  if(['field-monthlyContribution','field-contributionEndMonth'].includes(e.target.id))syncRetirementContribution();
