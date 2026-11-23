@@ -37,6 +37,30 @@ test('all desktop routes share the page frame and summary hierarchy with populat
  }
  const t=await app(domain.samplePortfolio());t.document.querySelector('#privacy-toggle').onclick();for(const [view,label]of Object.entries(navigation.viewLabels)){await t.visit(view);check(t,view,label);}assert.equal(t.writes(),0);
 });
+test('monthly flow shows income and expense details under their own totals and follows the month selection',async()=>{
+ const data=domain.samplePortfolio(),month=domain.todayKST().slice(0,7),previous=domain.shiftMonth(month,-1);
+ data.actualSpending=[{month:previous,amount:321000,applied:true}];
+ const t=await app(data);await t.visit('cashflow');
+ const withAmount=value=>new Intl.NumberFormat('ko-KR').format(value)+'원';
+ const total=key=>t.document.querySelector(`[data-flow-total="${key}"] .flow-summary-total > strong`).textContent;
+ const details=key=>Object.fromEntries([...t.document.querySelectorAll(`[data-flow-total="${key}"] .flow-summary-details > div`)].map(row=>[row.querySelector('dt').textContent,row.querySelector('dd').textContent]));
+ const current=domain.monthlyFlow(data,month);
+ assert.equal(total('income'),withAmount(current.income));
+ assert.equal(total('expense'),withAmount(current.expense));
+ assert.equal(total('balance'),withAmount(current.balance));
+ assert.deepEqual(details('income'),{'월급':withAmount(current.salary),'기타 수입':withAmount(current.otherIncome)});
+ assert.equal(details('expense')['기타 지출'],withAmount(current.otherExpense));
+ assert.equal(t.document.querySelector('#main .metric-strip'),null);
+ assert.ok(t.document.querySelector('.flow-summary [role="group"] [data-action="prev-month"]'));
+
+ t.document.querySelector('.flow-summary [data-action="prev-month"]').dispatchEvent(new t.Event('click',{bubbles:true}));
+ const prior=domain.monthlyFlow(data,previous);
+ assert.equal(total('expense'),withAmount(prior.expense));
+ assert.deepEqual(details('expense'),{'가계부 생활비':withAmount(321000),'대출·카드 예정액':withAmount(prior.payments)});
+ t.document.querySelector('#privacy-toggle').onclick();
+ assert.equal(total('income'),'••••••');assert.equal(details('expense')['가계부 생활비'],'••••••');
+ assert.equal(t.writes(),0);
+});
 test('desktop record tables put secondary values in independently accessible tooltips',async()=>{
  const data=domain.samplePortfolio(),card=data.cards[0];
  card.cardAccountId='card-profile';card.billingMonth=card.dueDate.slice(0,7);

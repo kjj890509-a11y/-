@@ -8,7 +8,7 @@ import {initialAdvisorState,renderAdvisorPage,mountAdvisorControls} from '/advis
 import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard, renderDashboardSearch, enhanceTableExports, tableCSV, createLedgerWorkspace, ledgerState, ledgerPreference, ledgerEntries, ledgerColumns, ledgerLabels, ledgerStatus, statusLabels, ledgerQuery, ledgerLayout, validateLedgerPreferences, mountLedger, unmountLedger, renderCashCalendar, shiftCalendarDay, entryPresets, entryGroups, renderEntryHub, createEntryManagerState, mountEntryManager, stageEntryRecord, entryDraftRow, mountFinancialMotion, unmountFinancialMotion, createCardBillingState, renderCardBilling, mountCardBilling, renderCardAccounts, saveCardAccount, setCardArchived, renderMonthPicker, renderMonthlySpending, mountMonthPickers, syncMonthPicker, closeMonthPicker, mountRecordLayout, orderLayoutRows, applyPageLayout, isMobileViewport, createMobileState, renderMobilePage, mountMobileControls, createPortfolioSync, mountPortfolioSync, mountAssetConsultation, createCoachmarkState, mountCoachmarks, renderFinanceRecordIcon} from '/navigation.mjs';
 import {renderDashboard, renderForecastPeriod, renderForecastMonthPage, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
-import {mountDesktopNavigation,applyEntryDrafts,createRecordAmountEditing,recordAmountInput,recordAmountActions,valueWithContextTip} from '/navigation.mjs';
+import {mountDesktopNavigation,applyEntryDrafts,createRecordAmountEditing,recordAmountInput,recordAmountActions,contextTip,valueWithContextTip} from '/navigation.mjs';
 const icons = {
   home:'<path d="m3 10 9-7 9 7M5 9v11h14V9M10 20v-7h4v7"/>',
   portfolio:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M9 5v5"/>',
@@ -141,11 +141,27 @@ function paymentRow(item){
   const badge=item.paid?'결제 완료':overdue?'지난 일정':diff===0?'오늘':`D-${diff}`;
   return `<div class="payment-row"><div class="payment-date"><span>${Number(item.date.slice(5,7))}월</span><strong>${Number(item.date.slice(8))}</strong></div><div class="institution-icon ${item.type}">${escapeHTML(item.name.slice(0,1))}</div><div class="payment-info"><strong>${escapeHTML(item.name)}</strong><small>${item.type==='cashflow'?FLOW_LABELS[item.flowType]:item.type==='loans'?'대출 원금 + 이자':item.type==='fixed'?'고정지출 · 계좌 결제':'카드 결제예정액'}</small></div><span class="payment-amount ${item.income?'income-color':''}">${item.income?'+ ':''}${money(item.amount)}</span><span class="status-pill ${overdue?'overdue':item.paid?'paid':''}">${badge}</span></div>`;
 }
-function monthToolbar(){const [y,m]=month.split('-').map(Number);return `<div class="calendar-toolbar"><button data-action="prev-month" aria-label="이전 달">‹</button><strong>${y}년 ${m}월</strong><button data-action="next-month" aria-label="다음 달">›</button><button data-action="this-month" class="month-reset">이번 달</button></div>`;}
-function flowSummary(selectedMonth,link=true){
- const f=monthlyFlow(portfolio,selectedMonth);
- const expenseLabel=f.actualApplied?'집계 지출':'등록 지출 계획',expenseDetails=f.actualApplied?'가계부 생활비 '+money(f.livingExpense):'고정 '+money(f.fixedCash)+' + 기타 '+money(f.otherExpense);
- return `<section class="panel flow-summary"><div class="panel-header"><div><h2>${Number(selectedMonth.slice(5))}월 수입과 지출</h2><p>${f.actualApplied?'가계부 생활비 반영':'등록된 수입과 지출 계획'}</p></div>${link?'<a class="panel-link" href="#cashflow">내역 관리 ↗</a>':''}</div><div class="flow-metrics"><div><span>수입 합계</span><strong class="income-color">${money(f.income)}</strong><small>월급 ${money(f.salary)} + 기타 ${money(f.otherIncome)}</small></div><div><span>${expenseLabel}</span><strong>${money(f.expense)}</strong><small>대출·카드 ${money(f.payments)} + ${expenseDetails}</small></div><div><span>수입·지출 차액</span><strong class="${f.balance<0?'negative':'income-color'}">${money(f.balance)}</strong><small>수입 합계 − ${expenseLabel}</small></div></div><p class="panel-note">카드 청구액에 포함한 지출은 카드대금과 중복 합산하지 않습니다. 예금 잔액은 자동 변경되지 않습니다.</p></section>`;
+function monthToolbar(selectedMonth=month){const [y,m]=selectedMonth.split('-').map(Number);return `<div class="calendar-toolbar"><button data-action="prev-month" aria-label="이전 달">‹</button><strong>${y}년 ${m}월</strong><button data-action="next-month" aria-label="다음 달">›</button><button data-action="this-month" class="month-reset">이번 달</button></div>`;}
+function flowSummary(selectedMonth){
+ const flow=monthlyFlow(portfolio,selectedMonth);
+ const expenses=flow.actualApplied?[['가계부 생활비',flow.livingExpense]]:[['정기 지출 · 계좌 결제',flow.fixedCash],['기타 지출',flow.otherExpense]];
+ expenses.push(['대출·카드 예정액',flow.payments]);
+ const expenseHelp=(flow.actualApplied?'가계부 생활비를 반영해 등록된 정기 지출과 기타 지출을 대체했습니다. ':'카드 청구액에 들어간 기타·정기 지출은 중복 합산하지 않습니다. ')+'대출 상환 예정액과 미결제 카드 청구액이 포함됩니다.';
+ const group=(key,label,amount,help,details=[])=>`<div class="flow-summary-item" data-flow-total="${key}">
+  <div class="flow-summary-total">
+   <div class="flow-summary-label"><span>${label}</span>${help?contextTip(label,help):''}</div>
+   <strong class="${key==='balance'&&amount<0?'negative':''}">${money(amount)}</strong>
+  </div>
+  ${details.length?`<dl class="flow-summary-details" aria-label="${label} 세부 항목">${details.map(([name,value])=>`<div><dt>${name}</dt><dd>${money(value)}</dd></div>`).join('')}</dl>`:''}
+ </div>`;
+ return `<section class="flow-summary" aria-labelledby="flow-summary-title">
+  <div class="flow-summary-heading"><h2 id="flow-summary-title">${Number(selectedMonth.slice(5))}월 수입·지출 요약</h2><div role="group" aria-label="조회 월">${monthToolbar(selectedMonth)}</div></div>
+  <div class="flow-metrics">
+   ${group('income','수입 합계',flow.income,'',[['월급',flow.salary],['기타 수입',flow.otherIncome]])}
+   ${group('expense','지출 합계',flow.expense,expenseHelp,expenses)}
+   ${group('balance','수입·지출 차액',flow.balance,'수입 합계에서 지출 합계를 뺀 금액입니다. 예금 잔액 변경은 별도로 기록하세요.')}
+  </div>
+ </section>`;
 }
 function planningHeader(title,subtitle,action,label){
  return `<div class="page-heading"><div><h1>${title}</h1><p class="subtitle">${subtitle}</p></div><div class="heading-actions">${action?`<button class="button primary" data-action="${action}">${svg('plus')}${label}</button>`:''}</div></div>`;
@@ -424,7 +440,6 @@ function openLoanPaymentEditor(id){
 
 const descriptions={fixed:'월세·보험료·통신비처럼 매월 나가는 금액을 관리하세요.',cashflow:'내 월급과 기타 수입·지출을 기록하고 매달 남는 금액을 확인하세요.',stocks:'증권사별 잔고와 평가손익을 한곳에서 확인하세요.',loans:'잔액부터 이율, 매월 갚는 원금과 이자까지 꼼꼼하게.',retirement:'오늘의 노력이 쌓인, 내일의 든든한 자산.',deposits:'생활비 통장부터 정기예금까지, 내 돈이 모인 곳.',cards:'카드사별 카드 청구액을 미리 확인하고 준비하세요.'};
 function categoryMetrics(kind){const t=totals(portfolio);
- if(kind==='cashflow'){const f=monthlyFlow(portfolio,month);return metric('월급',money(f.salary))+metric('기타 수입',money(f.otherIncome))+metric('기타 지출',money(f.otherExpense));}
  if(kind==='stocks')return metric('총평가액',money(t.stock))+metric('총매입금액',money(t.cost))+metric('평가손익',money(t.profit),t.profitRate==null?'매입금액 입력 후 수익률을 계산해요':`수익률 ${percent(t.profitRate)}`,t.profit>=0?'positive':'negative');
  if(kind==='loans'){const weighted=t.loans?portfolio.loans.reduce((n,r)=>n+r.balance*r.rate,0)/t.loans:0;const asOf=todayKST(),annual=loanSchedule(portfolio,asOf.slice(0,7),12,asOf).reduce((n,r)=>n+r.interest,0);return metric('현재 납부 이자 합계',money(t.monthlyInterest),`향후 12개월 예상 이자 ${money(annual)}`)+metric('대출 잔액',money(t.loans))+metric('월 원금 + 이자',money(t.monthlyPrincipal+t.monthlyInterest),`원금 ${money(t.monthlyPrincipal)} · 이자 ${money(t.monthlyInterest)}`)+metric('잔액 가중평균 연 이율',`${weighted.toFixed(2)}%`,'대출잔액 기준 가중 평균','',true);}
  if(kind==='fixed'){const f=monthlyFlow(portfolio,month);return metric('월 고정지출 합계',money(f.fixedTotal),'선택한 월에 적용되는 전체 항목','',true)+metric('계좌 결제',money(f.fixedCash),'지출 계획·자산 전망에 반영','',true)+metric('카드 청구액에 포함',money(f.fixedCard),'카드대금과 중복 합산하지 않아요','',true);}
@@ -543,9 +558,8 @@ function cardsPage(){
 function category(kind,{embedded=false}={}){
  if(kind==='cards'&&!embedded)return cardsPage();
  if(kind==='loans')return renderLoanManagement(portfolio,{formatMoney:money,layout:recordLayoutFor('loan-cards'),amountState:recordAmountState,hidden,query,heading:heading('대출 현황','남은 기간으로 원금·이자와 완납까지의 지출을 계산하세요.').replace('<div class="heading-actions">','<div class="heading-actions"><a class="button secondary" href="#advisor">AI 상담</a>'),demoBanner:demoBanner(),recordsTable:recordLedgerHost('loans'),forecastPanel:loanForecastPanel()});
- const data=filteredRecords(kind);
  const notes={fixed:'매월 납부일이 없는 달은 말일로 표시합니다. 시작월·종료월은 해당 월을 포함합니다. 카드 청구액에 포함되는 항목은 고정지출 분석에만 포함하고 카드대금과 중복 합산하지 않습니다. 수입·지출에 같은 항목을 이미 등록했다면 중복 입력하지 마세요.',cashflow:'월급은 실수령액으로 입력해 주세요. 매월 반복은 시작일이 속한 달부터 같은 날짜에 반영하며, 해당 날짜가 없는 달에는 말일로 표시합니다. 카드대금에 포함된 기타 지출은 결제 방식에서 카드 청구액에 포함 · 중복 제외를 선택하세요. 수입·지출 기록은 예금 잔액이나 순자산을 자동으로 바꾸지 않습니다.',stocks:'증권사 계좌별 총액 또는 종목별 금액 중 한 가지 방식으로 등록해 주세요. 같은 자산을 중복 등록하면 합계도 중복됩니다. 해외 자산은 원화로 환산해 입력해 주세요.',loans:'월별 예상 이자는 매달 남은 잔액 × 연 이율 ÷ 12로 계산합니다. 이번 납부 이자는 은행 청구액을 직접 입력할 수 있습니다. 실제 이자는 일수·금리 변경에 따라 다를 수 있습니다. 월별 표는 현재 잔액 기준이며 실제 상환 이력이 아닙니다. 일정이 지나도 현재 대출잔액을 자동 차감하지 않습니다.',retirement:'퇴직금 예상액과 퇴직연금 계좌 평가액은 중복되지 않도록 입력해 주세요. 입력 금액은 세전·세후 여부에 따라 실제 수령액과 다를 수 있습니다. 회사 월 납입액은 첫 납입 예정일부터 매월 예상 퇴직연금에 더하며, 예금이나 현재 잔액을 자동 변경하지 않습니다.',deposits:'연 예상 이자는 현재 잔액과 연 이율을 사용한 세전 단순 추정치입니다. 실제 이자는 상품 조건과 입출금 내역에 따라 달라집니다.',cards:'카드 청구액은 정확한 날짜별로 등록해 주세요. 상태를 눌러 결제 완료로 바꿀 수 있습니다. 완료된 카드대금은 부채에서 제외되며, 예금 잔액은 직접 수정해 주세요.'};
- return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${['cashflow','fixed'].includes(kind)?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>${kind==='cashflow'?flowSummary(month,false):''}`:''}<div class="metric-strip ${kind==='loans'?'loan-metrics':''}">${categoryMetrics(kind)}</div>${recordLedgerHost(kind)}<p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
+ return `${embedded?homeDetailHeading(navLabels[kind]+' 상세',descriptions[kind],kind):heading(navLabels[kind],descriptions[kind])+demoBanner()}${kind==='cashflow'?flowSummary(month):`${kind==='fixed'?`<div class="flow-month-bar"><span>조회할 월</span>${monthToolbar()}</div>`:''}<div class="metric-strip">${categoryMetrics(kind)}</div>`}${recordLedgerHost(kind)}<p class="category-note">${notes[kind]}</p>${kind==='loans'?loanForecastPanel():''}`;
 }
 function calendar(){
  return `${heading('입출금 달력','등록한 수입과 지출 계획을 날짜별로 확인하세요.',false)}${demoBanner()}${renderExpenseConfirmationSummary(portfolio,{money})}${renderCashCalendar(portfolio,{month,selectedDate:calendarSelected,filter:calendarFilter,category:calendarCategory,mode:calendarMode,money,compact})}`;
