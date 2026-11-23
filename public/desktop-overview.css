@@ -366,7 +366,7 @@ body:not(.mobile-app) #main tbody td:has(.record-amount-input) { background: #ff
 /* Use the same button shapes and selection states throughout desktop filters and tabs. */
 body:not(.mobile-app) #main :is(
   .section-tabs, .entry-mode-tabs, .entry-kind-filters,
-  .ui-steps, .workspace-period-controls, .segmented, .cf-view-switch, .cf-categories,
+  .ui-steps, .workspace-period-controls, .segmented,
   .rank-controls, .spending-modes
 ) {
   flex-wrap: wrap;
@@ -375,14 +375,14 @@ body:not(.mobile-app) #main :is(
   background: transparent;
   overflow: visible;
 }
-body:not(.mobile-app) #main :is(.segmented, .cf-view-switch, .spending-modes, .section-tabs) {
+body:not(.mobile-app) #main :is(.segmented, .spending-modes, .section-tabs) {
   padding: 0;
 }
 body:not(.mobile-app) #main :is(
   .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
-  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
-  .cf-categories > button, .rank-controls > button, .spending-modes > button
+  .workspace-period-controls > button, .segmented > button,
+  .rank-controls > button, .spending-modes > button
 ) {
   display: inline-flex;
   align-items: center;
@@ -406,16 +406,16 @@ body:not(.mobile-app) #main :is(
 body:not(.mobile-app) #main :is(
   .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
-  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
-  .cf-categories > button, .rank-controls > button, .spending-modes > button
+  .workspace-period-controls > button, .segmented > button,
+  .rank-controls > button, .spending-modes > button
 ):hover:where(:not(:disabled)) {
   background: var(--desk-panel-active);
 }
 body:not(.mobile-app) #main :is(
   .section-tabs > a,
   .entry-mode-tabs > button, .entry-kind-filters > button, .ui-steps > button,
-  .workspace-period-controls > button, .segmented > button, .cf-view-switch > button,
-  .cf-categories > button, .rank-controls > button, .spending-modes > button
+  .workspace-period-controls > button, .segmented > button,
+  .rank-controls > button, .spending-modes > button
 ):is([aria-pressed="true"], [aria-current="page"], [aria-current="step"], .active) {
   background: var(--desk-choice-selected);
   color: #fff;
@@ -427,15 +427,6 @@ body:not(.mobile-app) #main :is(.entry-category-count, .entry-mode-tabs span) {
   padding: 0;
   background: transparent;
   color: inherit;
-}
-body:not(.mobile-app) #main .page-content .cf-day.is-selected {
-  border: 0;
-  box-shadow: none;
-  background: var(--desk-paper);
-  color: var(--brand-ink);
-  font-weight: 650;
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 body:not(.mobile-app) :is(.button.secondary, .entry-recent-edit, .coach-launch, .cf-month-link) {
   border: 0;
