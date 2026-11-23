@@ -1,5 +1,5 @@
 import {createWorkspaceState,renderWorkspace,mountWorkspace,unmountWorkspace,defaultDashboard,dashboardConfig,widgetTemplates} from '/workspace.mjs';
-import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, monthlyForecastPeriod, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, nextRetirementContribution, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense} from '/domain.mjs';
+import {KINDS, LABELS, FLOW_LABELS, emptyPortfolio, todayKST, validatePortfolio, totals, eventsForMonth, cashflowForMonth, monthlyFlow, samplePortfolio, paymentDate, budgetPlan, monthlyForecastPeriod, forecastMonths, snapshotTotals, captureSnapshot, fixedForMonth, interestForLoan, estimatedMonthlyInterest, nextRetirementContribution, loanSchedule, paydayForecasts, scheduledCashflows, isCardIncludedExpense, loanNextPayment, loanPlanSummary, shiftMonth, actualSpendingForMonth, validMonth, pendingExpenses, confirmExpense, applyLoanRepayment} from '/domain.mjs';
 import {renderTrendChart, mountTrendCharts} from '/chart.mjs';
 import {renderLoanForecastPanel} from '/loan-forecast.mjs';
 import {renderLoanCards,renderLoanManagement} from '/loans-page.mjs';
@@ -439,17 +439,137 @@ function openLoanPaymentEditor(id){
  const row=id?(portfolio.loanPayments||[]).find(item=>item.id===id):{};
  if(!row)return;
  $('editor-title').textContent=id?'상환 기록 수정':'대출 상환 기록 추가';$('form-error').textContent='';
- const specs=[['name','대출명','text'],['institution','은행','text'],['date','실제 상환일','date'],['principal','상환 원금','money'],['interest','납부 이자','money'],['note','메모','text']];
+ const specs=[['name','대출명','text'],['institution','은행','text'],['date','실제 상환일','date'],['principal','상환 원금','money'],['interest','납부 이자','money'],['fee','납부 수수료','money'],['note','메모','text']];
  $('form-fields').innerHTML=`<div class="field full-width"><label for="payment-loan">등록 대출 연결 · 선택</label><select id="payment-loan" name="loanId"><option value="">직접 입력</option>${row.loanId&&!portfolio.loans.some(loan=>loan.id===row.loanId)?`<option value="${escapeHTML(row.loanId)}" selected>${escapeHTML(row.name)} · 보관된 기록</option>`:''}${portfolio.loans.map(loan=>`<option value="${escapeHTML(loan.id)}" ${row.loanId===loan.id?'selected':''}>${escapeHTML(loan.name)} · ${escapeHTML(loan.institution||'은행 미등록')}</option>`).join('')}</select></div>`+specs.map(([key,label,type])=>`<div class="field ${key==='note'?'full-width':''}"><label for="payment-${key}">${label}${key==='note'?'':' *'}</label><div class="input-wrap"><input id="payment-${key}" name="${key}" type="${type==='date'?'date':'text'}" value="${escapeHTML(row[key]??(type==='date'?todayKST():type==='money'?0:''))}" ${key==='note'?'maxlength="500"':'required'} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='date'?`max="${todayKST()}"`:key==='note'?'':'maxlength="100"'}>${type==='money'?'<span>원</span>':''}</div></div>`).join('')+'<p class="form-notice full-width">이미 상환한 내역을 통계에 기록합니다. 현재 대출잔액은 자동 변경하지 않으며, 앞으로의 상환은 예상표에서 계산합니다.</p>';
  const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.disabled=false;submit.textContent='상환 기록 저장';
  $('record-form').onsubmit=async event=>{
   event.preventDefault();if(saving)return;
-  const values=new FormData(event.target),record={id:id||crypto.randomUUID(),loanId:String(values.get('loanId')||'')};
+  const values=new FormData(event.target),record={...row,id:id||crypto.randomUUID(),loanId:String(values.get('loanId')||'')};
   for(const [key,,type]of specs)record[key]=type==='money'?Number(String(values.get(key)||'0').replaceAll(',','')):String(values.get(key)||'').trim();
   const next=structuredClone(portfolio);next.loanPayments=(next.loanPayments||[]).filter(item=>item.id!==id);next.loanPayments.push(record);submit.disabled=true;
   try{await persist(next);$('editor').close();toast('상환 기록을 저장했어요.');}catch(error){$('form-error').textContent=error.message;}finally{submit.disabled=false;}
  };
  openDialog('editor');
+}
+
+function loanRepaymentOptions(id){
+ const loan=portfolio.loans.find(row=>row.id===id);
+ if(!loan)return '';
+ const latest=(portfolio.loanPayments||[]).filter(row=>row.loanId===id&&row.repaymentType)
+  .reduce((last,row)=>!last||row.date>=last.date?row:last,null);
+ const history=latest?`<p>최근 반영 · ${latest.date} · ${latest.repaymentType==='full'?'전체 완납':'부분 상환'} · ${money(latest.principal+latest.interest+(latest.fee||0))}</p>`:'';
+ if(!loan.balance&&!history)return '';
+ return `<section class="loan-repayment-options full-width">
+  <div><h3>${loan.balance?'원금 상환':'상환 완료'}</h3>${history}</div>
+  ${loan.balance?`<div class="loan-repayment-buttons">
+   <button type="button" class="button secondary small" data-action="loan-repayment" data-id="${escapeHTML(id)}" data-mode="partial">부분 상환</button>
+   <button type="button" class="button secondary small" data-action="loan-repayment" data-id="${escapeHTML(id)}" data-mode="full">전체 완납</button>
+  </div>`:''}
+ </section>`;
+}
+function openLoanRepayment(id,type){
+ if(saving||hidden)return;
+ if(entryManagerState.drafts.has('loans:'+id)){
+  toast('통합 입력·수정에서 이 대출의 변경을 먼저 저장하거나 되돌려 주세요.');
+  return;
+ }
+ const loan=portfolio.loans.find(row=>row.id===id);
+ if(!loan?.balance||!['partial','full'].includes(type))return;
+ const full=type==='full',today=todayKST(),paymentId=crypto.randomUUID();
+ const dialog=$('loan-repayment-dialog'),form=$('loan-repayment-form'),error=$('loan-repayment-error');
+ const submit=form.querySelector('button[type="submit"]');
+ const field=(key,label,attrs,unit='')=>`<div class="field"><label for="repay-${key}">${label}</label><div class="input-wrap"><input id="repay-${key}" name="${key}" ${attrs}>${unit?`<span>${unit}</span>`:''}</div></div>`;
+ const amount=(key,label,value,attrs='')=>field(key,label,`type="text" inputmode="numeric" maxlength="21" value="${value}" ${attrs}`,'원');
+ const term=loan.calculationMode==='term';
+ const monthlyFields=term
+  ? field('nextPaymentDate','다음 납부일',`type="date" value="${loanNextPayment(loan,today).date}" required`)
+    +field('remainingMonths','남은 납부 횟수',`type="number" min="1" max="600" value="${loan.remainingMonths}" required`,'회')
+    +field('graceMonths','남은 거치 횟수',`type="number" min="0" max="599" value="${loan.graceMonths}" required`,'회')
+  : amount('monthlyPrincipal','월 상환 원금',loan.principal,'required')
+    +(loan.interestMode==='manual'?amount('monthlyInterest','다음 납부 이자',loan.interest,'required'):'');
+ const scheduleNote=term?'은행에서 받은 새 일정이 있으면 입력하세요. 그대로 두면 기존 일정으로 계산합니다.':'은행에서 월 납부액을 변경했다면 입력하세요. 그대로 두면 기존 납부 조건을 사용합니다.';
+ $('loan-repayment-title').textContent=full?'전체 완납':'부분 상환';
+ $('loan-repayment-name').textContent=loan.name;
+ error.textContent='';
+ submit.disabled=false;
+ submit.textContent=full?'완납 반영':'부분 상환 반영';
+ $('loan-repayment-fields').innerHTML=`
+  ${full?'<p class="repayment-hint full-width">완납 후에도 대출과 상환 기록은 보관됩니다. 앞으로 낼 원금과 이자는 0원으로 반영됩니다.</p>':''}
+  ${amount('principal','상환 원금',full?loan.balance:'',full?'readonly':'required')}
+  ${field('date','실제 상환일',`type="date" value="${today}" max="${today}" required`)}
+  ${amount('interest','함께 낸 이자',0)}
+  ${amount('fee','중도상환 수수료',0)}
+  <div class="field full-width">
+   <label for="repay-cash-mode">예금 잔액 반영</label>
+   <select id="repay-cash-mode" name="cashMode" required>
+    ${portfolio.deposits.length?'<option value="">반영 방식 선택</option><option value="deduct">등록한 예금·현금에서 차감</option>':''}
+    <option value="recorded">예금 잔액 그대로 두기</option>
+   </select>
+   <p class="repayment-hint" data-repay-cash-hint>이미 잔액을 수정했거나 등록하지 않은 계좌로 냈다면 그대로 두세요.</p>
+  </div>
+  <div class="field full-width" data-repay-account hidden>
+   <label for="repay-deposit">출금한 예금·현금</label>
+   <select id="repay-deposit" name="depositId" disabled><option value="">출금 항목 선택</option>${portfolio.deposits.map(row=>`<option value="${escapeHTML(row.id)}">${escapeHTML(row.name)} · ${money(row.balance)}</option>`).join('')}</select>
+  </div>
+  ${full?'':`<details class="repayment-schedule full-width">
+    <summary>상환 후 월 납부 조건 수정</summary>
+    <p class="repayment-hint">${scheduleNote}</p>
+    <div class="form-grid">${monthlyFields}</div>
+   </details>`}
+  <dl class="repayment-summary full-width" aria-live="polite"></dl>`;
+ const inputs=Object.fromEntries([...form.querySelectorAll('input,select')].map(input=>[input.name,input]));
+ const initialNext=inputs.nextPaymentDate?.value;
+ const readAmount=key=>{
+  const value=inputs[key].value.trim();
+  return /^\d+$|^\d{1,3}(,\d{3})+$/.test(value)?Number(value.replaceAll(',','')):value===''&&key!=='principal'?0:NaN;
+ };
+ const update=()=>{
+  const deduct=inputs.cashMode.value==='deduct',deposit=inputs.depositId;
+  form.querySelector('[data-repay-account]').hidden=!deduct;
+  deposit.disabled=!deduct;
+  deposit.required=deduct;
+  form.querySelector('[data-repay-cash-hint]').hidden=deduct;
+  const principal=full?loan.balance:readAmount('principal'),interest=readAmount('interest'),fee=readAmount('fee');
+  const validPrincipal=principal>0&&principal<=loan.balance&&(full||principal<loan.balance);
+  const total=validPrincipal&&Number.isSafeInteger(principal+interest+fee)?principal+interest+fee:null;
+  const account=deduct?portfolio.deposits.find(row=>row.id===deposit.value):null;
+  const rows=[['남은 원금',validPrincipal?`${money(loan.balance)} → ${money(loan.balance-principal)}`:money(loan.balance)],
+   ['총 납부액',total===null?'—':money(total)]];
+  if(account&&total!==null)rows.push(['차감 후 예금 잔액',account.balance<total?'잔액 부족':money(account.balance-total)]);
+  if(inputs.cashMode.value==='recorded')rows.push(['예금 잔액','그대로 유지']);
+  form.querySelector('.repayment-summary').innerHTML=rows.map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join('');
+ };
+ form.oninput=form.onchange=update;
+ update();
+ dialog.oncancel=event=>{if(submit.disabled)event.preventDefault();};
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  if(saving||submit.disabled)return;
+  error.textContent='';
+  const schedule={};
+  if(!full&&term){
+   schedule.remainingMonths=Number(inputs.remainingMonths.value);
+   schedule.graceMonths=Number(inputs.graceMonths.value);
+   if(inputs.nextPaymentDate.value!==initialNext)schedule.nextPaymentDate=inputs.nextPaymentDate.value;
+  }else if(!full){
+   schedule.principal=readAmount('monthlyPrincipal');
+   if(inputs.monthlyInterest)schedule.interest=readAmount('monthlyInterest');
+  }
+  try{
+   const next=applyLoanRepayment(portfolio,{loanId:id,paymentId,type,expectedBalance:loan.balance,
+    date:inputs.date.value,principal:readAmount('principal'),interest:readAmount('interest'),fee:readAmount('fee'),
+    cashMode:inputs.cashMode.value,depositId:inputs.depositId.value,schedule});
+   submit.disabled=true;
+   await persist(next);
+   dialog.close();$('editor').close();entryDetailEditing=false;
+   toast(full?'완납을 반영했어요.':'부분 상환을 반영했어요.');
+  }catch(err){
+   error.textContent=err.status===409?'다른 기기에서 내역이 변경됐습니다. 창을 닫고 페이지를 새로고침한 뒤 다시 시도해 주세요.':err.message;
+   error.scrollIntoView?.({block:'nearest'});
+  }
+  finally{submit.disabled=false;}
+ };
+ openDialog('loan-repayment-dialog');
 }
 
 const descriptions={fixed:'월세·보험료·통신비처럼 매월 나가는 금액을 관리하세요.',cashflow:'내 월급과 기타 수입·지출을 기록하고 매달 남는 금액을 확인하세요.',stocks:'증권사별 잔고와 평가손익을 한곳에서 확인하세요.',loans:'잔액부터 이율, 매월 갚는 원금과 이자까지 꼼꼼하게.',retirement:'오늘의 노력이 쌓인, 내일의 든든한 자산.',deposits:'생활비 통장부터 정기예금까지, 내 돈이 모인 곳.',cards:'카드사별 카드 청구액을 미리 확인하고 준비하세요.'};
@@ -761,7 +881,7 @@ function openEditor(kind,id,rowOverride){
  const row=rowOverride||(id?portfolio[kind].find(r=>r.id===id):{});
  if(!row)return;
  $('editor-title').textContent=`${LABELS[kind]} ${id?'수정':'추가'}`;$('form-error').textContent='';
- $('form-fields').innerHTML=fields[kind].map(([key,label,type,required,placeholder])=>{
+ $('form-fields').innerHTML=(kind==='loans'&&id&&!hidden?loanRepaymentOptions(id):'')+fields[kind].map(([key,label,type,required,placeholder])=>{
   let value=row[key]??(kind==='loans'&&key==='calculationMode'?(id?'manual':'term'):kind==='loans'&&key==='method'?'원금균등':kind==='loans'&&key==='remainingMonths'?12:kind==='loans'&&key==='graceMonths'?0:kind==='loans'&&key==='nextPaymentDate'?(paymentDate(todayKST().slice(0,7),25)>todayKST()?paymentDate(todayKST().slice(0,7),25):paymentDate(shiftMonth(todayKST().slice(0,7),1),25)):kind==='loans'&&key==='day'?25:key==='includeInForecast'?true:key==='startMonth'?month:key==='paymentSource'?'account':key==='interestMode'?(id?'manual':'estimate'):key==='repeat'?'monthly':(type==='date'&&required)?(kind==='cashflow'&&month!==todayKST().slice(0,7)?month+'-01':todayKST()):['money','rate'].includes(type)?0:'');
   let input;
   if(type==='calculationMode')input=`<select id="field-${key}" name="${key}"><option value="term" ${value==='term'?'selected':''}>남은 기간으로 자동 계산</option><option value="manual" ${value==='manual'?'selected':''}>월 원금 직접 입력 · 기존 방식</option></select>`;
@@ -884,13 +1004,14 @@ $('search-dialog').addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openDashboardSearch();}});
 document.addEventListener('click',async e=>{
  if(recordAmountEditing.click(e))return;
- const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='editor')entryDetailEditing=false;if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
+ const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='loan-repayment-dialog'&&saving)return;if(close.dataset.close==='editor')entryDetailEditing=false;if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
  const forecastRow=e.target.closest('[data-forecast-row]');
  if(forecastRow&&!e.target.closest('a,button,input,select')&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey){
   location.hash='#forecast/'+forecastRow.dataset.forecastRow;return;
  }
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='loan-repayment'){openLoanRepayment(id,button.dataset.mode);return;}
  if(action==='retirement-change-add'){
   const list=$('retirement-changes');if(!list||saving||list.children.length>=24)return;
   list.insertAdjacentHTML('beforeend',retirementChangeFields());

@@ -194,10 +194,12 @@ export function validatePortfolio(input) {
       ids.add(row.id);
       if (typeof row.name !== 'string' || !row.name.trim() || row.name.length > 100 || typeof row.institution !== 'string' || !row.institution.trim() || row.institution.length > 100) throw new Error('대출명과 은행을 100자 이내로 입력해 주세요.');
       if (!validDate(row.date) || row.date > todayKST()) throw new Error('상환 기록은 오늘까지의 실제 상환일을 입력해 주세요.');
-      if (!validMoney(row.principal) || !validMoney(row.interest) || row.principal + row.interest === 0) throw new Error('상환 원금과 이자를 확인해 주세요.');
+      if (!validMoney(row.principal) || !validMoney(row.interest) || (row.fee!==undefined&&!validMoney(row.fee)) || row.principal + row.interest + (row.fee??0) === 0) throw new Error('상환 원금·이자·수수료를 확인해 주세요.');
+      if (row.repaymentType!==undefined&&!['partial','full'].includes(row.repaymentType)) throw new Error('대출 상환 구분을 확인해 주세요.');
       if (row.loanId != null && row.loanId !== '' && (typeof row.loanId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(row.loanId))) throw new Error('연결한 대출을 확인해 주세요.');
       if (row.note != null && (typeof row.note !== 'string' || row.note.length > 500)) throw new Error('상환 메모는 500자 이내로 입력해 주세요.');
-      return {id:row.id,loanId:row.loanId||'',name:row.name.trim(),institution:row.institution.trim(),date:row.date,principal:row.principal,interest:row.interest,note:row.note||''};
+      return {id:row.id,loanId:row.loanId||'',name:row.name.trim(),institution:row.institution.trim(),date:row.date,principal:row.principal,interest:row.interest,note:row.note||'',
+        ...(row.fee?{fee:row.fee}:{}),...(row.repaymentType?{repaymentType:row.repaymentType}:{})};
     });
   }
   if(input.expenseConfirmations!==undefined){
@@ -324,6 +326,38 @@ export function confirmExpense(data,key,{depositId='',asOf=todayKST()}={}){
  if(expense.kind==='cards')next.cards.find(row=>row.id===expense.id).paid=true;
  (next.expenseConfirmations??=[]).push({key,name:expense.name,amount:expense.amount,dueDate:expense.dueDate,confirmedOn:asOf,depositId});
  return next;
+}
+export function applyLoanRepayment(data,{
+ loanId,paymentId,type,expectedBalance,principal,interest=0,fee=0,date,cashMode,depositId='',schedule={},note=''
+},asOf=todayKST()){
+ if(data.loanPayments?.some(row=>row.id===paymentId))throw new Error('이미 저장한 상환입니다. 상환 기록을 확인해 주세요.');
+ const loan=data.loans.find(row=>row.id===loanId);
+ if(!loan||loan.balance!==expectedBalance)throw new Error('대출 잔액이 변경됐습니다. 최신 내역을 불러온 뒤 다시 확인해 주세요.');
+ if(loan.balance<=0)throw new Error('이미 상환이 완료된 대출입니다.');
+ if(!['partial','full'].includes(type))throw new Error('상환 방식을 선택해 주세요.');
+ if(type==='full')principal=loan.balance;
+ if(!Number.isSafeInteger(principal)||principal<1||(type==='partial'&&principal>=loan.balance))throw new Error('부분 상환 원금은 1원 이상, 남은 원금보다 작아야 합니다.');
+ if(!validDate(date)||!validMonth(date.slice(0,7))||date>asOf)throw new Error('상환일은 오늘까지의 실제 납부일로 입력해 주세요.');
+ if([interest,fee].some(amount=>!Number.isSafeInteger(amount)||amount<0||amount>1_000_000_000_000_000))throw new Error('이자와 수수료는 0 이상의 정수(원)로 입력해 주세요.');
+ const total=principal+interest+fee;
+ if(!['deduct','recorded'].includes(cashMode))throw new Error('예금 잔액 반영 방식을 선택해 주세요.');
+ const account=cashMode==='deduct'?data.deposits.find(row=>row.id===depositId):null;
+ if(cashMode==='deduct'&&!account)throw new Error('출금할 예금·현금 항목을 선택해 주세요.');
+ if(account&&account.balance<total)throw new Error('선택한 예금·현금 항목의 잔액이 총 납부액보다 적습니다.');
+ const updated={...loan,balance:loan.balance-principal};
+ if(type==='full'){
+  updated.principal=0;
+  updated.interest=0;
+ }else if(loan.calculationMode==='term'){
+  for(const key of ['remainingMonths','graceMonths','nextPaymentDate'])if(Object.hasOwn(schedule,key))updated[key]=schedule[key];
+  if(Object.hasOwn(schedule,'nextPaymentDate')&&updated.nextPaymentDate<=asOf)throw new Error('다음 납부일은 오늘 이후로 입력해 주세요.');
+ }else{
+  for(const key of ['principal','interest'])if(Object.hasOwn(schedule,key))updated[key]=schedule[key];
+ }
+ const payment={id:paymentId,loanId,name:loan.name,institution:loan.institution?.trim()||'은행 미등록',date,principal,interest,fee,note,repaymentType:type};
+ return validatePortfolio({...data,loans:data.loans.map(row=>row.id===loanId?updated:row),
+  deposits:account?data.deposits.map(row=>row.id===account.id?{...row,balance:row.balance-total}:row):data.deposits,
+  loanPayments:[...(data.loanPayments||[]),payment]});
 }
 export function estimatedMonthlyInterest(balance,rate) {return Math.round(balance*rate/1200);}
 export function interestForLoan(loan,balance=loan.balance) {return balance<=0?0:loan.calculationMode==='term'||loan.interestMode==='estimate'?estimatedMonthlyInterest(balance,loan.rate):loan.interest;}

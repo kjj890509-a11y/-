@@ -7,10 +7,44 @@ import {repaymentScenarios} from '../public/repayment.mjs';
 import {handleApi} from '../server/api.mjs';
 import {renderLoanForecastPanel} from '../public/loan-forecast.mjs';
 import {parseHTML} from 'linkedom';
+import {buildStatistics} from '../public/statistics.mjs';
 const asOf='2027-01-01';
 function portfolio(patch={}){return domain.validatePortfolio({...domain.emptyPortfolio(),deposits:[{id:'cash',name:'현금',balance:50000000,rate:0}],loans:[{id:'term',name:'기간 대출',institution:'은행',balance:12000000,rate:12,method:'원금균등',day:31,calculationMode:'term',remainingMonths:12,graceMonths:0,nextPaymentDate:'2027-01-31',...patch}]});}
 const payable=rows=>rows.flatMap(row=>row.details).filter(row=>row.installment!==null);
 const sum=(rows,key)=>rows.reduce((n,row)=>n+row[key],0);
+
+test('partial and full repayments apply principal, exact cash outlay and future schedule together',()=>{
+ const original=portfolio(),before=structuredClone(original),date=domain.todayKST();
+ const repayment={loanId:'term',type:'partial',paymentId:'settlement-1',expectedBalance:12000000,
+  principal:3000000,interest:15000,fee:25000,date,cashMode:'deduct',depositId:'cash',
+  schedule:{remainingMonths:9,graceMonths:0,nextPaymentDate:domain.shiftMonth(date.slice(0,7),1)+'-15'}};
+ const partial=domain.applyLoanRepayment(original,repayment);
+ assert.deepEqual(original,before);
+ assert.equal(partial.loans[0].balance,9000000);
+ assert.equal(partial.deposits[0].balance,46960000);
+ assert.equal(partial.loans[0].remainingMonths,9);
+ assert.equal(domain.loanNextPayment(partial.loans[0],date).date,repayment.schedule.nextPaymentDate);
+ assert.equal(domain.loanNextPayment(partial.loans[0],date).payment,1090000);
+ assert.equal(partial.fixed.length,0);
+ assert.equal(partial.cashflow.length,0);
+ const stats=buildStatistics(partial,{start:date,end:date,kind:'loans'});
+ assert.equal(stats.totals.actualLoanPayment,3040000);
+ assert.equal(stats.totals.interest,15000);
+ assert.equal(stats.rows[0].status,'부분 상환');
+ assert.throws(()=>domain.applyLoanRepayment(partial,repayment),/이미 저장/);
+ assert.throws(()=>domain.applyLoanRepayment(original,{...repayment,expectedBalance:1}),/잔액이 변경/);
+ assert.throws(()=>domain.applyLoanRepayment(original,{...repayment,principal:12000000}),/남은 원금보다 작/);
+ assert.throws(()=>domain.applyLoanRepayment(original,{...repayment,depositId:'wrong'}),/항목을 선택/);
+ assert.throws(()=>domain.applyLoanRepayment(original,{...repayment,fee:50000000}),/잔액이 총 납부액보다 적/);
+ assert.deepEqual(original,before);
+ const settled=domain.applyLoanRepayment(partial,{loanId:'term',paymentId:'settlement-2',type:'full',
+  expectedBalance:9000000,date,interest:900,cashMode:'recorded'});
+ assert.equal(settled.loanPayments[1].principal,9000000);
+ assert.equal(settled.loanPayments[1].repaymentType,'full');
+ assert.equal(settled.loans[0].balance,0);
+ assert.equal(settled.deposits[0].balance,partial.deposits[0].balance);
+ assert.ok(domain.loanSchedule(settled,date.slice(0,7),12,date).every(month=>month.payment===0));
+});
 
 test('equal principal computes exact declining interest and clears every won at maturity',()=>{
  const p=portfolio(),before=structuredClone(p),rows=domain.loanSchedule(p,'2027-01',14,asOf),payments=payable(rows);

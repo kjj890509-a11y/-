@@ -78,7 +78,7 @@ export function buildStatistics(data, filters, today = todayKST()) {
   }
   if (kind !== 'loans' && !bank) for (const row of data.cards) add({source:'cards',recordId:row.id,item:'cards:'+row.id,date:row.dueDate,name:row.name,note:row.note,type:'expense',amount:row.amount,status:row.paid?'결제 완료':'결제 예정'});
   if (kind === 'all' || kind === 'loans') {
-    for (const row of data.loanPayments||[]) add({source:'loanPayments',recordId:row.id,item:historicalKey(row),date:row.date,name:row.name,institution:bankName(row.institution),note:row.note,type:'loans',amount:row.principal+row.interest,principal:row.principal,interest:row.interest,status:'상환 기록'});
+    for (const row of data.loanPayments||[]) add({source:'loanPayments',recordId:row.id,item:historicalKey(row),date:row.date,name:row.name,institution:bankName(row.institution),note:row.note,type:'loans',amount:row.principal+row.interest+(row.fee||0),principal:row.principal,interest:row.interest,fee:row.fee||0,status:row.repaymentType==='full'?'전체 완납':row.repaymentType==='partial'?'부분 상환':'상환 기록'});
     if (end > today && data.loans.length) {
       const projectionCount = distance(today,end)+1;
       if (projectionCount > 120) throw new Error('대출 예상은 오늘부터 10년 이내의 날짜를 선택해 주세요.');
