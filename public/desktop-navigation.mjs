@@ -51,7 +51,6 @@ function restoreMenu(groups,storage) {
 export function mountDesktopNavigation(root,groups,{
  labels,icon,storage,onFeedback=()=>{},loadSortable=()=>import('/sortable.mjs')
 }){
- const defaultViews=new Set(groups.map(group=>group.defaultView));
  root.innerHTML=restoreMenu(groups,storage).map(group=>`
   <div class="desk-menu-group" data-sidebar-group="${group.id}">
    <div class="desk-menu-heading">
@@ -63,7 +62,7 @@ export function mountDesktopNavigation(root,groups,{
    <div class="desk-menu-items" data-sidebar-items id="desk-menu-${group.id}" ${group.collapsed?'hidden':''}>
     ${group.items.map(key=>`<div class="desk-menu-row" data-sidebar-item="${key}">
      ${handle('item',labels[key])}
-     <a href="#${key}" class="desk-menu-item${defaultViews.has(key)?' nav-link':''}">${icon(key)}<span>${labels[key]}</span></a>
+     <a href="#${key}" class="desk-menu-item" title="${labels[key]}">${icon(key)}<span>${labels[key]}</span></a>
     </div>`).join('')}
    </div>
   </div>`).join('');
@@ -78,7 +77,6 @@ export function mountDesktopNavigation(root,groups,{
    let active=false;
    for (const link of group.querySelectorAll('.desk-menu-item')) {
     const current=link.getAttribute('href')==='#'+view;
-    link.classList.toggle('active',current);
     if(current){link.setAttribute('aria-current','page');active=true;}
     else link.removeAttribute('aria-current');
    }

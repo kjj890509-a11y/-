@@ -179,7 +179,7 @@ test('the live app saves the dashboard envelope and restores it without writing 
  document.querySelector('[data-board-action=save]').dispatchEvent(new Event('click',{bubbles:true}));await tick();
  assert.deepEqual(Object.keys(body).sort(),['dashboard','revision']);assert.deepEqual(stored,{...before,dashboard:body.dashboard});
  assert.equal(document.querySelector('.workspace-editbar'),null);
- assert.deepEqual([...document.querySelectorAll('#main-nav .nav-link')].map(link=>link.getAttribute('href')),navigation.navigationGroups.map(group=>'#'+group.defaultView));
+ assert.deepEqual([...document.querySelectorAll('#main-nav [data-sidebar-items]')].map(list=>list.querySelector('.desk-menu-item').getAttribute('href')),navigation.navigationGroups.map(group=>'#'+group.defaultView));
  assert.doesNotMatch(document.querySelector('#main-nav').textContent,/월별 예산|월말 예상|월급날 예상/);
  document.getElementById('privacy-toggle').onclick();assert.equal(document.querySelector('.workspace-current-stat strong').textContent,'••••••');
  context.location.hash='#statistics';window.dispatchEvent(new Event('hashchange'));

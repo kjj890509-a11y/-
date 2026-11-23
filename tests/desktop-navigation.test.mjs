@@ -48,6 +48,21 @@ test('accordion visibility persists and identifies a collapsed group containing 
  reloaded.navigation.destroy();
 });
 
+test('every desktop menu row uses the same link styling when the active page changes',()=>{
+ const t=sidebar();
+ const rows=[...t.root.querySelectorAll('[data-sidebar-item]')];
+ assert.equal(rows.length,Object.keys(viewLabels).length);
+ for(const page of ['assets','deposits','cashflow','spending']){
+  t.navigation.setActive(page);
+  for(const row of rows){
+   const link=row.querySelector('a');
+   assert.equal(link.className,'desk-menu-item');
+   assert.equal(link.hasAttribute('aria-current'),row.dataset.sidebarItem===page);
+  }
+ }
+ t.navigation.destroy();
+});
+
 test('group and nested Sortable drops preserve every link and restore the customized order',async()=>{
  const t=sidebar();
  await tick();

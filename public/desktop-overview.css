@@ -100,10 +100,11 @@ body:not(.mobile-app) :is(.app-shell, .sidebar, .topbar, #main) {
   .desk-menu-ghost { border-radius: 5px; background: var(--desk-panel-active); opacity: .45; }
   .desk-menu-item {
     display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
-    min-height: 29px; padding: 3px 4px; margin: 0;
+    min-height: 30px; padding: 3px 4px; margin: 0;
     font-size: .875rem; line-height: 1.4; color: var(--text-secondary);
     font-weight: 500; border-radius: 5px; text-decoration: none;
   }
+  .desk-menu-item > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .desk-menu-item svg { width: 15px; height: 15px; flex: 0 0 15px; color: var(--muted); }
   .desk-menu-item:hover { background: var(--soft-surface); }
   body:not(.mobile-app) .desk-menu-item[aria-current="page"] { color: var(--brand-ink); background: var(--desk-highlight); font-weight: 700; box-shadow: none; }
