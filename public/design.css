@@ -634,3 +634,43 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
   gap: 12px;
 }
 .expense-confirmation-detail > .text-button { justify-self: start; }
+
+.loan-repayment-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--brand-accent-soft);
+}
+.loan-repayment-options h3 { margin: 0; font-size: var(--font-sm); }
+.loan-repayment-options p,
+#loan-repayment-name,
+.repayment-hint { margin: 4px 0 0; color: var(--muted); font-size: var(--font-xs); }
+.loan-repayment-buttons { display: flex; gap: 8px; }
+.loan-repayment-buttons > .button { min-height: 36px; white-space: nowrap; }
+#loan-repayment-dialog { width: min(540px, calc(100% - 24px)); }
+#loan-repayment-dialog .form-grid { gap: 14px; }
+#loan-repayment-name { margin: 0 0 4px; overflow-wrap: anywhere; }
+#loan-repayment-dialog input[readonly] { background: var(--canvas); }
+.repayment-schedule {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--canvas);
+}
+.repayment-schedule > summary { cursor: pointer; font-size: var(--font-sm); font-weight: 600; }
+.repayment-schedule > .form-grid { margin-top: 12px; }
+.repayment-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--brand-accent-soft);
+  font-size: var(--font-sm);
+}
+.repayment-summary > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; }
+.repayment-summary dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mobile-app #loan-repayment-dialog { width: 100%; }
