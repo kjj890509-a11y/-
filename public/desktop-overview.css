@@ -157,7 +157,7 @@ body:not(.mobile-app) #main .page-content :is(
   .overview-support > .panel,
   .spending-columns > .panel,
   .planning-columns > .panel,
-  .flow-metrics > div,
+  .flow-summary-total,
   .entry-tile
 ) {
   border: 0;
@@ -174,11 +174,63 @@ body:not(.mobile-app) #main .page-content > :is(.planning-metrics:not(.asset-hub
   --desk-card-fill: var(--desk-highlight);
 }
 
-body:not(.mobile-app) #main .page-content .flow-metrics {
-  gap: clamp(12px, 1.4vw, 20px);
+#main[data-view="cashflow"] .page-shell > .page-header {
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 14px;
 }
-body:not(.mobile-app) #main .page-content .flow-metrics > div {
-  padding: 16px;
+#main[data-view="cashflow"] .page-shell > .section-tabs { margin-bottom: 16px; }
+#main .flow-summary { margin: 0; }
+.flow-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+#main .flow-summary .flow-metrics { align-items: start; gap: var(--summary-gap); padding: 0; }
+#main .flow-summary .flow-summary-item { min-width: 0; padding: 0; }
+.flow-summary-total { min-height: 88px; padding: 12px 16px; }
+.flow-summary-item[data-flow-total="balance"] .flow-summary-total { --desk-card-fill: var(--desk-highlight); }
+#main .flow-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 23px;
+  line-height: 1.4;
+}
+#main .flow-summary-label > span { margin: 0; color: var(--text-secondary); }
+.flow-summary-label > button.context-tip-trigger { margin: 0; }
+#main .flow-summary-total > strong {
+  margin-top: 5px;
+  font-size: var(--font-2xl);
+  font-weight: 650;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.flow-summary-details { margin: 6px 0 0; padding-inline: 16px; }
+.flow-summary-details > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding-block: 5px;
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+.flow-summary-details dt { color: var(--muted); }
+.flow-summary-details dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
+#main[data-view="cashflow"] .record-ledger-panel { margin-top: 18px; }
+#main[data-view="cashflow"] :is(.record-ledger-panel > .table-heading, .record-ledger-panel .ledger-controls) { padding-inline: 0; }
+#main[data-view="cashflow"] .ledger-table tbody td { vertical-align: middle; }
+#main[data-view="cashflow"] .ledger-table:not(.compact) tbody td { padding-block: 8px; }
+@media (max-width: 920px) {
+  #main .flow-summary .flow-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #main .flow-summary-item[data-flow-total="balance"] { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  #main .flow-summary .flow-metrics { grid-template-columns: minmax(0, 1fr); }
 }
 body:not(.mobile-app) #main .page-content .entry-tile:hover {
   background: var(--desk-panel-active);
