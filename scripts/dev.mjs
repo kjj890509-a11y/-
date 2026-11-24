@@ -16,7 +16,8 @@ const server=createServer(async(req,res)=>{
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   const headers=new Headers(req.headers);headers.set('oai-authenticated-user-id','local-preview-only');
   const request=new Request(`http://${req.headers.host}${req.url}`,{method:req.method,headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(chunks)});
-  const response=await worker.fetch(request,{DB,OPENAI_API_KEY:process.env.OPENAI_API_KEY,ADVISOR_USER_DAILY_LIMIT:process.env.ADVISOR_USER_DAILY_LIMIT,ADVISOR_GLOBAL_DAILY_LIMIT:process.env.ADVISOR_GLOBAL_DAILY_LIMIT});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
+  const {OPENAI_API_KEY,ADVISOR_RELAY_URL,ADVISOR_RELAY_TOKEN,ADVISOR_USER_DAILY_LIMIT,ADVISOR_GLOBAL_DAILY_LIMIT}=process.env;
+  const response=await worker.fetch(request,{DB,OPENAI_API_KEY,ADVISOR_RELAY_URL,ADVISOR_RELAY_TOKEN,ADVISOR_USER_DAILY_LIMIT,ADVISOR_GLOBAL_DAILY_LIMIT});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
  }catch{res.writeHead(500);res.end('Preview error');}
 });
 server.listen(port,'0.0.0.0',()=>console.log(`Preview listening on ${port}`));
