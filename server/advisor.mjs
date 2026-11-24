@@ -7,7 +7,14 @@ const ADVICE_SCOPE='등록된 숫자와 계산 결과만 설명하세요. 특정
 const ASSET_INSTRUCTIONS='월말과 급여일 전망을 현재 잔액과 구분해 한국어로 설명하세요. 등록된 수입·지출, 대출 원금과 이자, 카드대금, 회사 퇴직연금 납입의 영향을 설명하고 누락 지출·금리 변동과 같은 가정을 밝혀 주세요. 계산에 없는 금액·수익률·날짜를 만들지 마세요.';
 const REPAYMENT_INSTRUCTIONS='높은 금리 우선과 적은 잔액 우선의 계산 결과를 한국어로 비교하세요. 양쪽의 예상 이자와 남는 예금을 설명하고 각 전략을 판단할 조건을 알려 주세요. 특정 전략을 골라 주거나 행동을 권유하지 마세요. 생활비, 중도상환수수료, 금리 변경은 확인할 항목입니다. 회사 퇴직연금 납입을 상환 가능한 현금에 포함하지 마세요.';
 const advisorLimit=(value,fallback)=>/^\d+$/.test(String(value))&&Number(value)>=1&&Number(value)<=10000?Number(value):fallback;
-const advisorConfigured=env=>typeof env.OPENAI_API_KEY==='string'&&/^sk-[A-Za-z0-9_-]{20,600}$/.test(env.OPENAI_API_KEY.trim());
+function advisorConnection(env){
+ const key=typeof env.OPENAI_API_KEY==='string'?env.OPENAI_API_KEY.trim():'';
+ if(/^sk-[A-Za-z0-9_-]{20,600}$/.test(key))return {url:'https://api.openai.com/v1/responses',token:key};
+ const {ADVISOR_RELAY_URL:url,ADVISOR_RELAY_TOKEN:token}=env;
+ if(typeof url==='string'&&/^https:\/\/[a-z0-9]{20}\.supabase\.co\/functions\/v1\/moa-advisor-relay$/.test(url)
+  &&typeof token==='string'&&/^moa_[A-Za-z0-9_-]{43}$/.test(token))return {url,token};
+ return null;
+}
 async function reserveAdvisorUsage(env,userId,now){
   const day=todayKST(new Date(now)),actor='user:'+userId,lease=crypto.randomUUID();
   const reserve=(who,limit,cooldown,token,until)=>env.DB.prepare(`INSERT INTO advisor_usage (actor,day,attempts,last_request_ms,lease_id,lease_until) VALUES (?,?,1,?,?,?) ON CONFLICT(actor) DO UPDATE SET day=excluded.day, attempts=CASE WHEN advisor_usage.day=excluded.day THEN advisor_usage.attempts+1 ELSE 1 END, last_request_ms=excluded.last_request_ms, lease_id=excluded.lease_id, lease_until=excluded.lease_until WHERE (advisor_usage.day<>excluded.day OR advisor_usage.attempts<?) AND advisor_usage.last_request_ms<=? AND advisor_usage.lease_until<=? RETURNING attempts`).bind(who,day,now,token,until,limit,now-cooldown,now).first();
@@ -24,12 +31,13 @@ const advisorJSON=(body,status=200)=>new Response(JSON.stringify(body),{status,h
 export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={}) {
   const userId=request.headers.get('oai-authenticated-user-id');
   if(!userId)return advisorJSON({error:'로그인 후 상담을 이용해 주세요.'},401);
-  if(request.method==='GET')return advisorJSON({configured:advisorConfigured(env),...(!advisorConfigured(env)?{code:'advisor_not_configured'}:{}),model:ADVISOR_MODEL,reasoning:ADVISOR_REASONING});
+  const connection=advisorConnection(env);
+  if(request.method==='GET')return advisorJSON({configured:Boolean(connection),...(!connection?{code:'advisor_not_configured'}:{}),model:ADVISOR_MODEL,reasoning:ADVISOR_REASONING});
   if(request.method!=='POST')return advisorJSON({error:'상담 요청은 POST로 보내 주세요.'},405);
   if(request.headers.get('Origin')!==new URL(request.url).origin||request.headers.get('Sec-Fetch-Site')==='cross-site')return advisorJSON({error:'요청 출처를 확인할 수 없습니다.'},403);
   if(!request.headers.get('Content-Type')?.startsWith('application/json'))return advisorJSON({error:'JSON 형식이 필요합니다.'},415);
   if(!env.DB)return advisorJSON({error:'저장된 자산에 연결할 수 없습니다.'},503);
-  if(!advisorConfigured(env))return advisorJSON({error:'운영자의 AI 서비스 연결이 설정되지 않았습니다. 서버 연결을 완료한 뒤 다시 이용해 주세요.',code:'advisor_not_configured'},503);
+  if(!connection)return advisorJSON({error:'운영자의 AI 서비스 연결이 설정되지 않았습니다. 서버 연결을 완료한 뒤 다시 이용해 주세요.',code:'advisor_not_configured'},503);
   let body,data,scenarios,revision,mode,history=[];
  const asOf=todayKST();
   try {
@@ -37,7 +45,7 @@ export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={
     body=JSON.parse(raw);
     if(!body||typeof body!=='object'||Array.isArray(body))return advisorJSON({error:'상담 요청 형식을 확인해 주세요.'},400);
     if(body.dataSharingAccepted!==true)return advisorJSON({error:'상담에 사용할 정보의 전송 안내를 확인해 주세요.'},400);
-    if(['apiKey','model','reasoning','baseUrl'].some(key=>Object.hasOwn(body,key)))return advisorJSON({error:'상담 연결 설정이 변경됐습니다. 새로고침한 뒤 다시 상담해 주세요.'},400);
+    if(['apiKey','model','reasoning','baseUrl','relayUrl','relayToken'].some(key=>Object.hasOwn(body,key)))return advisorJSON({error:'상담 연결 설정이 변경됐습니다. 새로고침한 뒤 다시 상담해 주세요.'},400);
     mode=body.mode??'repayment';if(!['repayment','assets'].includes(mode))return advisorJSON({error:'상담 종류를 확인해 주세요.'},400);
     if(body.history!==undefined){if(!Array.isArray(body.history)||body.history.length>4||body.history.some(m=>!m||!['user','assistant'].includes(m.role)||typeof m.text!=='string'||m.text.length>2000))return advisorJSON({error:'최근 대화 형식을 확인해 주세요.'},400);history=body.history.map(m=>({role:m.role,text:m.text}));}
     if(typeof body.question!=='string'||!body.question.trim()||body.question.length>2000)return advisorJSON({error:'상담 질문은 2,000자 이내로 입력해 주세요.'},400);
@@ -56,15 +64,17 @@ export async function handleAdvisor(request,env,{fetchImpl=fetch,now=Date.now}={
   try{release=await reserveAdvisorUsage(env,userId,now());}catch{return advisorJSON({error:'상담 사용량을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
   if(!release)return advisorJSON({error:'상담이 진행 중이거나 상담 횟수 제한에 도달했습니다. 잠시 후 또는 내일 다시 이용해 주세요.'},429);
   try {
-    const response=await fetchImpl('https://api.openai.com/v1/responses',{
-      method:'POST',headers:{Authorization:'Bearer '+env.OPENAI_API_KEY.trim(),'Content-Type':'application/json'},signal:AbortSignal.timeout(180000),
+    const response=await fetchImpl(connection.url,{
+      method:'POST',redirect:'error',headers:{Authorization:'Bearer '+connection.token,'Content-Type':'application/json'},signal:AbortSignal.timeout(180000),
       body:JSON.stringify({model:ADVISOR_MODEL,store:false,max_output_tokens:16384,reasoning:{effort:ADVISOR_REASONING},instructions:ADVICE_SCOPE+' '+(mode==='assets'?ASSET_INSTRUCTIONS:REPAYMENT_INSTRUCTIONS),input:JSON.stringify({question:body.question,context,...(mode==='assets'?{history}:{})}),text:{format:{type:'json_schema',name:mode==='assets'?'asset_advice':'repayment_advice',strict:true,schema:mode==='assets'?{type:'object',additionalProperties:false,properties:{summary:{type:'string'},answer:{type:'string'},checks:{type:'array',items:{type:'string'}}},required:['summary','answer','checks']}:{type:'object',additionalProperties:false,properties:{summary:{type:'string'},reasons:{type:'array',items:{type:'string'}},checks:{type:'array',items:{type:'string'}}},required:['summary','reasons','checks']}}}})
     });
     if(!response.ok){
       const status=response.status;
       const detail=await response.json().catch(()=>({}));
       const providerCode=detail?.error?.code;
-      const failure=status===401?['provider_auth_failed','AI 서비스 인증에 실패했습니다. 운영자가 연결 키를 확인해야 합니다.',503]
+      const failure=providerCode==='relay_missing_key'||providerCode==='relay_auth_required'?['advisor_relay_unavailable','AI 상담 서버 연결을 확인하고 있습니다.',503]
+        :providerCode==='relay_timeout'?['provider_timeout','AI 상담 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.',502]
+        :status===401?['provider_auth_failed','AI 서비스 인증에 실패했습니다. 운영자가 연결 키를 확인해야 합니다.',503]
         :status===403?['provider_access_denied','선택한 AI 모델의 접근 권한이 없습니다. 운영자가 모델 권한을 확인해야 합니다.',503]
         :status===404?['provider_model_unavailable','설정된 AI 모델을 사용할 수 없습니다. 운영자가 모델 연결을 확인해야 합니다.',503]
         :status===429&&providerCode==='insufficient_quota'?['provider_quota_exhausted','OpenAI API 사용 한도가 소진되었습니다. 운영자가 API 결제 잔액과 사용 한도를 확인해야 합니다.',503]

@@ -275,3 +275,22 @@ test('asset consultation rejects unsupported modes, role injection, stale revisi
 test('asset consultation cannot treat an invalid or incomplete provider answer as a completed response',async()=>{
  for(const output of [{status:'incomplete',output_text:'{}'},{status:'completed',output_text:JSON.stringify({summary:'x',answer:'',checks:[]})},{status:'completed',output_text:JSON.stringify({summary:'x',answer:'x',checks:[{}]})}]){const {env}=environment();const result=await handleAdvisor(request({mode:'assets'}),env,{fetchImpl:async()=>new Response(JSON.stringify(output),{status:200})});assert.equal(result.status,502);}
 });
+
+test('AI can authenticate a dedicated relay without an exported OpenAI key and never exposes relay configuration to customers',async()=>{
+ const {env,db}=environment();delete env.OPENAI_API_KEY;env.ADVISOR_RELAY_URL='https://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay';env.ADVISOR_RELAY_TOKEN='moa_'+'t'.repeat(43);
+ const status=await handleAdvisor(new Request('https://moa.test/api/advisor',{headers:{'oai-authenticated-user-id':'owner'}}),env);const raw=await status.text();assert.match(raw,/"configured":true/);assert.ok(!raw.includes(env.ADVISOR_RELAY_TOKEN)&&!raw.includes(env.ADVISOR_RELAY_URL));
+ const response=await handleAdvisor(request(),env,{fetchImpl:async(url,init)=>{assert.equal(url,env.ADVISOR_RELAY_URL);assert.equal(init.headers.Authorization,'Bearer '+env.ADVISOR_RELAY_TOKEN);assert.equal(init.headers['X-Moa-Relay-Token'],undefined);const payload=JSON.parse(init.body);assert.equal(payload.reasoning.effort,'xhigh');assert.equal(payload.model,'gpt-6.1-terra');return Response.json({status:'completed',output_text:JSON.stringify(advice)});}});assert.equal(response.status,200);assert.deepEqual((await response.json()).advice,advice);assert.equal(db.prepare('SELECT revision FROM portfolios').get().revision,1);db.close();
+});
+test('invalid relay destinations and customer connection overrides cannot route AI requests',async()=>{
+ for(const url of ['http://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay','https://attacker.test/functions/v1/moa-advisor-relay','https://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay?token=bad']){
+  const {env,db}=environment();delete env.OPENAI_API_KEY;env.ADVISOR_RELAY_URL=url;env.ADVISOR_RELAY_TOKEN='moa_'+'t'.repeat(43);let calls=0;assert.equal((await handleAdvisor(request(),env,{fetchImpl:async()=>{calls++;throw Error();}})).status,503);assert.equal(calls,0);db.close();
+ }
+ const {env,db}=environment();assert.equal((await handleAdvisor(request({relayUrl:'https://attacker.test'}),env)).status,400);db.close();
+});
+test('general asset advice passes through the dedicated relay without requiring an exported provider key',async()=>{
+ const {env,db}=environment();delete env.OPENAI_API_KEY;env.ADVISOR_RELAY_URL='https://abcdefghijklmnopqrst.supabase.co/functions/v1/moa-advisor-relay';env.ADVISOR_RELAY_TOKEN='moa_'+'t'.repeat(43);
+ const {createRelayHandler}=await import('../supabase/functions/moa-advisor-relay/relay.mjs');const {createHash}=await import('node:crypto');
+ const answer={summary:'자산 예측',answer:'등록 일정에 따른 전망입니다.',checks:[]};let providerCalls=0;
+ const relay=createRelayHandler({expectedTokenHash:createHash('sha256').update(env.ADVISOR_RELAY_TOKEN).digest('hex'),readApiKey:()=>fakeKey,fetchImpl:async(url,init)=>{providerCalls++;assert.equal(init.headers.Authorization,'Bearer '+fakeKey);assert.equal(init.body.includes(env.ADVISOR_RELAY_TOKEN),false);assert.equal(JSON.parse(init.body).text.format.name,'asset_advice');return Response.json({status:'completed',output_text:JSON.stringify(answer)});}});
+ const response=await handleAdvisor(request({mode:'assets'}),env,{fetchImpl:async(url,init)=>{assert.equal(url,env.ADVISOR_RELAY_URL);return relay(new Request(url,init));}});assert.equal(response.status,200);assert.deepEqual((await response.json()).advice,answer);assert.equal(providerCalls,1);assert.equal(db.prepare('SELECT revision FROM portfolios WHERE user_id=?').get('owner').revision,1);db.close();
+});
