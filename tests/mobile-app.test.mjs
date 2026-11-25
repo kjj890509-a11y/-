@@ -14,12 +14,15 @@ import * as statistics from '../public/statistics-page.mjs';
 import * as advisor from '../public/advisor-page.mjs';
 import {renderLoanForecastPanel} from '../public/loan-forecast.mjs';
 const tick=()=>new Promise(setImmediate);
-async function app(data=domain.emptyPortfolio(),route='overview',{configured=false}={}){
+async function app(data=domain.emptyPortfolio(),route='overview',{configured=false,authenticated=true,storage,search=''}={}){
  const {document,window,Event}=parseHTML(readFileSync(new URL('../public/index.html',import.meta.url),'utf8'));window.scrollTo=()=>{};window.matchMedia=query=>({matches:query.includes('max-width: 760px'),addEventListener(){}});window.setInterval=undefined;
+ if(storage)window.sessionStorage=storage;
  for(const d of document.querySelectorAll('dialog')){Object.defineProperty(d,'open',{get(){return d.hasAttribute('open');}});d.showModal=()=>d.setAttribute('open','');d.close=()=>d.removeAttribute('open');}
  class BrowserFormData{constructor(form){this.values=new Map([...form.querySelectorAll('input,select,textarea')].filter(el=>el.name&&!el.disabled).map(el=>[el.name,el.value]));}get(key){return this.values.get(key)??null;}}
- const state={data:domain.validatePortfolio(data),revision:1,writes:0,gets:0,fail:false,advisorCalls:[]};
- const context=vm.createContext({...domain,...workspace,...navigation,...dashboard,...disclosure,...charts,...loans,...statistics,...advisor,renderLoanForecastPanel,document,window,location:{hash:'#'+route,search:''},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
+ const state={data:domain.validatePortfolio(data),revision:1,writes:0,gets:0,fail:false,advisorCalls:[],paths:[]};
+ const context=vm.createContext({...domain,...workspace,...navigation,...dashboard,...disclosure,...charts,...loans,...statistics,...advisor,renderLoanForecastPanel,document,window,location:{hash:'#'+route,search},localStorage:{getItem:()=>null,setItem:()=>{}},Intl,URLSearchParams,structuredClone,crypto,FormData:BrowserFormData,setTimeout,clearTimeout,fetch:async(path,init)=>{
+  state.paths.push(path);
+  if(!authenticated)return {ok:false,status:401};
   if(path==='/api/advisor'){if(init?.method==='POST'){state.advisorCalls.push(JSON.parse(init.body));return{ok:true,json:async()=>({advice:{summary:'계산된 자산 전망',answer:'급여일과 월말의 등록 일정을 확인했습니다.',checks:['미등록 지출 확인']},mode:'assets',asOf:domain.todayKST(),revision:state.revision})};}return{ok:true,json:async()=>({configured})};}
   if(path==='/api/preferences')return{ok:true,json:async()=>({data:{version:1,tables:{}},revision:0})};
   assert.equal(path,'/api/portfolio');if(init?.method==='PUT'){const body=JSON.parse(init.body);state.writes++;if(body.revision!==state.revision)return{ok:false,status:409,json:async()=>({error:'다른 기기에서 변경되었습니다.'})};state.data=domain.validatePortfolio(body.data);state.revision++;}else{state.gets++;if(state.fail)return{ok:false,json:async()=>({error:'연결 실패'})};}
@@ -34,6 +37,56 @@ async function app(data=domain.emptyPortfolio(),route='overview',{configured=fal
  const focus=async()=>{window.dispatchEvent(new Event('focus'));await tick();await tick();};
  return{document,window,Event,context,state,visit,click,change,fill,submit,focus};
 }
+test('guests enter and forecast without account writes, then explicitly save the same-tab draft after sign-in',async()=>{
+ const entries=new Map();
+ const storage={getItem:key=>entries.get(key),setItem:(key,value)=>entries.set(key,value),removeItem:key=>entries.delete(key)};
+ const guest=await app(domain.emptyPortfolio(),'overview',{authenticated:false,storage});
+ assert.match(guest.document.querySelector('[data-guest-banner]').textContent,/로그인 없이 돈모아 시작하기/);
+ await guest.visit('entry');
+ guest.click('[data-entry-type=deposits]');
+ guest.fill({name:'임시 예금',balance:'1,200,000'});
+ await guest.submit();
+ assert.match(guest.document.querySelector('[data-guest-banner]').textContent,/작성한 내역 1건/);
+ await guest.visit('forecast');
+ assert.match(guest.document.querySelector('.m-forecast-summary').textContent,/1,200,000원/);
+ await guest.visit('advisor');
+ assert.match(guest.document.querySelector('.guest-advisor').textContent,/로그인 후 AI 상담/);
+ assert.deepEqual(guest.state.paths,['/api/portfolio']);
+ const login=guest.document.querySelector('[data-guest-banner] [data-guest-login]');
+ assert.equal(login.getAttribute('target'),'_top');
+ const returnPath=new URL(new URL(login.getAttribute('href'),'https://site.test').searchParams.get('return_to'),'https://site.test');
+ assert.equal(returnPath.hash,'#advisor');
+ const account=domain.emptyPortfolio();
+ account.deposits=[{id:'existing',name:'계정 예금',balance:2000000,rate:0}];
+ const preview=await app(account,'deposits',{storage,search:'?try=guest&display=desktop'});
+ assert.deepEqual(preview.state.paths,[]);
+ assert.match(preview.document.querySelector('main').textContent,/임시 예금/);
+ assert.doesNotMatch(preview.document.querySelector('main').textContent,/계정 예금/);
+ const unclaimed=await app(account,'overview',{storage,search:'?display=desktop'});
+ assert.equal(Boolean(unclaimed.document.querySelector('[data-guest-banner]')),false);
+ assert.equal(unclaimed.state.writes,0);
+ const signed=await app(account,'deposits',{storage,search:returnPath.search+'&display=desktop'});
+ assert.match(signed.document.querySelector('[data-guest-banner]').textContent,/로그인 전 작성한 내역 1건/);
+ assert.equal(signed.state.writes,0);
+ signed.click('[data-action=guest-import]');
+ assert.match(signed.document.querySelector('#confirm-title').textContent,/저장할까요/);
+ signed.click('#confirm-cancel');
+ assert.equal(signed.state.writes,0);
+ signed.click('[data-action=guest-import]');
+ signed.state.revision++;
+ signed.click('#confirm-ok');
+ await tick();await tick();
+ assert.equal(signed.state.writes,1);
+ assert.equal(signed.state.data.deposits.length,1);
+ assert.equal(Boolean(signed.document.querySelector('[data-guest-banner]')),true);
+ signed.click('[data-action=guest-import]');
+ signed.click('#confirm-ok');
+ await tick();await tick();
+ assert.equal(signed.state.writes,2);
+ assert.deepEqual(signed.state.data.deposits.map(row=>[row.name,row.balance]),[['계정 예금',2000000],['임시 예금',1200000]]);
+ assert.equal(Boolean(signed.document.querySelector('[data-guest-banner]')),false);
+ assert.equal(entries.size,0);
+});
 test('mobile and desktop workspace show the same selected month and avoid double counting paid card bills',async()=>{
  const data=domain.emptyPortfolio();
  data.cashflow=[

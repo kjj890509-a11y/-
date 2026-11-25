@@ -9,6 +9,7 @@ import {viewLabels, navigationGroups, groupForView, sectionTabs, searchDashboard
 import {renderDashboard, renderForecastPeriod, renderForecastMonthPage, renderAssets, renderExpenseConfirmationSummary} from '/dashboard-view.mjs';
 import {enhanceDisclosure,enhanceEditorHelp,expandSection,rememberDisclosure} from '/disclosure.mjs';
 import {mountDesktopNavigation,applyEntryDrafts,createRecordAmountEditing,recordAmountInput,recordAmountActions,contextTip,valueWithContextTip,spendingBreakdown,spendingEntryHint} from '/navigation.mjs';
+import {countGuestDraft,readGuestDraft,writeGuestDraft,clearGuestDraft,guestClaimFrom,isGuestPreview,guestReturnPath,mergeGuestDraft} from '/navigation.mjs';
 const icons = {
   home:'<path d="m3 10 9-7 9 7M5 9v11h14V9M10 20v-7h4v7"/>',
   portfolio:'<rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 10h18M9 5v5"/>',
@@ -44,6 +45,8 @@ const escapeHTML = val => String(val ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;',
 const $ = id => document.getElementById(id);
 const wonFormat = new Intl.NumberFormat('ko-KR');
 let portfolio = emptyPortfolio(), revision = 0, demo = false, realData = null, realRevision = 0, loading = true, saving = false;
+let guest=false,guestDraftId='',pendingGuest=null,guestStorage;
+try{guestStorage=window.sessionStorage;}catch{}
 let hidden = localStorage.getItem('moa-hide-amounts') === 'true';
 let scheduledRange='upcoming',scheduledType='all';
 let paydaySalaryId='all',paydaySelectedDate='';
@@ -82,27 +85,105 @@ function confirmAction(title,body,label='삭제하기',buttonStyle='danger'){
 }
 async function fetchPortfolio(){
  const response=await fetch('/api/portfolio',{cache:'no-store'});
+ if(response.status===401)throw Object.assign(new Error('로그인 후 계정에 저장할 수 있습니다.'),{status:401});
  const result=await response.json();
  if(!response.ok)throw new Error(result.error||'내역을 불러오지 못했습니다.');
  return result;
 }
+function enterGuestMode(){
+ if(!guest){
+  const draft=readGuestDraft(guestStorage);
+  portfolio=draft?.data??emptyPortfolio();
+  guestDraftId=draft?.id??crypto.randomUUID();
+  entryManagerState.mode=countGuestDraft(portfolio)?'manage':'new';
+  workspaceState=createWorkspaceState();
+  recordWorkspace=createLedgerWorkspace();
+ }
+ guest=true;pendingGuest=null;revision=0;loading=false;render();status('로그인 전 · 임시 내역');
+}
 async function loadData(){
+  if(isGuestPreview(location.search)){enterGuestMode();return;}
   loading=true;status('불러오는 중');
   try{
     const data=await fetchPortfolio();
+    if(guest)recordWorkspace=createLedgerWorkspace();
+    guest=false;
+    const draft=readGuestDraft(guestStorage);
+    const claim=guestClaimFrom(location.search);
+    pendingGuest=draft&&draft.id===claim&&countGuestDraft(draft.data)?draft:null;
     portfolio=validatePortfolio(data.data);revision=data.revision;loading=false;status('서버 저장됨');render();loadRecordPreferences();
-  }catch(error){loading=false;status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">돈모아</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button><p><a href="/privacy.html">데이터 처리 안내</a></p></div>`;renderNav();}
+    if(claim&&!pendingGuest){forgetGuestClaim();toast('이 탭에 이어서 저장할 임시 내역이 없습니다.');}
+  }catch(error){
+   loading=false;
+   if(error.status===401){enterGuestMode();return;}
+   status('연결 필요',true);$('main').innerHTML=`<div class="error-state"><span class="eyebrow">돈모아</span><h1>자산 노트에 연결해 주세요</h1><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">다시 시도</button> <a class="button secondary" href="/signin-with-chatgpt?return_to=/" target="_top">로그인하기</a><p style="margin-top:24px;font-size:11px">먼저 둘러보고 싶다면 예시 화면을 열어보세요.</p><button class="button secondary" data-action="demo">예시로 둘러보기 ↗</button><p><a href="/privacy.html">데이터 처리 안내</a></p></div>`;renderNav();
+  }
 }
 async function persist(next,dashboardOnly=false,{renderAfter=true}={}){
   if(saving)throw new Error('저장 중입니다. 잠시만 기다려 주세요.');
   next=validatePortfolio(next);
   if(demo) {portfolio=next;if(renderAfter)render();status('예시 보기 중');return;}
+  if(guest){
+   portfolio=next;
+   const cached=writeGuestDraft(guestStorage,guestDraftId,next);
+   if(renderAfter)render();else renderGuestBanner();
+   status(cached?'이 탭에 임시 보관 중':'이 탭에서 작성 중',!cached);
+   return;
+  }
   saving=true;status('저장하는 중');
   try{
     const res=await fetch('/api/portfolio',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(dashboardOnly?{dashboard:next.dashboard,revision}:{data:next,revision})});
     const data=await res.json();if(!res.ok)throw Object.assign(new Error(data.error||'저장하지 못했습니다.'),{status:res.status});
     portfolio=validatePortfolio(data.data);revision=data.revision;status('서버 저장됨');if(renderAfter)render();
   }catch(error){status('저장 실패',true);throw error;}finally{saving=false;}
+}
+function guestLoginLink(){
+ const count=guest&&!demo?countGuestDraft(portfolio):0;
+ const back=guestReturnPath(count?guestDraftId:null,location.hash);
+ return `<a class="button ${count?'primary':'secondary'}" data-guest-login href="/signin-with-chatgpt?return_to=${encodeURIComponent(back)}" target="_top">${count?'로그인하고 저장':'로그인'}</a>`;
+}
+function renderGuestBanner(){
+ const root=$('main');
+ root.querySelector('[data-guest-banner]')?.remove();
+ if(demo||(!guest&&!pendingGuest))return;
+ const count=countGuestDraft(guest?portfolio:pendingGuest.data);
+ const title=guest?(count?`작성한 내역 ${count}건`:'로그인 없이 돈모아 시작하기'):`로그인 전 작성한 내역 ${count}건`;
+ const description=guest?(count?'이 탭에 임시 보관 중입니다. 계정에 저장하면 다른 기기에서도 볼 수 있어요.':'예금이나 월급부터 입력하고 예산과 전망을 확인해 보세요.'):'작성한 내역을 이 계정에 저장할 수 있어요.';
+ const actions=guest?`${!count?'<a class="button primary" href="#entry" data-action="guest-start">내역 입력 시작</a>':''}${guestLoginLink()}`:
+  '<button type="button" class="button primary" data-action="guest-import">작성한 내역 저장</button><button type="button" class="text-button" data-action="guest-discard">임시 내역 지우기</button>';
+ const markup=`<aside class="guest-entry-banner" data-guest-banner aria-label="임시 내역"><div><strong>${title}</strong><p>${description}</p></div><div class="guest-entry-actions">${actions}</div></aside>`;
+ const mobileHeader=root.querySelector('.m-app > header');
+ if(mobileHeader)mobileHeader.insertAdjacentHTML('afterend',markup);else root.insertAdjacentHTML('afterbegin',markup);
+}
+function forgetGuestClaim(){
+ const query=new URLSearchParams(location.search);
+ query.delete('guest_draft');
+ window.history?.replaceState?.(null,'','/'+(query.size?'?'+query:'')+location.hash);
+}
+async function importGuestIntoAccount(){
+ if(!pendingGuest||guest||demo||saving)return;
+ try{
+  const {data,added,skipped}=mergeGuestDraft(portfolio,pendingGuest.data);
+  if(added){
+   const expectedRevision=revision;
+   const explanation=skipped?`새 내역 ${added}건을 추가합니다. 이미 저장된 ${skipped}건은 기존 내역을 사용합니다.`:`작성한 ${added}건을 이 계정에 추가합니다.`;
+   if(!await confirmAction('작성한 내역을 저장할까요?',explanation,'계정에 저장','primary'))return;
+   if(revision!==expectedRevision)throw Object.assign(new Error('다른 기기에서 내역이 변경됐어요.'),{status:409});
+   await persist(data,false,{renderAfter:false});
+  }
+  clearGuestDraft(guestStorage);pendingGuest=null;forgetGuestClaim();render();
+  toast(added?`작성한 내역 ${added}건을 계정에 저장했어요.`:'작성한 내역이 이미 저장되어 있어요.');
+ }catch(error){
+  if(error.status===409){
+   try{
+    const latest=await fetchPortfolio();portfolio=validatePortfolio(latest.data);revision=latest.revision;render();
+   }catch{}
+   toast('다른 기기에서 내역이 변경됐어요. 작성한 내역 저장을 다시 눌러 주세요.');
+  }else toast(error.message);
+ }
+}
+function guestAdvisorPage(){
+ return `<div class="page-heading"><h1>AI 상담</h1></div><section class="guest-advisor"><h2>로그인 후 AI 상담을 이용할 수 있어요</h2><p>작성한 내역을 계정에 저장하면 예산과 순자산 전망에 대해 질문할 수 있습니다.</p>${guestLoginLink()}</section>`;
 }
 const desktopMenuIcons = {
   overview:'home', entry:'edit', workspace:'overview', assets:'portfolio', records:'journal', spending:'book'
@@ -219,15 +300,15 @@ function selectHomeDetail(selection){
 function recordLedgerHost(scope){return `<section class="table-panel record-ledger-panel"><div class="table-heading"><h2>${ledgerLabels[scope]} 목록</h2>${recordWorkspace.error?`<span class="form-error" role="alert">${escapeHTML(recordWorkspace.error)}</span><button class="button secondary small" data-action="retry-views">다시 연결</button>`:''}${KINDS.includes(scope)?`<button class="button primary small" data-action="add" data-kind="${scope}">내역 추가</button>`:''}</div><div data-ledger-scope="${scope}"></div></section>`;}
 function recordsPage(){return heading(navLabels.records,'자산과 입출금, 대출·카드 내역을 한곳에서 조회합니다.')+demoBanner()+recordLedgerHost('all');}
 async function loadRecordPreferences(){
- if(recordWorkspace.loaded||demo)return;recordWorkspace.loaded=true;const targetWorkspace=recordWorkspace;
+ if(recordWorkspace.loaded||demo||guest)return;recordWorkspace.loaded=true;const targetWorkspace=recordWorkspace;
  try{const response=await fetch('/api/preferences'),result=await response.json();if(recordWorkspace!==targetWorkspace||demo)return;if(!response.ok)throw new Error(result.error||'보기 설정에 연결하지 못했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.ready=true;recordWorkspace.error='';recordWorkspace.revision=result.revision;for(const [scope,pref]of Object.entries(recordWorkspace.preferences.tables)){if(!ledgerState(recordWorkspace,scope).rowOrderDirty)Object.assign(ledgerState(recordWorkspace,scope),pref);if(pref.rowOrder?.length)recordWorkspace.states[scope].sort='manual';}if(document.querySelector('[data-ledger-scope],[data-record-layout]'))render();}
  catch{if(recordWorkspace!==targetWorkspace)return;recordWorkspace.error='보기 설정 연결 실패';if(document.querySelector('[data-ledger-scope],[data-record-layout]'))render();}
 }
 async function saveRecordPreferences(scope,pref){
- if(!demo&&!recordWorkspace.ready)throw new Error('먼저 보기 설정을 불러온 뒤 저장해 주세요.');
+ if(!demo&&!guest&&!recordWorkspace.ready)throw new Error('먼저 보기 설정을 불러온 뒤 저장해 주세요.');
  if(recordWorkspace.saving)throw new Error('보기 설정을 저장 중입니다.');
  const data=structuredClone(recordWorkspace.preferences);data.tables[scope]=pref;validateLedgerPreferences(data);
- if(demo){recordWorkspace.preferences=data;return;}
+ if(demo||guest){recordWorkspace.preferences=data;return;}
  recordWorkspace.saving=true;
  try{const response=await fetch('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,revision:recordWorkspace.revision})}),result=await response.json();if(!response.ok)throw new Error(result.error||'보기 저장에 실패했습니다.');recordWorkspace.preferences=validateLedgerPreferences(result.data);recordWorkspace.revision=result.revision;}
  finally{recordWorkspace.saving=false;}
@@ -403,7 +484,7 @@ function advisorPage(){
  return renderAdvisorPage(portfolio,advisorState,{formatMoney:money,formatCompact:compact,demo,hideAmounts:hidden});
 }
 async function checkAdvisorService(){
- if(advisorState?.service!=='unknown')return;
+ if(guest||advisorState?.service!=='unknown')return;
  advisorState.service='checking';
  try{
   const response=await fetch('/api/advisor');const result=await response.json();
@@ -412,7 +493,7 @@ async function checkAdvisorService(){
  if(view==='advisor'||view==='overview'&&isMobileViewport(window,location))render();
 }
 async function requestAdvisor(next){
- if(advisorState?.busy||$('confirm-dialog').open)return;
+ if(guest||advisorState?.busy||$('confirm-dialog').open)return;
  if(demo){toast('예시 모드를 종료한 뒤 실제 자산으로 상담해 주세요.');return;}
  if(!await confirmAdvisorTransfer('repayment'))return;
  advisorState={...next,busy:true,advice:null,error:''};render();
@@ -823,21 +904,22 @@ function mountPageCoachmarks(root,mobile){
 }
 function renderMobile(){
  advisorState??=initialAdvisorState();
- const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,forecastHorizon:chartHorizon,forecastEndMonth,recordId:routeRecordId,demo,demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
+ const root=$('main');root.innerHTML=renderMobilePage(portfolio,view,mobileState,{money,compact,hidden,month,forecastHorizon:chartHorizon,forecastEndMonth,recordId:routeRecordId,demo,guest,guestAdvisor:guest&&view==='advisor'?guestAdvisorPage():'',demoBanner:demoBanner(),advisorState,advisorStatus:advisorState.service,advisorContent:view==='advisor'&&mobileState.advisorMode==='repayment'?advisorPage():''});
  enhanceDisclosure(root,{view,mobile:true});
  const pageTitle=root.querySelector('[data-forecast-detail-title]')?.textContent||(view==='menu'?'전체':navLabels[view]);
  document.title=view==='overview'||!pageTitle?'돈모아':pageTitle+' · 돈모아';
  recordCleanups.push(mountMobileControls(root,mobileState,{onRender:render,onPrivacy:()=>$('privacy-toggle').onclick(),onSettings:()=>openDialog('settings-dialog'),onRefresh:async()=>{if(!canRefreshPortfolio()){toast('입력·저장을 마친 뒤 다시 불러와 주세요.');return;}const updated=await refreshPortfolio();toast(updated===null?'연결을 확인한 뒤 다시 불러와 주세요.':updated?'최신 내역을 반영했어요.':'내역을 확인했어요.');},onCardBill:openMobileCardBill}));
- if(view==='advisor'){
+ if(view==='advisor'&&!guest){
   if(mobileState.advisorMode==='repayment'){enhanceDisclosure(root.querySelector('.m-advisor')||root,{view});mountAdvisorControls(root,advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});}
   else recordCleanups.push(mountAssetConsultation(root,advisorState,{onConsult:requestAssetAdvisor}));
  }
  mountTrendCharts(root);
- if(view==='overview'||view==='advisor')checkAdvisorService();
- mountPageCoachmarks(root,true);
+ if(!guest&&(view==='overview'||view==='advisor'))checkAdvisorService();
+ if(!guest)mountPageCoachmarks(root,true);
+ renderGuestBanner();
 }
 async function requestAssetAdvisor(question){
- if(advisorState?.busy||advisorState?.service!=='ready'||demo||$('confirm-dialog').open)return;
+ if(guest||advisorState?.busy||advisorState?.service!=='ready'||demo||$('confirm-dialog').open)return;
  if(!await confirmAdvisorTransfer('assets'))return;
  advisorState.assetQuestion=question;advisorState.assetError='';advisorState.busy=true;render();
  const history=(advisorState.assetMessages||[]).slice(-2).flatMap(m=>[{role:'user',text:m.question.slice(0,2000)},{role:'assistant',text:m.answer.slice(0,2000)}]);
@@ -861,7 +943,7 @@ function render(){
  for(const [key,{kind,id}] of recordAmountState.drafts) {
   if(!portfolio[kind].some(row=>row.id===id))recordAmountState.drafts.delete(key);
  }
- closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');if(view==='spending'&&month>todayKST().slice(0,7))month=todayKST().slice(0,7);const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);if(mobile){renderMobile();return;}$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?advisorPage():view==='schedule'?calendar():view==='budget'?budgetPage():view==='spending'?spendingPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:$('main').querySelector('[data-forecast-detail-title]')?.textContent||navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});mountPageCoachmarks($('main'),false);}
+ closeMonthPicker(document);unmountFinancialMotion($('main'));$('record-detail')?.remove();for(const cleanup of recordCleanups)cleanup();recordCleanups=[];unmountWorkspace($('main'));rememberDisclosure($('main'));$('main').classList.toggle('history-view',view==='history');if(view==='spending'&&month>todayKST().slice(0,7))month=todayKST().slice(0,7);const mobile=isMobileViewport(window,location);if(!mobile&&view==='menu')view='overview';$('main').dataset.view=view;renderNav();document.body.classList.toggle('mobile-app',mobile);document.body.classList.toggle('guest-mode',guest);if(mobile){renderMobile();return;}$('main').innerHTML=sectionTabs(view)+(view==='overview'?overview():view==='entry'?renderEntryHub(portfolio,{money,svg,session:entrySession,demoBanner:demoBanner(),managerState:entryManagerState,hidden,layoutFor:recordLayoutFor}):view==='workspace'?workspacePage():view==='assets'?assetsPage():view==='statistics'?statisticsPage():view==='advisor'?(guest?guestAdvisorPage():advisorPage()):view==='schedule'?calendar():view==='budget'?budgetPage():view==='spending'?spendingPage():view==='history'?historyPage():view==='forecast'?forecastPage():view==='payday'?paydayPage():view==='planned'?scheduledPage():view==='records'?recordsPage():category(view));const tabs=$('main').querySelector('.section-tabs'),title=$('main').querySelector('.page-heading');if(tabs&&title)title.after(tabs);enhanceDisclosure($('main'),{view});applyPageLayout($('main'),{title:$('main').querySelector('[data-forecast-detail-title]')?.textContent||navLabels[view]});enhanceTableExports($('main'),{onExport:downloadTable});mountRecordLedgers();mountEntryWorkspace();mountLoanLayout();if($('card-billing'))recordCleanups.push(mountCardBilling($('card-billing'),()=>portfolio,cardBillingState,{money,onLayoutSave:saveRecordLayout,onSave:next=>persist(next,false,{renderAfter:false}),onRender:render,onReload:loadData,onFeedback:toast}));mountTrendCharts($('main'));if(view==='workspace')mountWorkspace($('main'),portfolio,workspaceState,{onRender:render,onSave:async dashboard=>{const next=structuredClone(portfolio);next.dashboard=dashboard;await persist(next,true);},onFeedback:toast});if(view==='statistics')mountStatisticsControls($('main'),statisticsFilters,next=>{statisticsFilters=next;render();},toast);if(view==='advisor'&&!guest){mountAdvisorControls($('main'),advisorState,{onChange:next=>{advisorState=next;render();},onConsult:requestAdvisor,onFeedback:toast});checkAdvisorService();}mountFinancialMotion($('main'),{revision,hideAmounts:hidden});if(!guest)mountPageCoachmarks($('main'),false);renderGuestBanner();}
 const fields={
  fixed:[['name','고정지출명','text',true,'예: 월세 / 보험료 / 통신비'],['amount','매월 금액','money',true,'0'],['day','매월 납부일','day',true,'예: 25'],['paymentSource','결제 방식','paymentSource',true,''],['startMonth','시작월','month',true,''],['endMonth','종료월','month',false,''],['note','메모','textarea',false,'선택 입력']],
  cashflow:[['type','구분','flowType',true,''],['name','항목명','text',true,'예: 회사 월급 / 부업 / 월세'],['amount','금액','money',true,'0'],['date','일자 · 반복 시작일','date',true,''],['repeat','반복 여부','repeat',true,''],['paymentSource','결제 방식','paymentSource',true,''],['includeInForecast','예상 계산 반영','forecastFlag',true,''],['note','메모','textarea',false,'선택 입력']],
@@ -894,11 +976,11 @@ function openEditor(kind,id,rowOverride){
   else if(type==='textarea')input=`<textarea id="field-${key}" name="${key}" maxlength="500" placeholder="${placeholder}" rows="2">${escapeHTML(value)}</textarea>`;
   else input=`<div class="input-wrap"><input id="field-${key}" name="${key}" type="${type==='money'?'text':['rate','day','months','grace'].includes(type)?'number':type}" ${required?'required':''} ${type==='money'?'inputmode="numeric" maxlength="21"':type==='rate'?'min="0" max="100" step="0.001"':type==='day'?'min="1" max="31" step="1"':type==='months'?'min="1" max="600" step="1"':type==='grace'?'min="0" max="599" step="1"':type==='text'?'maxlength="100"':''} value="${escapeHTML(type==='money'?wonFormat.format(value):value)}" placeholder="${placeholder}">${type==='money'?'<span>원</span>':type==='rate'?'<span>%</span>':type==='day'?'<span>일</span>':''}</div>`;
   return `<div class="field ${type==='textarea'?'full-width':''}"><label for="field-${key}${type==='month'?'-button':''}">${label} ${required?'<span>*</span>':'<small>선택</small>'}</label>${input}${['cashflow','fixed'].includes(kind)&&key==='paymentSource'?'<p class="field-hint">카드 청구액에 이미 들어 있는 지출은 중복 제외를 선택하세요. 내역은 유지하고 추가로 차감하지 않습니다. 실제 카드 청구액은 카드 청구에서 별도로 입력하세요.</p>':''}${kind==='loans'&&key==='principal'?'<p class="field-hint">은행 납입액 중 원금으로 갚는 금액만 입력하세요. 예를 들어 총 50만 원 중 이자가 10만 원이면 원금은 40만 원입니다. 이 금액만큼 예상 대출잔액이 줄어듭니다.</p>':''}${kind==='loans'&&key==='remainingMonths'?'<p class="field-hint">앞으로 낼 횟수입니다. 예: 3년 남았다면 36회. 현재 잔액을 거치 이후 회차로 나눕니다.</p>':kind==='loans'&&key==='graceMonths'?'<p class="field-hint">처음에 이자만 내는 횟수입니다. 없으면 0으로 두세요.</p>':kind==='loans'&&key==='day'?'<p class="field-hint">29~31일이 없는 달은 말일에 납부하는 것으로 계산합니다.</p>':''}${kind==='retirement'&&key==='monthlyContribution'?'<p class="field-hint">회사가 퇴직연금 계좌에 매달 납입하는 금액입니다. 현재 금액과 별도로 입력하며, 월 납입액이 없으면 0원으로 두세요. 앞으로의 퇴직연금·순자산 예상에 반영하고 예금에서는 차감하지 않습니다.</p>':kind==='retirement'&&key==='contributionDate'?'<p class="field-hint">이 날짜부터 매월 같은 날 납입하는 것으로 예상합니다. 29~31일이 없는 달은 말일에 반영합니다. 오늘까지 지난 납입은 다시 더하지 않습니다.</p>':key==='contributionEndMonth'?'<p class="field-hint">이 달까지 납입하고 다음 달부터 멈춥니다.</p>':''}</div>`;
- }).join('')+(kind==='retirement'?retirementPlanFields(row.contributionChanges):'')+`<p class="form-notice full-width" ${demo?'':'data-form-help'}>${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
+ }).join('')+(kind==='retirement'?retirementPlanFields(row.contributionChanges):'')+`<p class="form-notice full-width" ${demo?'':'data-form-help'}>${demo?'예시 모드입니다. 변경 내용은 실제 자산에 저장되지 않습니다.':kind==='cashflow'?'월급은 실수령액을 입력해 주세요. 반복은 시작 월부터 적용됩니다. 카드 청구에 포함된 지출은 카드 청구액에 포함 · 중복 제외를 선택하세요.':kind==='loans'?'직접 입력은 이번 납부 이자입니다. 월별 예상에서는 입력 방식과 관계없이 남은 잔액 × 연 이율 ÷ 12로 이자를 다시 계산합니다.':kind==='fixed'?'카드대금에 포함된 고정지출은 카드 청구액에 포함을 선택해 주세요. 같은 금액을 기타 지출에 다시 입력하지 마세요.':guest?'입력한 내역은 이 탭에 임시 보관됩니다. 계정에 저장하려면 로그인해 주세요.':'입력한 내역은 본인 계정에 저장됩니다. 금액은 원화 기준으로 입력해 주세요.'}</p>`;
  if(kind==='loans'){const preview=document.createElement('section');preview.id='loan-plan-preview';preview.className='loan-plan-preview full-width';preview.setAttribute('aria-live','polite');$('form-fields').insertBefore(preview,$('form-fields').querySelector('.form-notice'));syncLoanPlan();}else syncRetirementContribution();
  syncExpensePaymentSource();
  $('record-form').onsubmit=submitRecord;
- $('record-form').querySelector('button[type="submit"]').textContent='저장하기 ↗';
+ $('record-form').querySelector('button[type="submit"]').textContent=guest&&!demo?'입력 완료':'저장하기 ↗';
  openDialog('editor');
 }
 function showAddMenu(){
@@ -930,10 +1012,10 @@ function startEntryEditor(type,{capture=true,message=''}={}){
  const defaults={...preset.defaults};if(preset.future)defaults.date=shiftCalendarDay(todayKST(),1);
  for(const [key,value]of Object.entries({...defaults,...entryDrafts[type]}))setEntryField(key,value);
  const controls=document.createElement('div');controls.className='entry-editor-controls full-width';
- controls.innerHTML=`<label for="entry-type">입력할 내역<select id="entry-type">${entryGroups.map(group=>`<optgroup label="${group.label}">${entryPresets.filter(p=>p.group===group.id).map(p=>`<option value="${p.id}" ${p.id===type?'selected':''}>${p.label}</option>`).join('')}</optgroup>`).join('')}</select></label><label class="entry-continue-label"><input type="checkbox" id="entry-continue" checked>저장 후 계속 입력</label>`;
+ controls.innerHTML=`<label for="entry-type">입력할 내역<select id="entry-type">${entryGroups.map(group=>`<optgroup label="${group.label}">${entryPresets.filter(p=>p.group===group.id).map(p=>`<option value="${p.id}" ${p.id===type?'selected':''}>${p.label}</option>`).join('')}</optgroup>`).join('')}</select></label><label class="entry-continue-label"><input type="checkbox" id="entry-continue" checked>${guest&&!demo?'계속 입력':'저장 후 계속 입력'}</label>`;
  $('form-fields').prepend(controls);
  if(message){const note=document.createElement('p');note.className='entry-save-message full-width';note.setAttribute('role','status');note.textContent=message;controls.after(note);}
- const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.textContent='저장하고 다음 입력';
+ const submit=$('record-form').querySelector('button[type="submit"]');submit.hidden=false;submit.textContent=guest&&!demo?'입력 완료':'저장하고 다음 입력';
  if(preset.kind==='loans')syncLoanPlan();else syncRetirementContribution();syncExpensePaymentSource();
  $('field-name')?.focus();
 }
@@ -964,7 +1046,7 @@ async function submitRecord(e){
    if(view==='entry')render();
    if(keepEntering&&stillOpen)startEntryEditor(entryType,{capture:false,message:(demo?'예시 내역 · ':'')+record.name+' 저장 완료. 다음 내역을 입력하세요.'});
   }
-  toast(demo?'예시 내역을 변경했어요.':'내역을 저장했어요.');
+  toast(demo?'예시 내역을 변경했어요.':guest?'임시 내역에 반영했어요.':'내역을 저장했어요.');
  }catch(error){$('form-error').textContent=error.message;}finally{for(const [el,wasDisabled]of disabled)if(el.isConnected)el.disabled=wasDisabled;}
 }
 
@@ -972,7 +1054,7 @@ function startDemo(){entrySession=[];entryDrafts={};entryEditing=false;entryDeta
  if(!demo){realData=portfolio;realRevision=revision;demo=true;portfolio=validatePortfolio(samplePortfolio());}
  loading=false;view='overview';location.hash='overview';$('settings-dialog').close();status('예시 보기 중');render();
 }
-async function exitDemo(){entrySession=[];entryDrafts={};entryEditing=false;entryDetailEditing=false;entryManagerState=createEntryManagerState();cardBillingState=createCardBillingState();recordAmountState.drafts.clear();workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;await loadData();}
+async function exitDemo(){entrySession=[];entryDrafts={};entryEditing=false;entryDetailEditing=false;entryManagerState=createEntryManagerState();cardBillingState=createCardBillingState();recordAmountState.drafts.clear();workspaceState=createWorkspaceState();recordWorkspace=createLedgerWorkspace();demo=false;portfolio=realData||emptyPortfolio();revision=realRevision;realData=null;if(guest){render();return;}await loadData();}
 function downloadTable(csv,title){
  if(!csv){toast('내려받을 내역이 없습니다.');return;}
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -1003,6 +1085,15 @@ $('search-dialog').addEventListener('click',event=>{
 });
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();openDashboardSearch();}});
 document.addEventListener('click',async e=>{
+ const loginLink=e.target.closest('[data-guest-login]');
+ if(loginLink&&guest&&!demo&&countGuestDraft(portfolio)){
+  if(entryManagerState.drafts.size||recordAmountState.drafts.size||cardBillingState.drafts.size||workspaceState.editing){
+   e.preventDefault();toast('수정 중인 내역을 먼저 반영한 뒤 로그인해 주세요.');return;
+  }
+  if(!writeGuestDraft(guestStorage,guestDraftId,portfolio)){
+   e.preventDefault();toast('이 탭에 임시 내역을 보관할 수 없습니다. 브라우저의 사이트 저장 설정을 확인해 주세요.');return;
+  }
+ }
  if(recordAmountEditing.click(e))return;
  const close=e.target.closest('[data-close]');if(close){if(close.dataset.close==='loan-repayment-dialog'&&saving)return;if(close.dataset.close==='editor')entryDetailEditing=false;if(close.dataset.close==='editor'&&entryEditing){rememberEntryDraft();entryEditing=false;}$(close.dataset.close).close();return;}
  const forecastRow=e.target.closest('[data-forecast-row]');
@@ -1011,6 +1102,20 @@ document.addEventListener('click',async e=>{
  }
  const button=e.target.closest('[data-action]');if(!button)return;
  const {action,kind,id}=button.dataset;
+ if(action==='guest-start'){
+  entryManagerState.mode='new';mobileState.entryMode='new';
+  if(view==='entry')render();
+  return;
+ }
+ if(action==='guest-import'){await importGuestIntoAccount();return;}
+ if(action==='guest-discard'){
+  if((pendingGuest||guest)&&await confirmAction('임시 내역을 지울까요?','이 탭에 작성한 내역을 삭제합니다.','임시 내역 지우기')){
+   clearGuestDraft(guestStorage);pendingGuest=null;forgetGuestClaim();
+   if(guest){portfolio=emptyPortfolio();guestDraftId=crypto.randomUUID();entrySession=[];entryDrafts={};entryManagerState=createEntryManagerState();entryManagerState.mode='new';cardBillingState=createCardBillingState();recordAmountState.drafts.clear();workspaceState=createWorkspaceState();}
+   if($('settings-dialog').open)$('settings-dialog').close();render();toast('임시 내역을 지웠어요.');
+  }
+  return;
+ }
  if(action==='loan-repayment'){openLoanRepayment(id,button.dataset.mode);return;}
  if(action==='retirement-change-add'){
   const list=$('retirement-changes');if(!list||saving||list.children.length>=24)return;
@@ -1166,6 +1271,7 @@ $('data-settings').onclick=()=>openDialog('settings-dialog');
 $('mobile-settings').onclick=()=>openDialog('settings-dialog');
 $('open-demo').onclick=startDemo;
 $('erase-data').onclick=async()=>{
+ if(guest)return;
  if(demo||loading||saving||advisorState?.busy||recordWorkspace.saving){
   toast('예시 모드나 저장·상담을 마친 뒤 다시 시도해 주세요.');
   return;
@@ -1188,10 +1294,11 @@ $('erase-data').onclick=async()=>{
  finally{saving=false;}
 };
 $('export-data').onclick=()=>{
+ if(guest){toast('계정에 저장한 뒤 내역을 백업할 수 있어요.');return;}
  if(demo){toast('예시 모드를 종료한 뒤 실제 내역을 백업해 주세요.');return;}
  const file=new Blob([JSON.stringify(portfolio,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=`돈모아-자산-${todayKST()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('백업 파일을 내려받았어요.');
 };
-$('import-data').onclick=()=>{if(demo){toast('예시 모드를 종료한 뒤 복원해 주세요.');return;}$('import-file').click();};
+$('import-data').onclick=()=>{if(guest){toast('로그인한 뒤 백업을 복원할 수 있어요.');return;}if(demo){toast('예시 모드를 종료한 뒤 복원해 주세요.');return;}$('import-file').click();};
 $('import-file').onchange=async e=>{
  const file=e.target.files[0];e.target.value='';if(!file)return;
  try{
@@ -1203,7 +1310,7 @@ $('import-file').onchange=async e=>{
 $('editor').addEventListener('cancel',()=>{entryDetailEditing=false;if(entryEditing){rememberEntryDraft();entryEditing=false;}});
 window.addEventListener('beforeunload',event=>{if(entryManagerState.drafts.size||cardBillingState.drafts.size||recordAmountState.drafts.size){event.preventDefault();event.returnValue='';}});
 function setView(){const hash=location.hash.slice(1),[route,recordId]=hash.split('/');routeRecordId=/^[a-zA-Z0-9_-]{1,80}$/.test(recordId||'')?recordId:'';if(route!==view){mobileState.search='';mobileState.category='all';mobileState.flowType='all';}if(entryEditing&&hash!=='entry'){rememberEntryDraft();entryEditing=false;$('editor').close();}view=navLabels[route]?route:isMobileViewport(window,location)&&route==='menu'?'menu':'overview';query='';if(!loading){render();$('main').querySelector('[data-forecast-detail-title]')?.focus({preventScroll:true});}window.scrollTo({top:0,behavior:'instant'});}
-function canRefreshPortfolio(){return !loading&&!saving&&!demo&&!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!recordAmountState.drafts.size&&!workspaceState.editing&&!advisorState?.busy&&!document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]');}
+function canRefreshPortfolio(){return !loading&&!saving&&!demo&&!guest&&!document.querySelector('dialog[open]')&&!entryManagerState.drafts.size&&!cardBillingState.drafts.size&&!recordAmountState.drafts.size&&!workspaceState.editing&&!advisorState?.busy&&!document.activeElement?.matches?.('input,textarea,select,[contenteditable=true]');}
 const refreshPortfolio=createPortfolioSync({
  getRevision:()=>revision,canRefresh:canRefreshPortfolio,
  fetchPortfolio,

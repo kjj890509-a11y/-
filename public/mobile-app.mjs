@@ -268,9 +268,9 @@ export function renderMobilePage(data,view,state,options){
  else if(view==='spending')content=spending(data,options);
  else if(view==='history')content=history(data,options);
  else if(view==='statistics')content=statistics(data,options);
- else if(view==='advisor')content=mobileAdvisor(state,options);
+ else if(view==='advisor')content=options.guestAdvisor||mobileAdvisor(state,options);
  else content=overviewDetails(data,options);
- return `<div class="m-app" data-mobile-app data-mobile-view="${esc(view)}">${view!=='overview'?options.demoBanner||'':''}${content}<div class="m-sync-line" role="status" data-mobile-sync>${options.demo?'예시 모드':'내 계정에 저장됨'}</div>${nav(view)}</div>`;
+ return `<div class="m-app" data-mobile-app data-mobile-view="${esc(view)}">${view!=='overview'?options.demoBanner||'':''}${content}<div class="m-sync-line" role="status" data-mobile-sync>${options.demo?'예시 모드':options.guest?'로그인 전 · 임시 내역':'내 계정에 저장됨'}</div>${nav(view)}</div>`;
 }
 export function mountMobileControls(root,state,{onRender,onPrivacy,onSettings,onRefresh,onCardBill}){
  const click=event=>{const b=event.target.closest('[data-action]');if(!b)return;const a=b.dataset.action;if(!a.startsWith('mobile-'))return;

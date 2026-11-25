@@ -674,3 +674,38 @@ footer { border-top:1px solid var(--line); margin:0 32px; padding:16px 0 24px; f
 .repayment-summary > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; }
 .repayment-summary dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mobile-app #loan-repayment-dialog { width: 100%; }
+
+.guest-entry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 16px 18px;
+  margin: 0 0 20px;
+  border-radius: 10px;
+  background: var(--brand-accent-soft);
+}
+.guest-entry-banner strong { font-size: var(--font-lg); }
+.guest-entry-banner p,
+.guest-advisor p { margin: 4px 0 0; color: var(--muted); font-size: var(--font-sm); }
+.guest-entry-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.guest-entry-actions .button,
+.guest-advisor .button { min-height: 40px; }
+.guest-advisor { padding: 20px; background: var(--soft-surface); border-radius: 10px; }
+.guest-advisor .button { margin-top: 14px; }
+body:not(.guest-mode) [data-guest-only],
+.guest-mode [data-account-only],
+.guest-mode .signout,
+.guest-mode .avatar,
+.guest-mode .private-badge { display: none !important; }
+.mobile-app .guest-entry-banner {
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 8px 0 16px;
+  padding: 14px;
+}
+.mobile-app .guest-entry-actions { width: 100%; }
+.mobile-app .guest-entry-actions .button { min-height: 44px; }
+@media (max-width: 960px) {
+  .guest-entry-banner { flex-wrap: wrap; }
+}

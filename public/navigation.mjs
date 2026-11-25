@@ -58,3 +58,4 @@ export {mountDesktopNavigation} from './desktop-navigation.mjs';
 export {applyEntryDrafts} from './entry-manager.mjs';
 export {createRecordAmountEditing,recordAmountInput,recordAmountActions} from './record-amount.mjs';
 export {contextTip,valueWithContextTip} from './context-tips.mjs';
+export {countGuestDraft,readGuestDraft,writeGuestDraft,clearGuestDraft,guestClaimFrom,isGuestPreview,guestReturnPath,mergeGuestDraft} from './guest-draft.mjs';
